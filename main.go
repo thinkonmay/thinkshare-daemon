@@ -1,61 +1,31 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	childprocess "github.com/OnePlay-Internet/daemon-tool/child-process"
-	"github.com/OnePlay-Internet/daemon-tool/log"
+	"github.com/thinkonmay/thinkshare-daemon/api"
+	"github.com/thinkonmay/thinkshare-daemon/log"
+	"github.com/thinkonmay/thinkshare-daemon/service"
 )
 
-type Daemon struct {
-	logURL                 string
-	sessionSettingURL      string
-	sessionRegistrationURL string
 
-	serverToken  string
-	sessionToken string
 
-	HIDport int
-
-	childprocess *childprocess.ChildProcesses
-	shutdown     chan bool
-}
-
-func TerminateAtTheEnd(daemon *Daemon) {
+func TerminateAtTheEnd(daemon *service.Daemon) {
 	chann := make(chan os.Signal, 10)
 	signal.Notify(chann, syscall.SIGTERM, os.Interrupt)
 	<-chann
 
-	daemon.childprocess.CloseAll()
+	daemon.Childprocess.CloseAll()
 	time.Sleep(100 * time.Millisecond)
-	daemon.shutdown <- true
-}
-
-func FindProcessPath(dir *string,process string) (string,error){
-	cmd := exec.Command("where.exe",process)
-
-	if dir != nil {
-		cmd.Dir = *dir
-	}
-
-	bytes,err := cmd.Output()
-	if err != nil{
-		return "",nil
-	}
-	paths := strings.Split(string(bytes), "\n")
-	pathss := strings.Split(paths[0], "\r")
-	return pathss[0],nil
+	daemon.Shutdown <- true
 }
 
 func main() {
 	var err error
-	domain := "service.dev.thinkmay.net"
+	domain := "service.thinkmay.net"
 	args := os.Args[1:]
 	for i, arg := range args {
 		if arg == "--url" {
@@ -63,28 +33,21 @@ func main() {
 		}
 	}
 
-	daemon := Daemon{
-		shutdown:               make(chan bool),
-		serverToken: 			"none",
-		sessionToken:           "none",
-		sessionRegistrationURL: fmt.Sprintf("https://%s/api/worker", domain),
-		sessionSettingURL:      fmt.Sprintf("https://%s/api/session/setting", domain),
-		logURL:                 fmt.Sprintf("https://%s/api/log/worker", domain),
-		childprocess:           childprocess.NewChildProcessSystem(),
-	}
+	daemon := service.NewDaemon(domain)
 
-	go func ()  {
+
+	go func() {
 		for {
 			out := log.TakeLog()
-			if daemon.serverToken == "none" {
+			if daemon.ServerToken == "none" {
 				continue
 			}
-			PushLog(daemon.logURL,daemon.serverToken,out)
+			log.PushLog(daemon.LogURL, daemon.ServerToken, out)
 		}
 	}()
 
-	go TerminateAtTheEnd(&daemon)
-	if daemon.serverToken, err = getServerToken(daemon.sessionRegistrationURL); err != nil {
+	go TerminateAtTheEnd(daemon)
+	if daemon.ServerToken, err = api.GetServerToken(daemon.SessionRegistrationURL); err != nil {
 		log.PushLog("unable to get server token :%s\n", err.Error())
 		return
 	}
@@ -92,8 +55,8 @@ func main() {
 	daemon.HIDport = daemon.HandleDevSim()
 	go func() {
 		for {
-			if token, err := getSessionToken(daemon.sessionRegistrationURL, daemon.serverToken); err == nil {
-				daemon.sessionToken = token
+			if token, err := api.GetSessionToken(daemon.SessionRegistrationURL, daemon.ServerToken); err == nil {
+				daemon.SessionToken = token
 			} else {
 				log.PushLog("unable to get session token :%s\n", err.Error())
 			}
@@ -103,5 +66,5 @@ func main() {
 	}()
 
 	go daemon.HandleWebRTC()
-	<-daemon.shutdown
+	<-daemon.Shutdown
 }
