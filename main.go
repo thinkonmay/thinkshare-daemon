@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,7 +43,7 @@ func main() {
 			if daemon.ServerToken == "none" {
 				continue
 			}
-			log.PushLog(daemon.LogURL, daemon.ServerToken, out)
+			fmt.Println(out)
 		}
 	}()
 

@@ -20,7 +20,7 @@ func (daemon *Daemon) HandleDevSim() int {
 	done := make(chan bool)
 	go func() {
 		for {
-			path, err := FindProcessPath(nil, "hid.exe")
+			path, err := FindProcessPath("hid", "hid.exe")
 			if err != nil {
 				panic(err)
 			}

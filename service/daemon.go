@@ -35,11 +35,11 @@ func NewDaemon(domain string) *Daemon {
 }
 
 
-func FindProcessPath(dir *string, process string) (string, error) {
+func FindProcessPath(dir string, process string) (string, error) {
 	cmd := exec.Command("where.exe", process)
 
-	if dir != nil {
-		cmd.Dir = *dir
+	if dir != "" {
+		cmd.Dir = dir
 	}
 
 	bytes, err := cmd.Output()

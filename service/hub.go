@@ -28,7 +28,7 @@ func (daemon *Daemon) HandleWebRTC() {
 					return
 				}
 
-				path, err := FindProcessPath(nil, "hub.exe")
+				path, err := FindProcessPath("hub/bin", "hub.exe")
 				if err != nil {
 					panic(err)
 				}
