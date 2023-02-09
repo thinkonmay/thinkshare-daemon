@@ -104,7 +104,7 @@ func GetSessionInfor(URL string, ssToken string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	buff := make([]byte, 500)
+	buff := make([]byte, 10000)
 	size, err := res.Body.Read(buff)
 	if err != nil {
 		return nil, err
