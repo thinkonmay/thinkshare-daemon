@@ -18,9 +18,8 @@ func TestFilter(t *testing.T) {
 	}()
 
 	rtc := webrtc.Configuration{ICEServers: []webrtc.ICEServer{{
-		URLs: []string{
-			"stun:stun.l.google.com:19302",
-		}}, {
+		URLs: []string{ "stun:stun.l.google.com:19302" },
+	}, {
 		URLs:           []string{"turn:workstation.thinkmay.net:3478"},
 		Username:       "oneplay",
 		Credential:     "oneplay",
@@ -33,10 +32,9 @@ func TestFilter(t *testing.T) {
 	}},
 	}
 
-	str := FilterAndEncodeWebRTCConfig(rtc)
+	str     := EncodeWebRTCConfig(rtc)
 	result2 := DecodeWebRTCConfig(str)
 
 	str2, _ := json.MarshalIndent(result2, " ", " ")
-
 	fmt.Printf("%s\n", str2)
 }

@@ -41,6 +41,7 @@ func DecodeSignalingConfig(data string) Signaling {
 func GetSessionInforHash(in []byte) (webrtcHash string, signaling string) {
 	ssinfor := SessionInfor{}
 	json.Unmarshal(in, &ssinfor)
+
 	webrtc_config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{{
 			URLs: ssinfor.STUNs,
@@ -48,14 +49,13 @@ func GetSessionInforHash(in []byte) (webrtcHash string, signaling string) {
 
 	for _, i := range ssinfor.TURNs {
 		webrtc_config.ICEServers = append(webrtc_config.ICEServers, webrtc.ICEServer{
-			URLs:           []string{i.URL},
-			Username:       i.Username,
-			Credential:     i.Credential,
-			CredentialType: webrtc.ICECredentialTypePassword,
+			URLs:       []string{i.URL},
+			Username:   i.Username,
+			Credential: i.Credential,
 		})
 	}
 
-	webrtcHash = iceservers.FilterAndEncodeWebRTCConfig(webrtc_config)
+	webrtcHash = iceservers.EncodeWebRTCConfig(webrtc_config)
 	signaling = EncodeSignalingConfig(ssinfor.Signaling)
 
 	return

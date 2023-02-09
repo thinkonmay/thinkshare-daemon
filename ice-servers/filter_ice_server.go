@@ -9,10 +9,9 @@ import (
 
 	"github.com/go-ping/ping"
 	"github.com/pion/webrtc/v3"
-	"github.com/thinkonmay/thinkshare-daemon/log"
 )
 
-func FilterWebRTCConfig(config webrtc.Configuration) webrtc.Configuration {
+func filterWebRTCConfig(config webrtc.Configuration) webrtc.Configuration {
 	result := webrtc.Configuration{}
 
 	total_turn, count := 0, 0
@@ -76,17 +75,14 @@ func FilterWebRTCConfig(config webrtc.Configuration) webrtc.Configuration {
 	return result
 }
 
-func FilterAndEncodeWebRTCConfig(config webrtc.Configuration) string {
-	filtered := webrtc.Configuration{}
-	for {
-		filtered = FilterWebRTCConfig(config)
-		if len(filtered.ICEServers) == 2 {
-			log.PushLog("found ice server")
-			break
-		}
-		log.PushLog("unable to find ice server, retrying")
-	}
-	bytes, _ := json.Marshal(filtered)
+
+
+
+
+
+
+func EncodeWebRTCConfig(config webrtc.Configuration) string {
+	bytes, _ := json.Marshal(config)
 	return base64.RawURLEncoding.EncodeToString(bytes)
 }
 
