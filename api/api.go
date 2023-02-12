@@ -39,12 +39,12 @@ func GetServerToken(URL string) (token string, err error) {
 		fmt.Printf("unable to request :%s\n", err.Error())
 		return
 	} else if resp.StatusCode != 200 {
-		out := make([]byte, 1000)
+		out := make([]byte, 10000)
 		size, _ := resp.Body.Read(out)
 		return "", fmt.Errorf("unable to request :%s", string(out[:size]))
 	}
 
-	out := make([]byte, 1000)
+	out := make([]byte, 10000)
 	size, err := resp.Body.Read(out)
 	if err != nil {
 		fmt.Printf("unable to request :%s\n", err.Error())
@@ -69,7 +69,7 @@ func GetSessionToken(URL string, token string) (out string, err error) {
 		err = fmt.Errorf("server response code %d", res.StatusCode)
 		return
 	} else {
-		buff := make([]byte, 500)
+		buff := make([]byte, 10000)
 		size, _ := res.Body.Read(buff)
 		return string(buff[:size]), nil
 	}
