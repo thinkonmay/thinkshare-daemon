@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,23 +194,10 @@ func (procs *ChildProcesses) WaitID(ID ProcessID) {
 	}
 }
 
-func findLineEnd(dat []byte) (out [][]byte) {
-	prev := 0
-	for pos, i := range dat {
-		if i == []byte("\n")[0] {
-			out = append(out, dat[prev:pos])
-			prev = pos + 1
-		}
-	}
 
-	out = append(out, dat[prev:])
-	return
-}
 
 func (procs *ChildProcesses) copyAndCapture(process string, r io.Reader) {
 	prefix := []byte(fmt.Sprintf("Child process (%s): ", process))
-	after := []byte("")
-
 	buf := make([]byte, 1024)
 	for {
 		n, err := r.Read(buf[:])
@@ -221,14 +209,17 @@ func (procs *ChildProcesses) copyAndCapture(process string, r io.Reader) {
 			return
 		}
 
-		if n > 0 {
-			d := buf[:n]
-			lines := findLineEnd(d)
-			for _, line := range lines {
-				out := append(prefix, line...)
-				out = append(out, after...)
-
-				log.PushLog(string(out))
+		if n < 1 {
+			continue
+		}
+		lines := strings.Split(string(buf[:n]),"\n")
+		for _,line := range lines {
+			if len(line) < 2 {
+				continue
+			}
+			log.PushLog(fmt.Sprintf("%s%s",prefix,line))
+			if err != nil {
+				return
 			}
 		}
 	}

@@ -38,12 +38,17 @@ func main() {
 
 
 	go func() {
+		log_file,err := os.OpenFile("./log.txt", os.O_RDWR|os.O_CREATE, 0755)
 		for {
 			out := log.TakeLog()
 			if daemon.ServerToken == "none" {
 				continue
 			}
 			fmt.Println(out)
+			if  _,err = log_file.Write([]byte(out)); err != nil {
+				fmt.Printf("error write log to file%s\n", err.Error())
+			}
+			log_file.Write([]byte("\n"))
 		}
 	}()
 
