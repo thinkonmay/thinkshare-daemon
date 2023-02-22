@@ -197,7 +197,8 @@ func (procs *ChildProcesses) WaitID(ID ProcessID) {
 
 
 func (procs *ChildProcesses) copyAndCapture(process string, r io.Reader) {
-	prefix := []byte(fmt.Sprintf("Child process (%s): ", process))
+	procname := strings.Split(process,"\\")
+	prefix := []byte(fmt.Sprintf("Child process (%s): ", procname[len(procname)-1]))
 	buf := make([]byte, 1024)
 	for {
 		n, err := r.Read(buf[:])

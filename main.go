@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -35,22 +34,10 @@ func main() {
 	}
 
 	daemon := service.NewDaemon(domain)
+	DefaultLogHandler(daemon,true,true);
 
 
-	go func() {
-		log_file,err := os.OpenFile("./log.txt", os.O_RDWR|os.O_CREATE, 0755)
-		for {
-			out := log.TakeLog()
-			if daemon.ServerToken == "none" {
-				continue
-			}
-			fmt.Println(out)
-			if  _,err = log_file.Write([]byte(out)); err != nil {
-				fmt.Printf("error write log to file%s\n", err.Error())
-			}
-			log_file.Write([]byte("\n"))
-		}
-	}()
+
 
 	go TerminateAtTheEnd(daemon)
 	if daemon.ServerToken, err = api.GetServerToken(daemon.SessionRegistrationURL); err != nil {
@@ -59,6 +46,8 @@ func main() {
 	}
 
 	daemon.HIDport = daemon.HandleDevSim()
+	go daemon.HandleWebRTC()
+
 	go func() {
 		for {
 			if token, err := api.GetSessionToken(daemon.SessionRegistrationURL, daemon.ServerToken); err == nil {
@@ -71,6 +60,5 @@ func main() {
 		}
 	}()
 
-	go daemon.HandleWebRTC()
 	<-daemon.Shutdown
 }

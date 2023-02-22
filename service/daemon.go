@@ -29,7 +29,7 @@ func NewDaemon(domain string) *Daemon {
 		SessionToken:           "none",
 		SessionRegistrationURL: fmt.Sprintf("https://%s/api/worker", domain),
 		SessionSettingURL:      fmt.Sprintf("https://%s/api/session/setting", domain),
-		LogURL:                 fmt.Sprintf("https://%s/api/log/worker", domain),
+		LogURL:                 fmt.Sprintf("wss://%s/api/worker/log", domain),
 		Childprocess:           childprocess.NewChildProcessSystem(),
 	}
 }
