@@ -1,3 +1,5 @@
 .vscode/launch.json
-*.exe
+daemon.exe
+main.exe
 log.txt
+build/
