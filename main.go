@@ -25,12 +25,16 @@ func TerminateAtTheEnd(daemon *service.Daemon) {
 
 func main() {
 	var err error
-	domain := "service.thinkmay.net"
+	domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL");
 	args := os.Args[1:]
 	for i, arg := range args {
 		if arg == "--url" {
 			domain = args[i+1]
 		}
+	}
+
+	if domain == "" {
+		domain = "service.thinkmay.net"
 	}
 
 	daemon := service.NewDaemon(domain)
