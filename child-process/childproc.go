@@ -9,60 +9,33 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thinkonmay/thinkshare-daemon/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-type ProcessID int
+type ProcessID int64
 
-type Event struct {
-	raised bool
-}
-
-func NewEvent() *Event {
-	return &Event{
-		raised: false,
-	}
-}
-func (eve *Event) Wait() {
-	for {
-		if eve.raised {
-			return
-		} else {
-			time.Sleep(10 * time.Millisecond)
-		}
-	}
+type ProcessLog struct {
+	ID ProcessID 
+	Log string
+	LogType string
 }
 
-func (eve *Event) IsInvoked() bool {
-	return bool(eve.raised)
-}
-func (eve *Event) Raise() {
-	eve.raised = true
-}
 
 type ChildProcess struct {
 	cmd *exec.Cmd
-
-	shutdown *Event
-	done     *Event
 }
 type ChildProcesses struct {
-	ready bool
-	count int
 	mutex sync.Mutex
 	procs map[ProcessID]*ChildProcess
 
-	ExitEvent chan ProcessID
+
+	LogChan chan ProcessLog
 }
 
 func NewChildProcessSystem() *ChildProcesses {
 	ret := ChildProcesses{
-		ExitEvent: make(chan ProcessID),
-
 		procs: make(map[ProcessID]*ChildProcess),
 		mutex: sync.Mutex{},
-		count: 0,
-		ready: true,
 	}
 
 	stdinSelf := os.Stdin
@@ -79,126 +52,101 @@ func NewChildProcessSystem() *ChildProcesses {
 	return &ret
 }
 
-func (procs *ChildProcesses) handleProcess(id ProcessID) {
-	proc := procs.procs[id]
 
-	processname := proc.cmd.Args[0]
-	stdoutIn, _ := proc.cmd.StdoutPipe()
-	stderrIn, _ := proc.cmd.StderrPipe()
-	stdinOut, _ := proc.cmd.StdinPipe()
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			_, err := stdinOut.Write([]byte("\n"))
-			if err != nil {
-				return
-			}
-		}
-	}()
 
-	_log := make([]byte, 0)
-	for _, i := range proc.cmd.Args {
-		_log = append(_log, append([]byte(i), []byte(" ")...)...)
-	}
-	log.PushLog("starting %s : %s\n", processname, string(_log))
-	err := proc.cmd.Start()
-	if err != nil {
-		log.PushLog("error init process %s\n", err.Error())
-		return
-	}
-
-	go procs.copyAndCapture(processname, stdoutIn)
-	go procs.copyAndCapture(processname, stderrIn)
-
-	go func() {
-		proc.shutdown.Wait()
-		if !proc.done.IsInvoked() {
-			proc.done.Raise()
-			proc.cmd.Process.Kill()
-		}
-	}()
-	go func() {
-		proc.cmd.Wait()
-		if !proc.done.IsInvoked() {
-			proc.done.Raise()
-		}
-	}()
-
-	proc.done.Wait()
-}
-
-func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) ProcessID {
-	if !procs.ready {
-		return ProcessID(-1)
-	}
+func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
+	procs.mutex.Lock()
+	defer procs.mutex.Unlock()
 
 	if cmd == nil {
-		return -1
+		return -1,fmt.Errorf("nil cmd input")
 	}
 
-	procs.mutex.Lock()
-	defer func() {
-		procs.mutex.Unlock()
-		procs.count++
-	}()
-
-	id := ProcessID(procs.count)
+	id := ProcessID(time.Now().UnixMilli())
 	procs.procs[id] = &ChildProcess{
 		cmd:      cmd,
-		shutdown: NewEvent(),
-		done:     NewEvent(),
 	}
 
-	go func() {
-		log.PushLog("process %s, process id %d booting up\n", cmd.Args[0], int(id))
-		procs.handleProcess(id)
-		procs.ExitEvent <- id
-	}()
-
-	return ProcessID(procs.count)
+	log.PushLog("process %s, process id %d booting up\n", cmd.Args[0], int(id))
+	procs.handleProcess(id)
+	return id,nil
 }
 
 func (procs *ChildProcesses) CloseAll() {
 	procs.mutex.Lock()
 	defer procs.mutex.Unlock()
 
-	procs.ready = false
-	for _, proc := range procs.procs {
-		proc.shutdown.Raise()
+	for id,_ := range procs.procs {
+		procs.CloseID(id);
 	}
 }
 
-func (procs *ChildProcesses) CloseID(ID ProcessID) {
+func (procs *ChildProcesses) CloseID(ID ProcessID) error {
 	procs.mutex.Lock()
 	defer procs.mutex.Unlock()
 
 	proc := procs.procs[ID]
 	if proc == nil {
-		return
+		return fmt.Errorf("no such ProcessID")
 	}
 
 	log.PushLog("force terminate process name %s, process id %d \n", proc.cmd.Args[0], int(ID))
-	proc.shutdown.Raise()
+	return proc.cmd.Process.Kill()
 }
 
-func (procs *ChildProcesses) WaitID(ID ProcessID) {
-	for {
-		id := <-procs.ExitEvent
-		if id == ID {
-			log.PushLog("process name %s with id %d exited \n", procs.procs[ID].cmd.Args[0], int(ID))
-			return
-		} else {
-			procs.ExitEvent <- id
-			time.Sleep(10 * time.Millisecond)
-		}
+func (procs *ChildProcesses) WaitID(ID ProcessID) error {
+	procs.mutex.Lock()
+	defer procs.mutex.Unlock()
+
+	proc := procs.procs[ID]
+	if proc == nil {
+		return fmt.Errorf("no such ProcessID")
 	}
+
+	proc.cmd.Process.Wait()
+	return nil;
 }
 
 
 
-func (procs *ChildProcesses) copyAndCapture(process string, r io.Reader) {
-	procname := strings.Split(process,"\\")
-	prefix := []byte(fmt.Sprintf("Child process (%s): ", procname[len(procname)-1]))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+func (procs *ChildProcesses) handleProcess(id ProcessID) {
+	proc := procs.procs[id]
+	if proc == nil {
+		return
+	}
+
+
+	processname := proc.cmd.Args[0]
+	stdoutIn, _ := proc.cmd.StdoutPipe()
+	stderrIn, _ := proc.cmd.StderrPipe()
+	
+	log.PushLog("starting %s : %s\n", processname, strings.Join(proc.cmd.Args, " "))
+	err := proc.cmd.Start()
+	if err != nil {
+		log.PushLog("error init process %s\n", err.Error())
+		return
+	}
+
+	go procs.copyAndCapture(id,"stdout" ,stdoutIn)
+	go procs.copyAndCapture(id,"stderr" ,stderrIn)
+}
+
+
+func (procs *ChildProcesses) copyAndCapture(id ProcessID, logtype string, r io.Reader) {
 	buf := make([]byte, 1024)
 	for {
 		n, err := r.Read(buf[:])
@@ -215,12 +163,10 @@ func (procs *ChildProcesses) copyAndCapture(process string, r io.Reader) {
 		}
 		lines := strings.Split(string(buf[:n]),"\n")
 		for _,line := range lines {
-			if len(line) < 2 {
-				continue
-			}
-			log.PushLog(fmt.Sprintf("%s%s",prefix,line))
-			if err != nil {
-				return
+			procs.LogChan <- ProcessLog{
+				Log: line,
+				LogType: logtype,
+				ID: id,
 			}
 		}
 	}

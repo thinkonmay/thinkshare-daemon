@@ -1,15 +1,11 @@
-package signaling
+package session
 
 import (
 	"encoding/base64"
 	"encoding/json"
 )
 
-type Signaling struct {
-	Wsurl    string `json:"wsurl"`
-	Grpcport int    `json:"grpcport"`
-	Grpcip   string `json:"grpcip"`
-}
+
 
 func EncodeSignalingConfig(config Signaling) string {
 	bytes, _ := json.Marshal(config)

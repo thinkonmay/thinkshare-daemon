@@ -6,21 +6,13 @@ import (
 	"fmt"
 	"net/http"
 
-	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
-	"github.com/thinkonmay/thinkshare-daemon/session"
-	"github.com/thinkonmay/thinkshare-daemon/system"
+	"github.com/thinkonmay/thinkshare-daemon/api/session"
+	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
-type Session struct {
-	Ids        []childprocess.ProcessID
-	Token      string
-	WebRTCConf string `json:"webrtcConfig"`
-	GrpcConf   string `json:"grpcConfig"`
-	Done       bool
-}
 
-func GetServerToken(URL string) (token string, err error) {
-	sysinf := system.GetInfor()
+
+func GetServerToken(URL string, sysinf *system.SysInfo) (token string, err error) {
 	infor, err := json.Marshal(sysinf)
 	if err != nil {
 		fmt.Printf("unable to marshal sysinfor :%s\n", err.Error())
@@ -53,11 +45,13 @@ func GetServerToken(URL string) (token string, err error) {
 	return string(out[:size]), nil
 }
 
+
+
 func GetSessionToken(URL string, token string) (out string, err error) {
 	req, err := http.NewRequest("GET", URL, bytes.NewBuffer([]byte("")))
 	req.Header.Add("Authorization", fmt.Sprintf("Brearer %s", token))
 	if err != nil {
-		err = fmt.Errorf("unable to request %s\n", err.Error())
+		err = fmt.Errorf("unable to request %s", err.Error())
 		return
 	}
 
@@ -75,28 +69,13 @@ func GetSessionToken(URL string, token string) (out string, err error) {
 	}
 }
 
-type Signaling struct {
-	Wsurl    string `json:"wsurl"`
-	Grpcport string `json:"grpcport"`
-	Grpcip   string `json:"grpcip"`
-}
 
-type TURN struct {
-	URL        string `json:"urls"`
-	Username   string `json:"username"`
-	Credential string `json:"credential"`
-}
 
-type SessionInfor struct {
-	Signaling Signaling `json:"signaling"`
-	TURNs     []TURN    `json:"turns"`
-	STUNs     []string  `json:"stuns"`
-}
-
-func GetSessionInfor(URL string, ssToken string) (*Session, error) {
+func GetSessionInfor(URL string, ssToken string) (*session.Session, error) {
 	req, err := http.NewRequest("GET",
 		fmt.Sprintf("%s?token=%s", URL, ssToken),
 		bytes.NewBuffer([]byte("")))
+
 	if err != nil {
 		return nil, err
 	}
@@ -104,19 +83,15 @@ func GetSessionInfor(URL string, ssToken string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	buff := make([]byte, 10000)
 	size, err := res.Body.Read(buff)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &Session{
-		Token: ssToken,
-		Ids:   make([]childprocess.ProcessID, 0),
-		Done:  false,
-	}
-
-	result.WebRTCConf, result.GrpcConf = session.GetSessionInforHash(buff[:size])
+	result := &session.Session{ Token: ssToken, }
+	result.GetSessionInforHash(buff[:size])
 	return result, nil
 }
 

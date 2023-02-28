@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 
 	"github.com/pion/webrtc/v3"
-	"github.com/thinkonmay/thinkshare-daemon/session/signaling"
-	"github.com/thinkonmay/thinkshare-daemon/session/ice"
 )
 
 
+
+type Signaling struct {
+	Wsurl    string `json:"wsurl"`
+	Grpcport string `json:"grpcport"`
+	Grpcip   string `json:"grpcip"`
+}
 
 type TURN struct {
 	URL        string `json:"urls"`
@@ -17,12 +21,18 @@ type TURN struct {
 }
 
 type SessionInfor struct {
-	Signaling signaling.Signaling `json:"signaling"`
+	Signaling Signaling `json:"signaling"`
 	TURNs     []TURN    `json:"turns"`
 	STUNs     []string  `json:"stuns"`
 }
+type Session struct {
+	Token      string
+	WebRTCConf string `json:"webrtcConfig"`
+	GrpcConf   string `json:"grpcConfig"`
+}
 
-func GetSessionInforHash(in []byte) (webrtcHash string, signalingHash string) {
+
+func (session *Session)GetSessionInforHash(in []byte) {
 	ssinfor := SessionInfor{}
 	json.Unmarshal(in, &ssinfor)
 
@@ -39,7 +49,6 @@ func GetSessionInforHash(in []byte) (webrtcHash string, signalingHash string) {
 		})
 	}
 
-	webrtcHash = ice.EncodeWebRTCConfig(webrtc_config)
-	signalingHash = signaling.EncodeSignalingConfig(ssinfor.Signaling)
-	return
+	session.WebRTCConf   = EncodeWebRTCConfig(webrtc_config)
+	session.GrpcConf     = EncodeSignalingConfig(ssinfor.Signaling)
 }

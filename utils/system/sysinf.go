@@ -9,7 +9,7 @@ import (
 	"github.com/pion/stun"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
-	"github.com/thinkonmay/thinkshare-daemon/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 // SysInfo saves the basic system information
