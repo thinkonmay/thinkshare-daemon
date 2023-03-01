@@ -159,6 +159,7 @@ func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
 	var err error
 	output := make([]byte,0);
 	go func() {
+		testcase.SysProcAttr.HideWindow = true;
 		output,err = testcase.Output()
 		done<-false
 	}()
