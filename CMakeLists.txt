@@ -1,21 +1,46 @@
 cmake_minimum_required(VERSION 2.20.0)
-project(WebrtcProxy)
+project(Daemon)
 
-find_package(Threads REQUIRED)
-list(APPEND SVC_COMPILE_OPTIONS -Wall)
-list(PREPEND PLATFORM_LIBRARIES
-        ksuser
-        wsock32
-        ws2_32
-        d3d11 dxgi D3DCompiler
-        setupapi
-        dwmapi
-        userenv
-        synchronization.lib)
-add_executable(thinkremote-svc ./tools/thinkremote-svc.cpp)
-set_target_properties(thinkremote-svc PROPERTIES CXX_STANDARD 17)
-target_link_libraries(thinkremote-svc
-        ${CMAKE_THREAD_LIBS_INIT}
-        wtsapi32
-        ${PLATFORM_LIBRARIES})
-target_compile_options(thinkremote-svc PRIVATE ${SVC_COMPILE_OPTIONS})
+
+set(CMAKE_PREFIX_PATH C:/gstreamer/1.22.0/msvc_x86_64)
+set(INCLUDE_LIBRARY C:/gstreamer/1.22.0/msvc_x86_64/lib)
+
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(GLIB REQUIRED glib-2.0)
+pkg_check_modules(GST REQUIRED gstreamer-1.0)
+pkg_check_modules(VIDEO REQUIRED gstreamer-video-1.0)
+
+
+
+file(GLOB SOURCE_LIST 
+    ${CMAKE_SOURCE_DIR}/cgo/*.cpp
+)
+
+
+
+
+
+
+add_library(shared STATIC ${SOURCE_LIST})
+target_include_directories(shared PUBLIC
+    ${CMAKE_SOURCE_DIR}/pipeline/device
+
+    ${GLIB_INCLUDE_DIRS} 
+    ${GST_INCLUDE_DIRS}
+    ${VIDEO_INCLUDE_DIRS}
+)
+
+target_compile_options(shared PUBLIC ${GLIB_CFLAGS}
+                                     ${GST_CFLAGS}
+                                     ${VIDEO_CFLAGS})
+
+target_link_directories(shared PUBLIC ${INCLUDE_LIBRARY} )    
+
+target_link_libraries(shared PUBLIC 
+    ${GLIB_LIBRARIES} 
+    ${GST_LIBRARIES}
+    ${VIDEO_LIBRARIES}
+)
+
+
