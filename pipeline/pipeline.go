@@ -1,6 +1,8 @@
-package gsttest
+package pipeline
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -18,6 +20,117 @@ const (
 	defaultAudioBitrate = 256000
 	defaultVideoBitrate = 6000
 )
+
+type AudioPipeline struct {
+	PipelineHash string
+	PipelineString string
+	Plugin string
+
+	Disable bool
+}
+
+type VideoPipeline struct {
+	PipelineHash string
+
+	PipelineString map[int]string
+	Plugin map[int]string
+
+	Disable bool
+}
+
+func (pipeline *AudioPipeline) SyncPipeline(device *device.MediaDevice) {
+	if pipeline.Disable == false && pipeline.PipelineString != "" && pipeline.PipelineHash != "" && pipeline.Plugin != "" {
+		return
+	}
+
+	found := false
+	for _, card := range device.Soundcards {
+		if card.Name == "Default Audio Render Device" {
+			result,err := GstTestAudio(card.Api,card.DeviceID)
+			if err != nil {
+				continue
+			}
+
+			pipeline.PipelineString = result;
+			pipeline.Plugin = card.Api;
+			found = true
+		}
+	}
+
+	if !found {
+		pipeline.Disable = true
+	}
+	
+
+	bytes, _ := json.Marshal(pipeline)
+	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
+	pipeline.Disable = false
+}
+
+
+func (pipeline *VideoPipeline) SyncPipeline(device *device.MediaDevice) {
+	haveUpdate := false
+
+	keys := make([]int, 0, len(pipeline.PipelineString))
+	for k := range pipeline.PipelineString {
+		keys = append(keys, k)
+	}
+
+
+	for _,m := range device.Monitors {
+		found := false
+		for _,k := range keys {
+			if k == m.MonitorHandle {
+				found = true
+			}
+		}
+
+		if found {
+			continue
+		}
+
+		result,plugin,err := GstTestVideo(m.MonitorHandle)
+		if err != nil {
+			log.PushLog("unable to find pipeline for monitor %s",m.MonitorName)
+			continue
+		}
+
+		pipeline.PipelineString[m.MonitorHandle] = result;	
+		pipeline.Plugin[m.MonitorHandle] = plugin;	
+		haveUpdate = true
+	}
+
+	for _,m := range keys {
+		found := false
+		for _,k := range device.Monitors {
+			if k.MonitorHandle == m {
+				found = true
+			}
+		}
+
+		if found {
+			continue;
+		}
+
+		delete(pipeline.PipelineString,m)
+		haveUpdate = true
+	}
+
+
+	pipeline.Disable = false
+	if !haveUpdate {
+		return;
+	}
+
+	// possible memory leak here, severity HIGH, avoid calling this if possible
+	bytes, _ := json.Marshal(pipeline)
+	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
+}
+
+
+
+
+
 
 func FindTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 	path, err := utils.FindProcessPath("","gst-launch-1.0.exe")
@@ -128,18 +241,18 @@ func formatAudioDeviceID(in string) string {
 }
 
 
-func GstTestAudio(video *device.Soundcard) (string,error) {
-	testcase := FindTestCmd(video.Api, 0, video.DeviceID)
-	return gstTestGeneric(video.Api, testcase)
+func GstTestAudio(API string,DeviceID string) (string,error) {
+	testcase := FindTestCmd(API, 0, DeviceID)
+	return gstTestGeneric(API, testcase)
 }
 
 
-func GstTestVideo(video *device.Monitor) (string,error) {
+func GstTestVideo(MonitorHandle int) (pipeline string,plugin string,err error) {
 	video_plugins := []string{"nvcodec", "amf", "quicksync", "media foundation", "opencodec"}
 
 	for _, _plugin := range video_plugins {
-		fmt.Printf("testing pipeline plugin %s, monitor handle %d\n",_plugin, video.MonitorHandle)
-		testcase := FindTestCmd(_plugin, video.MonitorHandle, "")
+		fmt.Printf("testing pipeline plugin %s, monitor handle %d\n",_plugin, MonitorHandle)
+		testcase := FindTestCmd(_plugin, MonitorHandle, "")
 		pipeline,err := gstTestGeneric(_plugin, testcase)
 		if err != nil {
 			fmt.Printf("test failted %s\n", err.Error())
@@ -147,24 +260,22 @@ func GstTestVideo(video *device.Monitor) (string,error) {
 		} 
 
 		log.PushLog("pipeline %s test success",pipeline)
-		return pipeline,nil;
+		return pipeline,_plugin,nil;
 	}
 
-	return "",fmt.Errorf("no suitable pipeline found")
+	return "","",fmt.Errorf("no suitable pipeline found")
 }
 
 func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
 	done := make(chan bool,2)
 
 	var err error
-	output := make([]byte,0);
 	go func() {
-		testcase.SysProcAttr.HideWindow = true;
-		output,err = testcase.Output()
+		err = testcase.Run()
 		done<-false
 	}()
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		done<-true 
 	}()
 
@@ -176,6 +287,6 @@ func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
 	} else if err != nil{
 		return "",fmt.Errorf("test program failed, err: %s",err.Error())
 	} else {
-		return "",fmt.Errorf("test program failed, stdout: %s",string(output))
+		return "",fmt.Errorf("test program failed")
 	}
 }

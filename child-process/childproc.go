@@ -3,7 +3,6 @@ package childprocess
 import (
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -34,20 +33,10 @@ type ChildProcesses struct {
 
 func NewChildProcessSystem() *ChildProcesses {
 	ret := ChildProcesses{
+		LogChan: make(chan ProcessLog,100),
 		procs: make(map[ProcessID]*ChildProcess),
 		mutex: sync.Mutex{},
 	}
-
-	stdinSelf := os.Stdin
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			_, err := stdinSelf.Write([]byte("\n"))
-			if err != nil {
-				return
-			}
-		}
-	}()
 
 	return &ret
 }
@@ -69,13 +58,14 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
 
 	log.PushLog("process %s, process id %d booting up\n", cmd.Args[0], int(id))
 	procs.handleProcess(id)
+	go func ()  {
+		procs.WaitID(id);
+		procs.CloseID(id)
+	}()
 	return id,nil
 }
 
 func (procs *ChildProcesses) CloseAll() {
-	procs.mutex.Lock()
-	defer procs.mutex.Unlock()
-
 	for id,_ := range procs.procs {
 		procs.CloseID(id);
 	}
@@ -96,9 +86,9 @@ func (procs *ChildProcesses) CloseID(ID ProcessID) error {
 
 func (procs *ChildProcesses) WaitID(ID ProcessID) error {
 	procs.mutex.Lock()
-	defer procs.mutex.Unlock()
-
 	proc := procs.procs[ID]
+	procs.mutex.Unlock()
+
 	if proc == nil {
 		return fmt.Errorf("no such ProcessID")
 	}
@@ -135,7 +125,6 @@ func (procs *ChildProcesses) handleProcess(id ProcessID) {
 	stderrIn, _ := proc.cmd.StderrPipe()
 	
 	log.PushLog("starting %s : %s\n", processname, strings.Join(proc.cmd.Args, " "))
-	proc.cmd.SysProcAttr.HideWindow = true;
 	err := proc.cmd.Start()
 	if err != nil {
 		log.PushLog("error init process %s\n", err.Error())

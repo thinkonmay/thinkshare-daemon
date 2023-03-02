@@ -13,10 +13,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/api"
 	"github.com/thinkonmay/thinkshare-daemon/api/session"
-	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
-	"github.com/thinkonmay/thinkshare-daemon/utils/system"
+	"github.com/thinkonmay/thinkshare-daemon/child-process"
+	"github.com/thinkonmay/thinkshare-daemon/pipeline/device"
+	"github.com/thinkonmay/thinkshare-daemon/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
 type Daemon struct {
@@ -37,11 +39,15 @@ type Daemon struct {
 
 		sessionToken   string
 		info  		  *session.Session
+
+		AudioPipeline *pipeline.AudioPipeline
+		VideoPipeline *pipeline.VideoPipeline
 	}
+
 	HID struct {
 		port int
-
 	}
+	Device *device.MediaDevice
 }
 
 func NewDaemon(domain string) *Daemon {
@@ -55,23 +61,60 @@ func NewDaemon(domain string) *Daemon {
 		Shutdown:               make(chan bool),
 		Childprocess:           childprocess.NewChildProcessSystem(),
 
-		WebRTCHub: struct{maxProcCount int; procs []int; sessionToken string; info *session.Session}{
+		WebRTCHub: struct{maxProcCount int; procs []int; sessionToken string; info *session.Session; AudioPipeline *pipeline.AudioPipeline; VideoPipeline *pipeline.VideoPipeline}{
 			maxProcCount: 0,
 			procs: make([]int, 0),
 			sessionToken: "none",
 			info: nil,
+
+			AudioPipeline: &pipeline.AudioPipeline{
+				Disable: true,
+			},
+			VideoPipeline: &pipeline.VideoPipeline{
+				PipelineString: map[int]string{},
+				Plugin: map[int]string{},
+				Disable: true,
+			},
 		},
 
 		HID: struct{port int}{
 			port: 25678,
 		},
+
+		Device: nil,
 	}
+
+	go func (){
+		for {
+			dm.Device = device.GetDevice()
+			time.Sleep(1 * time.Second)
+		}
+	}()
+	go func ()  {
+		for {
+			time.Sleep(1 * time.Second)
+			if dm.Device == nil {
+				continue
+			}
+			dm.WebRTCHub.VideoPipeline.SyncPipeline(dm.Device)	
+		}
+	}()
+	go func ()  {
+		for {
+			time.Sleep(1 * time.Second)
+			if dm.Device == nil {
+				continue
+			}
+			dm.WebRTCHub.AudioPipeline.SyncPipeline(dm.Device)	
+		}
+	}()
 
 
 
 	go func ()  {
+		child_log := childprocess.ProcessLog{}
 		for {
-			child_log := <-dm.Childprocess.LogChan
+			child_log = <-dm.Childprocess.LogChan
 			log.PushLog(fmt.Sprintf("childprocess (%d) (%s): %s",child_log.ID,child_log.LogType,child_log.Log))
 		}
 	}()
@@ -207,7 +250,7 @@ func (daemon *Daemon) HandleWebRTC() {
 
 			daemon.WebRTCHub.info = info
 			daemon.WebRTCHub.sessionToken = token
-			daemon.WebRTCHub.maxProcCount = 2
+			daemon.WebRTCHub.maxProcCount = 1
 		}
 	}()
 
