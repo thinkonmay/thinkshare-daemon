@@ -11,6 +11,12 @@ require (
 )
 
 require (
+	cloud.google.com/go/compute v1.14.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	github.com/jessevdk/go-flags v1.5.0 // indirect
+)
+
+require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -18,6 +24,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/pigeatgarlic/oauth2l v0.0.0-20230303143312-d75f87f5d187
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.5 // indirect
 	github.com/pion/ice/v2 v2.2.12 // indirect

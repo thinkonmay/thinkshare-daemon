@@ -2,7 +2,9 @@ package main
 
 import (
 	"os"
+
 	"github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -22,8 +24,11 @@ func main() {
 		domain = "service.thinkmay.net"
 	}
 
+	info := system.GetInfor()
+	credential.SetupSupabaseDb(info)
+
 	dm := daemon.NewDaemon(domain)
-	err := dm.GetServerToken(system.GetInfor());
+	err := dm.GetServerToken(info);
 	if err != nil  {
 		panic(err);
 	}
