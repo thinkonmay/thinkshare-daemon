@@ -3,16 +3,13 @@ package main
 import (
 	"os"
 
-	"github.com/thinkonmay/thinkshare-daemon"
+	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
-
-
-
 func main() {
-	domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL");
+	domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL")
 	args := os.Args[1:]
 	for i, arg := range args {
 		if arg == "--url" {
@@ -25,15 +22,15 @@ func main() {
 	}
 
 	info := system.GetInfor()
-	credential.SetupSupabaseDb(info)
+	credential.SetupCredential(info)
 
 	dm := daemon.NewDaemon(domain)
-	err := dm.GetServerToken(info);
-	if err != nil  {
-		panic(err);
+	err := dm.GetServerToken(info)
+	if err != nil {
+		panic(err)
 	}
 
-	dm.DefaultLogHandler(true,true);
+	dm.DefaultLogHandler(true, true)
 	dm.HandleDevSim()
 	dm.HandleWebRTC()
 	dm.TerminateAtTheEnd()
