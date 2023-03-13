@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/gorilla/websocket"
 	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
+	"github.com/thinkonmay/thinkshare-daemon/log"
 	"github.com/thinkonmay/thinkshare-daemon/session"
 	"github.com/thinkonmay/thinkshare-daemon/system"
 )
@@ -18,6 +21,71 @@ type Session struct {
 	GrpcConf   string `json:"grpcConfig"`
 	Done       bool
 }
+
+
+type SubsystemConnection struct {
+	ServerToken string
+	SessionToken string
+
+
+	wsclient *websocket.Conn 
+}
+
+
+func NewSubsystemConnection(registrationURL string) (ret *SubsystemConnection,err error){
+	ret = &SubsystemConnection{
+		ServerToken: "none",
+		SessionToken: "none",
+		wsclient: nil,
+	}
+
+	if ret.ServerToken,err = GetServerToken(registrationURL); err != nil {
+		log.PushLog("unable to get server token :%s\n", err.Error())
+		return
+	}
+
+	go func ()  {
+		var wserr error
+		for {
+			if ret.ServerToken == "none" || ret.wsclient != nil {
+				time.Sleep(1 * time.Second);
+				continue;
+			}
+
+
+
+			ret.wsclient, _, wserr = websocket.DefaultDialer.Dial(registrationURL,http.Header{
+				"Authorization": []string{fmt.Sprintf("Bearer %s",ret.ServerToken)},
+			})
+
+			if wserr != nil {
+				log.PushLog("error setup log websocket : %s",wserr.Error())
+				ret.wsclient = nil
+			} else {
+				ret.wsclient.SetCloseHandler(func(code int, text string) error {
+					ret.wsclient = nil
+					return nil
+				})
+			}
+			time.Sleep(1 * time.Second);
+		}
+	}()
+
+
+	go func ()  {
+		for {
+			time.Sleep(1 * time.Second);
+			if ret.wsclient != nil {
+				continue;
+			}
+
+			ret.wsclient.WriteMessage(websocket.TextMessage,[]byte("ping"));
+			ret.wsclient.WriteMessage(websocket.TextMessage,[]byte("sessionToken"));
+		}
+	}()
+	return
+}
+
 
 func GetServerToken(URL string) (token string, err error) {
 	sysinf := system.GetInfor()
@@ -53,6 +121,7 @@ func GetServerToken(URL string) (token string, err error) {
 	return string(out[:size]), nil
 }
 
+
 func GetSessionToken(URL string, token string) (out string, err error) {
 	req, err := http.NewRequest("GET", URL, bytes.NewBuffer([]byte("")))
 	req.Header.Add("Authorization", fmt.Sprintf("Brearer %s", token))
@@ -74,6 +143,8 @@ func GetSessionToken(URL string, token string) (out string, err error) {
 		return string(buff[:size]), nil
 	}
 }
+
+
 
 type Signaling struct {
 	Wsurl    string `json:"wsurl"`

@@ -13,7 +13,6 @@ type Daemon struct {
 	SessionSettingURL      string
 	SessionRegistrationURL string
 
-	ServerToken  string
 	SessionToken string
 
 	HIDport int
@@ -25,7 +24,6 @@ type Daemon struct {
 func NewDaemon(domain string) *Daemon {
 	return &Daemon{
 		Shutdown:               make(chan bool),
-		ServerToken:            "none",
 		SessionToken:           "none",
 		SessionRegistrationURL: fmt.Sprintf("https://%s/api/worker", domain),
 		SessionSettingURL:      fmt.Sprintf("https://%s/api/session/setting", domain),

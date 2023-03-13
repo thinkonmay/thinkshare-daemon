@@ -44,10 +44,6 @@ func main() {
 
 
 	go TerminateAtTheEnd(daemon)
-	if daemon.ServerToken, err = api.GetServerToken(daemon.SessionRegistrationURL); err != nil {
-		log.PushLog("unable to get server token :%s\n", err.Error())
-		return
-	}
 
 	daemon.HIDport = daemon.HandleDevSim()
 	go daemon.HandleWebRTC()
