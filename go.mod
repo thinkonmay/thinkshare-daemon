@@ -7,7 +7,7 @@ require (
 	github.com/pion/stun v0.4.0
 	github.com/pion/webrtc/v3 v3.1.53
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/thinkonmay/conductor v0.0.0-20230317015630-58a46158b9c2
+	github.com/thinkonmay/conductor v0.0.0-20230317030816-9a81eb6b8f3b
 )
 
 require (
@@ -16,6 +16,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/pion/transport/v2 v2.0.0 // indirect
+	github.com/thinkonmay/thinkremote-rtchub v1.1.1-0.20230303044453-4bd326fb5bbe // indirect
 	golang.org/x/text v0.6.0 // indirect
 	google.golang.org/genproto v0.0.0-20221202195650-67e5cbc046fd // indirect
 	google.golang.org/grpc v1.50.1 // indirect

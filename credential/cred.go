@@ -6,17 +6,20 @@ import (
 	"os"
 
 	"github.com/pigeatgarlic/oauth2l"
-	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
 type Cred struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+type Data struct {
+	PublicIP  string `json:"username"`
+	PrivateIP string `json:"password"`
+}
 
-func SetupCredential(sysinf *system.SysInfo) (cred *Cred, err error) {
+func SetupProxyAccount(sysinf interface{}) (cred *Cred, err error) {
 	secret, err := os.OpenFile("./cache.secret.json", os.O_RDWR|os.O_CREATE, 0755)
-	defer func ()  {
+	defer func() {
 		if err := secret.Close(); err != nil {
 			fmt.Printf("%s", err.Error())
 		}

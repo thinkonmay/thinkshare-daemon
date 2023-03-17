@@ -27,7 +27,7 @@ type SysInfo struct {
 }
 
 // Get preferred outbound ip of this machine
-func GetOutboundIP() net.IP {
+func GetPrivateIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		log.PushLog(err.Error())
@@ -36,7 +36,7 @@ func GetOutboundIP() net.IP {
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP
+	return string(localAddr.IP)
 }
 
 func GetPublicIP() string {
@@ -67,7 +67,7 @@ func GetPublicIP() string {
 	return result
 }
 
-func GetInfor() *packet.WorkerInfor {
+func GetInfor() (*packet.WorkerInfor,error) {
 	hostStat, _ := host.Info()
 	vmStat, _ := mem.VirtualMemory()
 	gpu, err := ghw.GPU()
@@ -78,20 +78,24 @@ func GetInfor() *packet.WorkerInfor {
 
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil
+		return nil,err
 	}
 
 	ret := &packet.WorkerInfor{
-		CPU:  cpus.Processors[0].Model,
-		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
-		BIOS: fmt.Sprintf("%s version %s", bios.Vendor, bios.Version),
-		NICs: make([]string,0),
+		CPU:   cpus.Processors[0].Model,
+		RAM:   fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
+		BIOS:  fmt.Sprintf("%s version %s", bios.Vendor, bios.Version),
+
+		NICs:  make([]string, 0),
 		Disks: make([]string, 0),
-		GPUs: make([]string, 0),
+		GPUs:  make([]string, 0),
+
+		// Get preferred outbound ip of this machine
+		PublicIP : GetPublicIP(),
+		PrivateIP : GetPrivateIP(),
 
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-
 
 	if hostStat.VirtualizationSystem == "" {
 		ret.Hostname = fmt.Sprintf("Baremetal %s ( OS %s %s) (arch %s)", hostStat.Hostname, hostStat.Platform, hostStat.PlatformVersion, hostStat.KernelArch)
@@ -114,8 +118,5 @@ func GetInfor() *packet.WorkerInfor {
 		}
 	}
 
-	// Get preferred outbound ip of this machine
-	ret.PublicIP = GetPublicIP()
-	ret.PrivateIP = GetOutboundIP().String()
-	return ret
+	return ret,nil
 }
