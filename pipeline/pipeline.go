@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/thinkonmay/thinkshare-daemon/pipeline/device"
+	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -25,106 +25,44 @@ type AudioPipeline struct {
 	PipelineHash string
 	PipelineString string
 	Plugin string
-
-	Disable bool
 }
 
 type VideoPipeline struct {
 	PipelineHash string
-
-	PipelineString map[int]string
-	Plugin map[int]string
-
-	Disable bool
+	PipelineString string
+	Plugin string
 }
 
-func (pipeline *AudioPipeline) SyncPipeline(device *device.MediaDevice) {
-	if pipeline.Disable == false && pipeline.PipelineString != "" && pipeline.PipelineHash != "" && pipeline.Plugin != "" {
-		return
+func (pipeline *AudioPipeline) SyncPipeline(card *packet.Soundcard) error {
+	result,err := GstTestAudio(card.Api,card.DeviceID)
+	if err != nil {
+		log.PushLog("unable to find pipeline for soundcard %s",card.DeviceID)
+		return err
 	}
 
-	found := false
-	for _, card := range device.Soundcards {
-		if card.Name == "Default Audio Render Device" {
-			result,err := GstTestAudio(card.Api,card.DeviceID)
-			if err != nil {
-				continue
-			}
-
-			pipeline.PipelineString = result;
-			pipeline.Plugin = card.Api;
-			found = true
-		}
-	}
-
-	if !found {
-		pipeline.Disable = true
-	}
-	
+	pipeline.PipelineString = result;
+	pipeline.Plugin = card.Api;
 
 	bytes, _ := json.Marshal(pipeline)
 	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
-	pipeline.Disable = false
+	return nil
 }
 
 
-func (pipeline *VideoPipeline) SyncPipeline(device *device.MediaDevice) {
-	haveUpdate := false
-
-	keys := make([]int, 0, len(pipeline.PipelineString))
-	for k := range pipeline.PipelineString {
-		keys = append(keys, k)
+func (pipeline *VideoPipeline) SyncPipeline(monitor *packet.Monitor) error {
+	result,plugin,err := GstTestVideo(int(monitor.MonitorHandle))
+	if err != nil {
+		log.PushLog("unable to find pipeline for monitor %s",monitor.MonitorName)
+		return err
 	}
 
-
-	for _,m := range device.Monitors {
-		found := false
-		for _,k := range keys {
-			if k == m.MonitorHandle {
-				found = true
-			}
-		}
-
-		if found {
-			continue
-		}
-
-		result,plugin,err := GstTestVideo(m.MonitorHandle)
-		if err != nil {
-			log.PushLog("unable to find pipeline for monitor %s",m.MonitorName)
-			continue
-		}
-
-		pipeline.PipelineString[m.MonitorHandle] = result;	
-		pipeline.Plugin[m.MonitorHandle] = plugin;	
-		haveUpdate = true
-	}
-
-	for _,m := range keys {
-		found := false
-		for _,k := range device.Monitors {
-			if k.MonitorHandle == m {
-				found = true
-			}
-		}
-
-		if found {
-			continue;
-		}
-
-		delete(pipeline.PipelineString,m)
-		haveUpdate = true
-	}
-
-
-	pipeline.Disable = false
-	if !haveUpdate {
-		return;
-	}
+	pipeline.PipelineString = result;	
+	pipeline.Plugin = plugin;	
 
 	// possible memory leak here, severity HIGH, avoid calling this if possible
 	bytes, _ := json.Marshal(pipeline)
 	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
+	return nil
 }
 
 

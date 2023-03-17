@@ -1,25 +1,26 @@
-package pipeline 
+package pipeline
 
 import (
 	"fmt"
 	"testing"
 
+	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/pipeline/device"
 )
 
 func TestTest(t *testing.T) {
 	dev := device.GetDevice()
-	result,_,err := GstTestVideo(dev.Monitors[0].MonitorHandle)
+	result,_,err := GstTestVideo(int(dev.Monitors[0].MonitorHandle))
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("test %s\n", result)
 
-	souncard := device.Soundcard{}
+	souncard := packet.Soundcard{}
 	for _, card := range dev.Soundcards {
 		if card.Name == "Default Audio Render Device" {
-			souncard = card
+			souncard = *card
 		}
 	}
 
@@ -36,17 +37,10 @@ func TestSync(t *testing.T) {
 	dev := device.GetDevice()
 
 
-	video := &VideoPipeline {
-		PipelineString: map[int]string{},
-		Plugin: map[int]string{},
-	}
-
-	video.SyncPipeline(dev)
-
-	audio := &AudioPipeline {
-	}
-
-	audio.SyncPipeline(dev)
+	video := &VideoPipeline { }
+	video.SyncPipeline(dev.Monitors[0])
+	audio := &AudioPipeline { }
+	audio.SyncPipeline(dev.Soundcards[0])
 
 	fmt.Printf("%v\n%v",video,audio)
 

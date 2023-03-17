@@ -9,35 +9,21 @@ import (
 // #include "util.h"
 import "C"
 
+import (
+	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
+)
+
 type DeviceQuery unsafe.Pointer
 
-type Monitor struct {
-	MonitorHandle int    `json:"handle"`
-	MonitorName   string `json:"name"`
-	DeviceName    string `json:"device"`
-	Adapter       string `json:"adapter"`
-	Width         int    `json:"width"`
-	Height        int    `json:"height"`
-	Framerate     int    `json:"framerate"`
-	IsPrimary     bool   `json:"isPrimary"`
-}
 
-type Soundcard struct {
-	DeviceID string `json:"id"`
-	Name     string `json:"name"`
-	Api      string `json:"api"`
 
-	IsDefault  bool `json:"isDefault"`
-	IsLoopback bool `json:"isLoopback"`
-}
 
-type MediaDevice struct {
-	Monitors   []Monitor   `json:"monitors"`
-	Soundcards []Soundcard `json:"soundcards"`
-}
+func GetDevice() *packet.MediaDevice {
+	result := &packet.MediaDevice{
+		Monitors: make([]*packet.Monitor, 0),
+		Soundcards: make([]*packet.Soundcard, 0),
+	}
 
-func GetDevice() *MediaDevice {
-	result := &MediaDevice{}
 	query := C.query_media_device()
 
 	count_soundcard := C.int(0)
@@ -55,14 +41,14 @@ func GetDevice() *MediaDevice {
 		height := C.get_monitor_height(query, count_monitor)
 		prim := C.monitor_is_primary(query, count_monitor)
 
-		result.Monitors = append(result.Monitors, Monitor{
+		result.Monitors = append(result.Monitors, &packet.Monitor{
 			Framerate: 	   60,
-			MonitorHandle: int(mhandle),
+			MonitorHandle: int32(mhandle),
 			MonitorName:   string(C.GoBytes(monitor_name, C.string_get_length(monitor_name))),
 			Adapter:       string(C.GoBytes(adapter, C.string_get_length(adapter))),
 			DeviceName:    string(C.GoBytes(device_name, C.string_get_length(device_name))),
-			Width:         int(width),
-			Height:        int(height),
+			Width:         int32(width),
+			Height:        int32(height),
 			IsPrimary:     (prim == 1),
 		})
 		count_monitor++
@@ -79,7 +65,7 @@ func GetDevice() *MediaDevice {
 		loopback := C.soundcard_is_loopback(query, count_soundcard)
 		defaul := C.soundcard_is_default(query, count_soundcard)
 
-		result.Soundcards = append(result.Soundcards, Soundcard{
+		result.Soundcards = append(result.Soundcards, &packet.Soundcard{
 			Name:       string(C.GoBytes(name, C.string_get_length(name))),
 			DeviceID:   string(C.GoBytes(device_id, C.string_get_length(device_id))),
 			Api:        string(C.GoBytes(api, C.string_get_length(api))),
@@ -88,15 +74,6 @@ func GetDevice() *MediaDevice {
 		})
 		count_soundcard++
 	}
-
-	result.Soundcards = append(result.Soundcards, Soundcard{
-		DeviceID: "none",
-		Name:     "Mute audio",
-		Api:      "None",
-
-		IsDefault:  false,
-		IsLoopback: false,
-	})
 
 	return result
 }
