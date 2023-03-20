@@ -1,37 +1,46 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
-	daemon "github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
-type Address struct {
-	PublicIP  string `json:"public_ip"`
-	PrivateIP string `json:"private_ip"`
-}
 
 func main() {
-	domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL")
+	// domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL")
 	args := os.Args[1:]
-	for i, arg := range args {
-		if arg == "--url" {
-			domain = args[i+1]
-		} else if arg == "--auth" {
-			credential.SetupProxyAccount(Address{
+	for _, arg := range args {
+		if arg == "--auth" {
+			_,err := credential.SetupProxyAccount(credential.Data{
 				PublicIP:  system.GetPublicIP(),
 				PrivateIP: system.GetPrivateIP(),
 			})
+			if err != nil {
+				fmt.Printf("failed to setup proxy account: %s",err.Error())
+			}
+			return;
 		}
 	}
-
-	if domain == "" {
-		domain = "service.thinkmay.net"
+	
+	data := credential.Data{
+		PublicIP  : system.GetPublicIP(),
+		PrivateIP : system.GetPrivateIP(),
+	}
+	cred,err := credential.SetupProxyAccount(data)
+	if err != nil {
+		fmt.Printf("failed to setup proxy account: %s",err.Error())
+		return
+	} else {
+		fmt.Printf("proxy account found, continue")
 	}
 
-	dm := daemon.NewDaemon(domain)
+	worker_cred,err := credential.SetupWorkerAccount("http://localhost:54321/functions/v1/",data,*cred)
+
+	dm := daemon.NewDaemon(worker_cred.Username)
 	// err := dm.GetServerToken(info)
 	// if err != nil {
 	// 	panic(err)

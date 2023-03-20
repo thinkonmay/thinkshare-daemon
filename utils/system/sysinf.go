@@ -36,7 +36,7 @@ func GetPrivateIP() string {
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return string(localAddr.IP)
+	return localAddr.IP.String()
 }
 
 func GetPublicIP() string {

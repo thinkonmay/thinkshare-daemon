@@ -4,3 +4,4 @@ main.exe
 log.txt
 build/
 __debug_bin.exe
+cache.secret.json
