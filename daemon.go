@@ -1,234 +1,95 @@
 package daemon
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync"
 
 	"syscall"
 	"time"
 
+	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/child-process"
-	"github.com/thinkonmay/thinkshare-daemon/utils"
+	"github.com/thinkonmay/thinkshare-daemon/persistent"
+	"github.com/thinkonmay/thinkshare-daemon/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
+	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"
+	"github.com/thinkonmay/thinkshare-daemon/utils/port"
+	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
 type Daemon struct {
-	LogURL                 string
-	SessionSettingURL      string
-	SessionRegistrationURL string
-
-	ServerToken  string
-
-
-	Childprocess *childprocess.ChildProcesses
+	childprocess *childprocess.ChildProcesses
 	Shutdown     chan bool
+	persist      persistent.Persistent
 
-
-
-	HID struct {
-		port int
-	}
+	mutex        *sync.Mutex
+	ground       packet.WorkerSession
 }
 
-func NewDaemon(domain string) *Daemon {
-	dm := &Daemon{
-		ServerToken:            "none",
-
-		SessionRegistrationURL: fmt.Sprintf("https://%s/api/worker", domain),
-		SessionSettingURL:      fmt.Sprintf("https://%s/api/session/setting", domain),
-		LogURL:                 fmt.Sprintf("wss://%s/api/worker/log", domain),
-
+func NewDaemon(persistent persistent.Persistent,
+			   ) *Daemon {
+	daemon := &Daemon{
+		persist: persistent,
 		Shutdown:               make(chan bool),
-		Childprocess:           childprocess.NewChildProcessSystem(),
+		childprocess:           childprocess.NewChildProcessSystem(),
 
-		HID: struct{port int}{
-			port: 25678,
-		},
+		mutex: &sync.Mutex{},
+		ground: packet.WorkerSession{},
 	}
-
-
-
 	go func ()  {
-		child_log := childprocess.ProcessLog{}
 		for {
-			child_log = <-dm.Childprocess.LogChan
-			log.PushLog(fmt.Sprintf("childprocess (%d) (%s): %s",child_log.ID,child_log.LogType,child_log.Log))
+			child_log := <-daemon.childprocess.LogChan
+			daemon.persist.Log(fmt.Sprintf("childprocess %d",child_log.ID),child_log.LogType,child_log.Log)
 		}
 	}()
-
-
-	return dm
-}
-
-
-
-
-
-// TODO
-func (daemon *Daemon)DefaultLogHandler(enableLogfile bool, enableWebscoketLog bool) {
-	log_file,err := os.OpenFile("./log.txt", os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		log.PushLog("error open log file to write: %s",err.Error())
-		log_file = nil
-		err = nil
-	} else {
-		log_file.Truncate(0);
-	}
-
-
-	// var wsclient *websocket.Conn = nil
-	go func ()  {
-		// var wserr error
-		for {
-			time.Sleep(5 * time.Second)
-			// if daemon.ServerToken == "none" || wsclient != nil {
-			// 	continue;
-			// }
-
-
-
-			// wsclient, _, wserr = websocket.DefaultDialer.Dial(daemon.LogURL,http.Header{
-			// 	"Authorization": []string{fmt.Sprintf("Bearer %s",daemon.ServerToken)},
-			// })
-
-			// if wserr != nil {
-			// 	log.PushLog("error setup log websocket : %s",wserr.Error())
-			// 	wsclient = nil
-			// } else {
-			// 	wsclient.SetCloseHandler(func(code int, text string) error {
-			// 		wsclient = nil
-			// 		return nil
-			// 	})
-			// }
-		}
-	}()
-
-
-
-
 	go func ()  {
 		for {
 			out := log.TakeLog()
-			
-			if log_file != nil {
-				log_file.Write([]byte(fmt.Sprintf("%s\n",out)))
-			}
+			daemon.persist.Log("daemon.exe","infor",out)
 		}
 	}()
-}
-
-
-
-
-func (daemon *Daemon) HandleDevSim()  {
-	go func() {
+	go func ()  {
 		for {
-			path, err := utils.FindProcessPath("hid", "hid.exe")
+			media := media.GetDevice()
+			daemon.persist.Media(media)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+	go func ()  {
+		for {
+			infor,err := system.GetInfor()
 			if err != nil {
-				panic(err)
+				log.PushLog("error get sysinfor : %s",err.Error())
+				continue
 			}
-			process := exec.Command(path, fmt.Sprintf("--urls=http://localhost:%d", daemon.HID.port))
-			id,err := daemon.Childprocess.NewChildProcess(process)
-			if err != nil || id == -1{
-				log.PushLog("fail to start hid process: %s",err.Error())
-			}
+			daemon.persist.Infor(infor)
+			time.Sleep(10 * time.Second)
+		}
+	}()
 
 
-			daemon.Childprocess.WaitID(id)
+	go func ()  {
+		for {
+			ss := daemon.persist.RecvSession()
+			daemon.persist.SyncSession(daemon.sync(ss))
 			time.Sleep(1 * time.Second)
 		}
 	}()
+
+
+	go daemon.handleHID()
+	go daemon.handleHub()
+	return daemon
 }
 
 
 
 
-
-
-// func (daemon *Daemon) HandleWebRTC() {
-// 	go func() {
-// 		for {
-// 			time.Sleep(1 * time.Second)
-// 			token, err := api.GetSessionToken(daemon.SessionRegistrationURL, daemon.ServerToken);
-// 			if err != nil {
-// 				log.PushLog("error get session token : %s\n", err.Error())
-// 				continue
-// 			} else if token == "none" {
-// 				daemon.WebRTCHub.sessionToken = "none"
-// 				daemon.WebRTCHub.info = nil
-// 				daemon.WebRTCHub.maxProcCount = 0
-// 				time.Sleep(1 * time.Second)
-// 				continue
-// 			} else if daemon.WebRTCHub.sessionToken != "none" {
-// 				time.Sleep(1 * time.Second)
-// 				continue
-// 			}
-
-// 			info, err := api.GetSessionInfor(daemon.SessionSettingURL, token)
-// 			if err != nil {
-// 				log.PushLog("error get session infor : %s\n", err.Error())
-// 				continue
-// 			}
-
-
-// 			daemon.WebRTCHub.info = info
-// 			daemon.WebRTCHub.sessionToken = token
-// 			daemon.WebRTCHub.maxProcCount = 1
-// 		}
-// 	}()
-
-// 	go func() {
-// 		for {
-// 			time.Sleep(50 * time.Millisecond)
-// 			if len(daemon.WebRTCHub.procs) > daemon.WebRTCHub.maxProcCount {
-// 				last :=daemon.WebRTCHub.procs[len(daemon.WebRTCHub.procs)-1]
-// 				daemon.Childprocess.CloseID(childprocess.ProcessID(last))
-// 				daemon.WebRTCHub.procs = utils.RemoveElement(&daemon.WebRTCHub.procs,int(last))
-// 			}
-// 		}
-// 	}()
-
-// 	go func() {
-// 		for {
-// 			if len(daemon.WebRTCHub.procs) >= daemon.WebRTCHub.maxProcCount {
-// 				time.Sleep(50 * time.Millisecond)
-// 				continue
-// 			}
-
-
-
-// 			path, err := utils.FindProcessPath("hub/bin", "hub.exe")
-// 			if err != nil {
-// 				log.PushLog("unable to find hub process %s",err.Error())
-// 				continue;
-// 			}
-
-// 			session := daemon.WebRTCHub.info;
-// 			process := exec.Command(path,
-// 				"--hid", 		fmt.Sprintf("localhost:%d", daemon.HID.port),
-// 				"--token", 		session.Token,
-// 				"--grpc", 		session.GrpcConf,
-// 				"--webrtc", 	session.WebRTCConf)
-
-// 			id,err := daemon.Childprocess.NewChildProcess(process)
-// 			if err != nil || id == -1 {
-// 				log.PushLog("error: fail to start hub process: %s",err.Error())
-// 				time.Sleep(1 * time.Second)
-// 				return;
-// 			}
-
-// 			daemon.WebRTCHub.procs = append(daemon.WebRTCHub.procs, int(id))
-// 			go func ()  {
-// 				daemon.Childprocess.WaitID(id)
-// 				daemon.Childprocess.CloseID(id)
-
-// 				daemon.WebRTCHub.procs = utils.RemoveElement(&daemon.WebRTCHub.procs,int(id))
-// 			}()
-// 		}
-// 	}()
-// }
 
 func (daemon *Daemon)TerminateAtTheEnd() {
 	go func ()  {
@@ -236,8 +97,224 @@ func (daemon *Daemon)TerminateAtTheEnd() {
 		signal.Notify(chann, syscall.SIGTERM, os.Interrupt)
 		<-chann
 
-		daemon.Childprocess.CloseAll()
+		daemon.childprocess.CloseAll()
 		time.Sleep(100 * time.Millisecond)
 		daemon.Shutdown <- true
 	}()
 }
+
+
+
+
+
+
+
+type SessionManifest struct {
+	HidPort int `json:"hid_port"`	
+	FailCount int `json:"fail_count"`	
+
+	HidProcessID int `json:"hid_process_id"`	
+	HubProcessID int `json:"hub_process_id"`	
+}
+
+
+
+func (daemon *Daemon) kill(){
+	session := SessionManifest{}
+	if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+		session = SessionManifest{
+			HidProcessID: 0,
+			HubProcessID: 0,
+		}
+	}
+
+	if session.HidProcessID != 0 {
+		daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
+	}
+	if session.HubProcessID != 0 {
+		daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+	}
+
+
+	bytes,_ := json.Marshal(session)
+	daemon.ground.Manifest = string(bytes)
+}
+func (daemon *Daemon) reset(){
+	session := SessionManifest{}
+	if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+		session = SessionManifest{
+			HidProcessID: 0,
+			HubProcessID: 0,
+		}
+	}
+
+	if session.HubProcessID != 0 {
+		daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+	}
+
+
+	bytes,_ := json.Marshal(session)
+	daemon.ground.Manifest = string(bytes)
+}
+
+func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
+	daemon.mutex.Lock()
+	defer daemon.mutex.Unlock()
+
+	if len(ss.Sessions) > 1 {
+		log.PushLog("number of session is more than 1, not valid");
+		return packet.WorkerSessions{
+			Sessions: []*packet.WorkerSession{&daemon.ground},
+		}
+	} else if len(ss.Sessions) == 0 {
+		daemon.kill()	
+		return ss
+	}
+
+	desired := ss.Sessions[0]
+	diff := false
+
+	diff = desired.Monitor.MonitorHandle != daemon.ground.Monitor.MonitorHandle
+	diff = desired.Soundcard.DeviceID != daemon.ground.Soundcard.DeviceID
+	diff = desired.WebRTCConfig != daemon.ground.WebRTCConfig
+	diff = desired.SignalingConfig != daemon.ground.SignalingConfig
+	diff = desired.Token != daemon.ground.Token
+
+	if diff {
+		daemon.ground = *desired		
+		daemon.reset()
+	}
+
+	return packet.WorkerSessions{
+		Sessions: []*packet.WorkerSession{desired},
+	}
+}
+
+
+func (daemon *Daemon) handleHID() (){
+	for {
+		path, err := utils.FindProcessPath("hid", "hid.exe")
+		if err != nil {
+			log.PushLog("unable to find hid.exe: %s",err.Error())
+			continue
+		}
+
+		free_port,err := port.GetFreePort()
+		if err != nil {
+			log.PushLog("unable to find open port: %s",err.Error())
+			continue
+		}
+
+		daemon.mutex.Lock()
+		session := SessionManifest{}
+		if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+			session = SessionManifest{}
+		}
+	
+		session.HidPort = free_port
+
+		bytes,_ := json.Marshal(session)
+		daemon.ground.Manifest = string(bytes)
+		daemon.mutex.Unlock()
+
+		process := exec.Command(path, fmt.Sprintf("--urls=http://localhost:%d", free_port))
+		id,err := daemon.childprocess.NewChildProcess(process)
+		if err != nil || id == -1{
+			log.PushLog("fail to start hid process: %s",err.Error())
+		}
+
+		daemon.mutex.Lock()
+		session = SessionManifest{}
+		if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+			session = SessionManifest{}
+		}
+	
+		session.FailCount++
+		session.HidProcessID = int(id)
+
+		bytes,_ = json.Marshal(session)
+		daemon.ground.Manifest = string(bytes)
+		daemon.mutex.Unlock()
+
+		daemon.childprocess.WaitID(id)
+	}
+}
+
+
+
+func (daemon *Daemon) handleHub() (){
+	for {
+		path, err := utils.FindProcessPath("hub/bin", "hub.exe")
+		if err != nil {
+			log.PushLog("unable to find hid.exe: %s",err.Error())
+			continue
+		}
+
+		daemon.mutex.Lock()
+		session := SessionManifest{}
+		if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+			session = SessionManifest{}
+		}
+
+
+		token 	    := daemon.ground.Token
+		signaling 	:= daemon.ground.SignalingConfig
+		webrtc 	    := daemon.ground.WebRTCConfig
+		hidport     := session.HidPort
+
+		video := pipeline.VideoPipeline{}
+		err = video.SyncPipeline(daemon.ground.Monitor)
+		if err != nil {
+			daemon.ground.SessionLog = append(daemon.ground.SessionLog, err.Error())
+			session.FailCount++
+		}
+
+		audio := pipeline.AudioPipeline{}
+		err = audio.SyncPipeline(daemon.ground.Soundcard)
+		if err != nil {
+			daemon.ground.SessionLog = append(daemon.ground.SessionLog, err.Error())
+			session.FailCount++
+		}
+
+		daemon.ground.Pipelines = []string{audio.PipelineString,video.PipelineString}
+
+		bytes,_ := json.Marshal(session)
+		daemon.ground.Manifest = string(bytes)
+		daemon.mutex.Unlock()
+
+		if err != nil {
+			continue
+		}
+
+		process := exec.Command(path,
+			"--hid", 		fmt.Sprintf("localhost:%d", hidport),
+			"--token", 		token,
+			"--audio", 		audio.PipelineHash,
+			"--video", 		video.PipelineHash,
+			"--grpc", 		signaling,
+			"--webrtc", 	webrtc)
+
+		id,err := daemon.childprocess.NewChildProcess(process)
+		if err != nil || id == -1{
+			log.PushLog("fail to start hid process: %s",err.Error())
+		}
+
+		daemon.mutex.Lock()
+		session = SessionManifest{}
+		if err := json.Unmarshal([]byte(daemon.ground.Manifest),&session); err != nil {
+			session = SessionManifest{}
+		}
+	
+		session.FailCount++
+		session.HubProcessID = int(id) 
+
+		bytes,_ = json.Marshal(session)
+		daemon.ground.Manifest = string(bytes)
+		daemon.mutex.Unlock()
+		
+
+		daemon.childprocess.WaitID(id)
+	}
+}
+
+

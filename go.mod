@@ -7,7 +7,8 @@ require (
 	github.com/pion/stun v0.4.0
 	github.com/pion/webrtc/v3 v3.1.53
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/thinkonmay/conductor v0.0.0-20230317030816-9a81eb6b8f3b
+	github.com/thinkonmay/conductor v0.0.0-20230321151703-eb0df2472cf3
+	google.golang.org/grpc v1.50.1
 )
 
 require (
@@ -16,10 +17,8 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/jessevdk/go-flags v1.5.0 // indirect
 	github.com/pion/transport/v2 v2.0.0 // indirect
-	github.com/thinkonmay/thinkremote-rtchub v1.1.1-0.20230303044453-4bd326fb5bbe // indirect
-	golang.org/x/text v0.6.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20221202195650-67e5cbc046fd // indirect
-	google.golang.org/grpc v1.50.1 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
 
@@ -28,7 +27,6 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorilla/websocket v1.5.0
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pigeatgarlic/oauth2l v0.0.0-20230303143312-d75f87f5d187
@@ -51,9 +49,9 @@ require (
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/crypto v0.0.0-20221010152910-d6f0a8c073c2 // indirect
-	golang.org/x/net v0.5.0 // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/crypto v0.6.0 // indirect
+	golang.org/x/net v0.6.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	howett.net/plist v1.0.0 // indirect
 )

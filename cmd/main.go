@@ -4,51 +4,50 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/thinkonmay/thinkshare-daemon"
+	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
+	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
-
 func main() {
-	// domain := os.Getenv("THINKREMOTE_SUBSYSTEM_URL")
-	args := os.Args[1:]
-	for _, arg := range args {
+	authonly := false
+	address := credential.Address{
+		PublicIP:  system.GetPublicIP(),
+		PrivateIP: system.GetPrivateIP(),
+	}
+	for _, arg := range os.Args[1:]{
 		if arg == "--auth" {
-			_,err := credential.SetupProxyAccount(credential.Data{
-				PublicIP:  system.GetPublicIP(),
-				PrivateIP: system.GetPrivateIP(),
-			})
-			if err != nil {
-				fmt.Printf("failed to setup proxy account: %s",err.Error())
-			}
-			return;
+			authonly = true
 		}
 	}
-	
-	data := credential.Data{
-		PublicIP  : system.GetPublicIP(),
-		PrivateIP : system.GetPrivateIP(),
-	}
-	cred,err := credential.SetupProxyAccount(data)
+
+	proxy_cred, err := credential.SetupProxyAccount(address)
 	if err != nil {
-		fmt.Printf("failed to setup proxy account: %s",err.Error())
+		fmt.Printf("failed to setup proxy account: %s", err.Error())
 		return
-	} else {
-		fmt.Printf("proxy account found, continue")
 	}
 
-	worker_cred,err := credential.SetupWorkerAccount("http://localhost:54321/functions/v1/",data,*cred)
+	if authonly {
+		return
+	}
 
-	dm := daemon.NewDaemon(worker_cred.Username)
-	// err := dm.GetServerToken(info)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	fmt.Printf("proxy account found, continue")
+	worker_cred, err := credential.SetupWorkerAccount("http://localhost:54321/functions/v1/", address, *proxy_cred)
+	if err != nil {
+		fmt.Printf("failed to setup worker account: %s", err.Error())
+		return
+	}
 
-	dm.DefaultLogHandler(true, true)
-	dm.HandleDevSim()
-	// dm.HandleWebRTC()
+
+	grpc,err := grpc.InitGRPCClient("localhost",5000,*worker_cred)
+	if err != nil {
+		fmt.Printf("failed to setup grpc: %s", err.Error())
+		return
+	}
+
+	// TODO
+	dm := daemon.NewDaemon(grpc)
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown
 }

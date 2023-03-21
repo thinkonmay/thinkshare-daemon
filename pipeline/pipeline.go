@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 )
 
 const (
@@ -71,7 +71,7 @@ func (pipeline *VideoPipeline) SyncPipeline(monitor *packet.Monitor) error {
 
 
 func FindTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
-	path, err := utils.FindProcessPath("","gst-launch-1.0.exe")
+	path, err := path.FindProcessPath("","gst-launch-1.0.exe")
 	if err != nil {
 		panic(err)
 	}
