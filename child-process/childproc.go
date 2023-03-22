@@ -12,6 +12,15 @@ import (
 )
 
 type ProcessID int64
+func (id ProcessID)Valid()bool{
+	return id > 0
+}
+
+const (
+	InvalidProcID = -1
+	NullProcID = -2
+)
+
 
 type ProcessLog struct {
 	ID ProcessID 
@@ -48,7 +57,7 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
 	defer procs.mutex.Unlock()
 
 	if cmd == nil {
-		return -1,fmt.Errorf("nil cmd input")
+		return InvalidProcID,fmt.Errorf("nil cmd input")
 	}
 
 	id := ProcessID(time.Now().UnixMilli())

@@ -44,7 +44,7 @@ func (pipeline *AudioPipeline) SyncPipeline(card *packet.Soundcard) error {
 	pipeline.Plugin = card.Api;
 
 	bytes, _ := json.Marshal(pipeline)
-	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
+	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
 	return nil
 }
 
@@ -61,7 +61,7 @@ func (pipeline *VideoPipeline) SyncPipeline(monitor *packet.Monitor) error {
 
 	// possible memory leak here, severity HIGH, avoid calling this if possible
 	bytes, _ := json.Marshal(pipeline)
-	pipeline.PipelineHash = base64.RawURLEncoding.EncodeToString(bytes)
+	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
 	return nil
 }
 
