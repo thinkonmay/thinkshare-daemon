@@ -110,13 +110,19 @@ func (daemon *Daemon)TerminateAtTheEnd() {
 
 
 
+type MediaConfig struct {
+	Monitor    *packet.Monitor   `json:"monitor"`
+	Soundcard  *packet.Soundcard `json:"soundcard"`
+}
 type SessionManifest struct {
 	HidPort int `json:"hid_port"`	
 	FailCount int `json:"fail_count"`	
 
 	HidProcessID childprocess.ProcessID `json:"hid_process_id"`	
 	HubProcessID childprocess.ProcessID `json:"hub_process_id"`	
+	Pipelines    []string 				`json:"pipelines"`             
 }
+
 
 func (manifest SessionManifest)Default() *SessionManifest{
 	return &SessionManifest{
@@ -190,14 +196,13 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 	if len(ss.Sessions) == 1 && len(daemon.current) == 0 {
 		defaultManifest,_ := json.Marshal(SessionManifest{}.Default())
 		daemon.current = []packet.WorkerSession{{
-			WebRTCConfig: desired.WebRTCConfig,	
-			SignalingConfig: desired.SignalingConfig ,
-			Token: desired.Token,
-			Monitor: desired.Monitor,
-			Soundcard: desired.Soundcard,
-			Pipelines: make([]string, 0),
-			SessionLog: make([]string, 0),
-			Manifest: string(defaultManifest),
+			Id: 				desired.Id,
+			WebrtcConfig: 		desired.WebrtcConfig,	
+			SignalingConfig:	desired.SignalingConfig ,
+			AuthConfig: 		desired.AuthConfig,
+			MediaConfig: 		desired.MediaConfig,
+			SessionLog: 		make([]string, 0),
+			Manifest: 			string(defaultManifest),
 		}}
 	}
 
@@ -206,18 +211,17 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 	current := &daemon.current[0]
 
 	// check if sync-required feature need to resync
-	if  desired.Monitor.MonitorHandle 	!= current.Monitor.MonitorHandle ||
-		desired.Soundcard.DeviceID 		!= current.Soundcard.DeviceID ||
-		desired.WebRTCConfig 			!= current.WebRTCConfig ||
+	if  desired.MediaConfig             != current.MediaConfig ||
+		desired.WebrtcConfig 			!= current.WebrtcConfig ||
 		desired.SignalingConfig 		!= current.SignalingConfig || 
-		desired.Token 					!= current.Token {
+		desired.AuthConfig 				!= current.AuthConfig {
 
 		// reset daemon current session state if sync is required
-		current.Monitor.MonitorHandle 	= desired.Monitor.MonitorHandle 
-		current.Soundcard.DeviceID 		= desired.Soundcard.DeviceID 
-		current.WebRTCConfig 			= desired.WebRTCConfig 
+		current.MediaConfig             = desired.MediaConfig
+		current.WebrtcConfig 			= desired.WebrtcConfig 
 		current.SignalingConfig 		= desired.SignalingConfig 
-		current.Token 					= desired.Token
+		current.AuthConfig 				= desired.AuthConfig
+		current.Id						= desired.Id
 
 		reset()
 	}
@@ -225,7 +229,6 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 	// reset daemon current session state if sync is required
 	desired.SessionLog = current.SessionLog
 	desired.Manifest   = current.Manifest
-	desired.Pipelines  = current.Pipelines
 
 	return packet.WorkerSessions{
 		Sessions: []*packet.WorkerSession{desired},
@@ -323,7 +326,7 @@ func (daemon *Daemon) handleHID() (){
 
 
 func (daemon *Daemon) handleHub() (){
-	presync := func() (path string,token string, signalingHash string, webrtcHash string, audioHash string, videoHash string, hidport int,err error){
+	presync := func() (path string,authHash string, signalingHash string, webrtcHash string, audioHash string, videoHash string, hidport int,err error){
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
@@ -350,15 +353,23 @@ func (daemon *Daemon) handleHub() (){
 			session.FailCount++
 		}
 
-		token 	    = current.Token
 		hidport     = session.HidPort
 
+		authBytes,_      := base64.StdEncoding.DecodeString(current.AuthConfig)
 		signalingBytes,_ := base64.StdEncoding.DecodeString(current.SignalingConfig)
-		webrtcBytes,_ 	 := base64.StdEncoding.DecodeString(current.WebRTCConfig)
-		signalingHash,webrtcHash  = string(signalingBytes),string(webrtcBytes)
+		webrtcBytes,_ 	 := base64.StdEncoding.DecodeString(current.WebrtcConfig)
+		signalingHash,webrtcHash,audioHash  = string(signalingBytes),string(webrtcBytes),string(authBytes)
 
+		media := &MediaConfig{}
+		err = json.Unmarshal([]byte(current.MediaConfig),media)
+		if err != nil {
+			current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to decode media: %s",err.Error()))
+			session.FailCount++
+			return "","","","","","",0,err
+		}
+		
 		video := pipeline.VideoPipeline{}
-		err = video.SyncPipeline(current.Monitor)
+		err = video.SyncPipeline(media.Monitor)
 		if err != nil {
 			current.SessionLog = append(current.SessionLog, fmt.Sprintf("failed to test video pipeline: %s",err.Error()))
 			session.FailCount++
@@ -366,16 +377,16 @@ func (daemon *Daemon) handleHub() (){
 		}
 
 		audio := pipeline.AudioPipeline{}
-		err = audio.SyncPipeline(current.Soundcard)
+		err = audio.SyncPipeline(media.Soundcard)
 		if err != nil {
 			current.SessionLog = append(current.SessionLog, fmt.Sprintf("failed to test audio pipeline: %s",err.Error()))
 			session.FailCount++
 			return "","","","","","",0,err
 		}
 
+		session.Pipelines = []string{audio.PipelineString,video.PipelineString}
 		current.SessionLog = append(current.SessionLog, "tested video and audio pipeline")
 		current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hub.exe at path : %s",path))
-		current.Pipelines = []string{audio.PipelineString,video.PipelineString}
 		audioHash = audio.PipelineHash
 		videoHash = video.PipelineHash
 
@@ -410,7 +421,7 @@ func (daemon *Daemon) handleHub() (){
 			continue
 		}
 
-		path,token,signaling,webrtc,audioHash,videoHash,hidport,err :=  presync()
+		path,authHash,signaling,webrtc,audioHash,videoHash,hidport,err :=  presync()
 		if err != nil {
 			log.PushLog("invalid initialization")	
 			continue
@@ -418,7 +429,7 @@ func (daemon *Daemon) handleHub() (){
 
 		process := exec.Command(path,
 			"--hid", 		fmt.Sprintf("localhost:%d", hidport),
-			"--token", 		token,
+			"--auth", 		authHash,
 			"--audio", 		audioHash,
 			"--video", 		videoHash,
 			"--grpc", 		signaling,

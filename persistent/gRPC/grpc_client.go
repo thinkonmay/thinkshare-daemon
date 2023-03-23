@@ -52,6 +52,14 @@ func InitGRPCClient(host string,
 
 		username : account.Username,
 		password : account.Password,
+
+		logger     : make(chan *packet.WorkerLog),
+		monitoring : make(chan *packet.WorkerMetric),
+		infor      : make(chan *packet.WorkerInfor),
+		devices    : make(chan *packet.MediaDevice),
+
+		state_out : make(chan *packet.WorkerSessions),
+		state_in  : make(chan *packet.WorkerSessions),
 	}
 
 
@@ -110,7 +118,8 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.devices); err != nil {
+				dv := <-ret.devices
+				if err := client.Send(dv); err != nil {
 					log.PushLog("error sending log to conductor %s", err.Error())
 					break
 				}

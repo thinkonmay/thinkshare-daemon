@@ -68,14 +68,37 @@ func GetPublicIP() string {
 }
 
 func GetInfor() (*packet.WorkerInfor,error) {
-	hostStat, _ := host.Info()
-	vmStat, _ := mem.VirtualMemory()
+	hostStat,err := host.Info()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
+	vmStat,err := mem.VirtualMemory()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
 	gpu, err := ghw.GPU()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
 	bios, err := ghw.BIOS()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
 	pcies, err := ghw.Block()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
 	cpus, err := ghw.CPU()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil,err
+	}
 	networks, err := ghw.Network()
-
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil,err

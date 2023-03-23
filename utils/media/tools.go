@@ -1,6 +1,7 @@
-package media 
+package media
 
 import (
+	"time"
 	"unsafe"
 
 	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
@@ -15,7 +16,9 @@ type DeviceQuery unsafe.Pointer
 
 
 func GetDevice() *packet.MediaDevice {
-	result := &packet.MediaDevice{}
+	result := &packet.MediaDevice{
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
 	query := C.query_media_device()
 
 	count_soundcard := C.int(0)

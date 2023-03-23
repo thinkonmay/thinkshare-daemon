@@ -6,7 +6,7 @@ require (
 	github.com/jaypipes/ghw v0.9.0
 	github.com/pion/stun v0.4.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/thinkonmay/conductor v0.0.0-20230321151703-eb0df2472cf3
+	github.com/thinkonmay/conductor v0.0.0-20230322083950-a66423b3a619
 	google.golang.org/grpc v1.50.1
 )
 

@@ -59,6 +59,12 @@ github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKs
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/thinkonmay/conductor v0.0.0-20230321151703-eb0df2472cf3 h1:RRZNB6giB4R+YjAw+zzr8FIcadvaTdLapXpstf9Oxr8=
 github.com/thinkonmay/conductor v0.0.0-20230321151703-eb0df2472cf3/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
+github.com/thinkonmay/conductor v0.0.0-20230322081822-8d0c50ead931 h1:NR5QKkDD0zd4fIHjNij7zm5FYIJi2ofoNH0eEb9SGec=
+github.com/thinkonmay/conductor v0.0.0-20230322081822-8d0c50ead931/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
+github.com/thinkonmay/conductor v0.0.0-20230322082752-7bba650b987f h1:bvVUVQ+k6biC5Mya+F3abF8ZjmE5CcmCcclQ0tH4j4Q=
+github.com/thinkonmay/conductor v0.0.0-20230322082752-7bba650b987f/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
+github.com/thinkonmay/conductor v0.0.0-20230322083950-a66423b3a619 h1:QcG0Jpr9LePxTMrTJKtBwnAi+JWsX50XtZmg32c5C78=
+github.com/thinkonmay/conductor v0.0.0-20230322083950-a66423b3a619/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
 github.com/tklauser/go-sysconf v0.3.11 h1:89WgdJhk5SNwJfu+GKyYveZ4IaJ7xAkecBo+KdJV0CM=
 github.com/tklauser/go-sysconf v0.3.11/go.mod h1:GqXfhXY3kiPa0nAXPDIQIWzJbMCB7AmcWpGR8lSZfqI=
 github.com/tklauser/numcpus v0.6.0 h1:kebhY2Qt+3U6RNK7UqpYNA+tJ23IBEGKkB7JQBfDYms=

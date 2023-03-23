@@ -18,6 +18,7 @@ func main() {
 	}
 	for _, arg := range os.Args[1:]{
 		if arg == "--auth" {
+			os.Remove("./cache.secret.json")
 			authonly = true
 		}
 	}
