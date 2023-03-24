@@ -87,6 +87,10 @@ func (procs *ChildProcesses) CloseID(ID ProcessID) error {
 	proc := procs.procs[ID]
 	if proc == nil {
 		return fmt.Errorf("no such ProcessID")
+	} else if proc.cmd == nil{
+		return fmt.Errorf("attempting to kill null process")
+	} else if proc.cmd.Process == nil {
+		return fmt.Errorf("attempting to kill null process")
 	}
 
 	log.PushLog("force terminate process name %s, process id %d \n", proc.cmd.Args[0], int(ID))
@@ -100,6 +104,10 @@ func (procs *ChildProcesses) WaitID(ID ProcessID) error {
 
 	if proc == nil {
 		return fmt.Errorf("no such ProcessID")
+	} else if proc.cmd == nil{
+		return fmt.Errorf("attempting to wait null process")
+	} else if proc.cmd.Process == nil {
+		return fmt.Errorf("attempting to wait null process")
 	}
 
 	proc.cmd.Process.Wait()

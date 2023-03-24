@@ -34,14 +34,21 @@ func TestTest(t *testing.T) {
 
 
 func TestSync(t *testing.T) {
-	dev := device.GetDevice()
+	// dev := device.GetDevice()
 
 
-	video := &VideoPipeline { }
-	video.SyncPipeline(dev.Monitors[0])
-	audio := &AudioPipeline { }
-	audio.SyncPipeline(dev.Soundcards[0])
+	// video := &VideoPipeline { }
+	// video.SyncPipeline(dev.Monitors[0])
 
-	fmt.Printf("%v\n%v",video,audio)
+	// soundcard := &packet.Soundcard{}
+	// for _,sc := range dev.Soundcards {
+	// 	if sc.Name == "Default Audio Render Device"  {
+	// 		soundcard = sc
+	// 	}
+	// }
+	// audio := &AudioPipeline { }
+	// audio.SyncPipeline(soundcard)
+
+	// fmt.Printf("%v",audio)
 
 }

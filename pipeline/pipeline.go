@@ -21,48 +21,40 @@ const (
 	defaultVideoBitrate = 6000
 )
 
-type AudioPipeline struct {
-	PipelineHash string
-	PipelineString string
-	Plugin string
-}
 
-type VideoPipeline struct {
-	PipelineHash string
-	PipelineString string
-	Plugin string
-}
 
-func (pipeline *AudioPipeline) SyncPipeline(card *packet.Soundcard) error {
+func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline,error) {
 	result,err := GstTestAudio(card.Api,card.DeviceID)
 	if err != nil {
 		log.PushLog("unable to find pipeline for soundcard %s",card.DeviceID)
-		return err
+		return nil,err
 	}
 
+	pipeline := &packet.Pipeline{}
 	pipeline.PipelineString = result;
 	pipeline.Plugin = card.Api;
 
-	bytes, _ := json.Marshal(pipeline)
+	bytes, _ := json.Marshal(pipeline.PipelineString)
 	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
-	return nil
+	return pipeline,nil
 }
 
 
-func (pipeline *VideoPipeline) SyncPipeline(monitor *packet.Monitor) error {
+func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline,error) {
 	result,plugin,err := GstTestVideo(int(monitor.MonitorHandle))
 	if err != nil {
 		log.PushLog("unable to find pipeline for monitor %s",monitor.MonitorName)
-		return err
+		return nil,err
 	}
 
+	pipeline := &packet.Pipeline{}
 	pipeline.PipelineString = result;	
 	pipeline.Plugin = plugin;	
 
 	// possible memory leak here, severity HIGH, avoid calling this if possible
-	bytes, _ := json.Marshal(pipeline)
+	bytes, _ := json.Marshal(pipeline.PipelineString)
 	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
-	return nil
+	return pipeline,nil
 }
 
 
@@ -70,7 +62,7 @@ func (pipeline *VideoPipeline) SyncPipeline(monitor *packet.Monitor) error {
 
 
 
-func FindTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
+func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 	path, err := path.FindProcessPath("","gst-launch-1.0.exe")
 	if err != nil {
 		panic(err)
@@ -180,7 +172,7 @@ func formatAudioDeviceID(in string) string {
 
 
 func GstTestAudio(API string,DeviceID string) (string,error) {
-	testcase := FindTestCmd(API, 0, DeviceID)
+	testcase := findTestCmd(API, 0, DeviceID)
 	return gstTestGeneric(API, testcase)
 }
 
@@ -190,7 +182,7 @@ func GstTestVideo(MonitorHandle int) (pipeline string,plugin string,err error) {
 
 	for _, _plugin := range video_plugins {
 		fmt.Printf("testing pipeline plugin %s, monitor handle %d\n",_plugin, MonitorHandle)
-		testcase := FindTestCmd(_plugin, MonitorHandle, "")
+		testcase := findTestCmd(_plugin, MonitorHandle, "")
 		pipeline,err := gstTestGeneric(_plugin, testcase)
 		if err != nil {
 			fmt.Printf("test failted %s\n", err.Error())
@@ -205,6 +197,10 @@ func GstTestVideo(MonitorHandle int) (pipeline string,plugin string,err error) {
 }
 
 func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
+	if testcase == nil {
+		return "",fmt.Errorf("nil test case")
+	}
+
 	done := make(chan bool,2)
 
 	var err error
@@ -213,7 +209,7 @@ func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
 		done<-false
 	}()
 	go func() {
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 		done<-true 
 	}()
 

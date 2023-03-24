@@ -65,6 +65,10 @@ github.com/thinkonmay/conductor v0.0.0-20230322082752-7bba650b987f h1:bvVUVQ+k6b
 github.com/thinkonmay/conductor v0.0.0-20230322082752-7bba650b987f/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
 github.com/thinkonmay/conductor v0.0.0-20230322083950-a66423b3a619 h1:QcG0Jpr9LePxTMrTJKtBwnAi+JWsX50XtZmg32c5C78=
 github.com/thinkonmay/conductor v0.0.0-20230322083950-a66423b3a619/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
+github.com/thinkonmay/conductor v0.0.0-20230324105813-89b9460e44dc h1:01Xq0IUJJGa5NAYCZDXju3sTJ5sfOw8hIftBr/X9LCY=
+github.com/thinkonmay/conductor v0.0.0-20230324105813-89b9460e44dc/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
+github.com/thinkonmay/conductor v0.0.0-20230324111444-6996fb93ced7 h1:OSYEU4D40k88HChd4sJmjXA90+gjh0XgMXVAKtxt0WU=
+github.com/thinkonmay/conductor v0.0.0-20230324111444-6996fb93ced7/go.mod h1:to6X00+IqL6jFVBXI6bD7WA4mJ3tk4w2lOKWqmq8kuY=
 github.com/tklauser/go-sysconf v0.3.11 h1:89WgdJhk5SNwJfu+GKyYveZ4IaJ7xAkecBo+KdJV0CM=
 github.com/tklauser/go-sysconf v0.3.11/go.mod h1:GqXfhXY3kiPa0nAXPDIQIWzJbMCB7AmcWpGR8lSZfqI=
 github.com/tklauser/numcpus v0.6.0 h1:kebhY2Qt+3U6RNK7UqpYNA+tJ23IBEGKkB7JQBfDYms=

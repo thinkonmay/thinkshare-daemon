@@ -57,10 +57,11 @@ func SetupProxyAccount(sysinf interface{}) (cred *Account, err error) {
 }
 
 func SetupWorkerAccount(URL string,
-	data Address,
-	proxy Account) (
-	cred *Account,
-	err error) {
+						anon_key string,
+						data Address,
+						proxy Account) (
+						cred *Account,
+						err error) {
 
 	b, _ := json.Marshal(data)
 	req, err := http.NewRequest("POST", URL, bytes.NewBuffer(b))
@@ -70,7 +71,7 @@ func SetupWorkerAccount(URL string,
 
 	req.Header.Set("username", proxy.Username)
 	req.Header.Set("password", proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", anon_key))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
