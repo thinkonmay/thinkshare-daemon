@@ -376,6 +376,20 @@ func (daemon *Daemon) handleHub() (){
 
 		// current.SessionLog = append(current.SessionLog, "tested video and audio pipeline")
 		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hub.exe at path : %s",path))
+		if current.MediaConfig == nil {
+			return "","","","","","",0,fmt.Errorf("invalid pipeline")
+		} else if current.MediaConfig.Soundcard == nil || 
+		          current.MediaConfig.Monitor == nil {
+			return "","","","","","",0,fmt.Errorf("invalid pipeline")
+		} else if current.MediaConfig.Soundcard.Pipeline == nil ||
+		    	   current.MediaConfig.Monitor.Pipeline == nil {
+			return "","","","","","",0,fmt.Errorf("invalid pipeline")
+		} else if current.MediaConfig.Soundcard.Pipeline.PipelineHash == "" ||
+		    	  current.MediaConfig.Monitor.Pipeline.PipelineHash   == "" {
+			return "","","","","","",0,fmt.Errorf("invalid pipeline")
+		}
+
+
 		audioHash = current.MediaConfig.Soundcard.Pipeline.PipelineHash
 		videoHash = current.MediaConfig.Monitor.Pipeline.PipelineHash
 

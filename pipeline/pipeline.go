@@ -181,11 +181,11 @@ func GstTestVideo(MonitorHandle int) (pipeline string,plugin string,err error) {
 	video_plugins := []string{"nvcodec", "amf", "quicksync", "media foundation", "opencodec"}
 
 	for _, _plugin := range video_plugins {
-		fmt.Printf("testing pipeline plugin %s, monitor handle %d\n",_plugin, MonitorHandle)
+		log.PushLog("testing pipeline plugin %s, monitor handle %d\n",_plugin, MonitorHandle)
 		testcase := findTestCmd(_plugin, MonitorHandle, "")
 		pipeline,err := gstTestGeneric(_plugin, testcase)
 		if err != nil {
-			fmt.Printf("test failted %s\n", err.Error())
+			log.PushLog("test failted %s\n", err.Error())
 			continue;
 		} 
 

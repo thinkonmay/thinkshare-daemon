@@ -47,7 +47,7 @@ func main() {
 	}
 
 
-	grpc,err := grpc.InitGRPCClient("localhost",5000,*worker_cred)
+	grpc,err := grpc.InitGRPCClient("192.168.1.4",5000,*worker_cred)
 	if err != nil {
 		fmt.Printf("failed to setup grpc: %s", err.Error())
 		return
