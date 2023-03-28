@@ -167,7 +167,7 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 			current.Manifest = string(bytes)
 		}()
 
-		if !session.HubProcessID.Valid() {
+		if session.HubProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
 		}
 	}
@@ -183,10 +183,10 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 		}()
 
 
-		if !session.HidProcessID.Valid() {
+		if session.HidProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
 		}
-		if !session.HubProcessID.Valid() {
+		if session.HubProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
 		}
 	}
@@ -209,13 +209,7 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 	if len(ss.Sessions) == 1 && len(daemon.current) == 0 {
 		defaultManifest,_ := json.Marshal(SessionManifest{}.Default())
 		daemon.current = []packet.WorkerSession{{
-			Id: 				desired.Id,
-			WebrtcConfig: 		desired.WebrtcConfig,	
-			SignalingConfig:	desired.SignalingConfig ,
-			AuthConfig: 		desired.AuthConfig,
-			MediaConfig: 		desired.MediaConfig,
-			// SessionLog: 		make([]string, 0),
-			Manifest: 			string(defaultManifest),
+			Manifest: string(defaultManifest),
 		}}
 	}
 
@@ -224,10 +218,7 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 	current := &daemon.current[0]
 
 	// check if sync-required feature need to resync
-	if  desired.MediaConfig             != current.MediaConfig ||
-		desired.WebrtcConfig 			!= current.WebrtcConfig ||
-		desired.SignalingConfig 		!= current.SignalingConfig || 
-		desired.AuthConfig 				!= current.AuthConfig {
+	if desired.Id != current.Id && desired.AuthConfig != "{}" {
 
 		// reset daemon current session state if sync is required
 		current.MediaConfig             = desired.MediaConfig
