@@ -44,12 +44,14 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	go func ()  {
 		for {
 			child_log := <-daemon.childprocess.LogChan
+			fmt.Println(fmt.Sprintf("childprocess %d : %s",child_log.ID, child_log.Log))
 			daemon.persist.Log(fmt.Sprintf("childprocess %d",child_log.ID),child_log.LogType,child_log.Log)
 		}
 	}()
 	go func ()  {
 		for {
 			out := log.TakeLog()
+			fmt.Println(out)
 			daemon.persist.Log("daemon.exe","infor",out)
 		}
 	}()
@@ -165,7 +167,7 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 			current.Manifest = string(bytes)
 		}()
 
-		if session.HubProcessID.Valid() {
+		if !session.HubProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
 		}
 	}
@@ -181,10 +183,10 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 		}()
 
 
-		if session.HidProcessID.Valid() {
+		if !session.HidProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
 		}
-		if session.HubProcessID.Valid() {
+		if !session.HubProcessID.Valid() {
 			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
 		}
 	}
@@ -318,7 +320,7 @@ func (daemon *Daemon) handleHID() (){
 
 
 		path,free_port,err := presync()
-		if err != nil {
+		if err != nil || path == "" {
 			time.Sleep(time.Second)
 			continue
 		}
@@ -425,7 +427,7 @@ func (daemon *Daemon) handleHub() (){
 		}
 
 		path,authHash,signaling,webrtc,audioHash,videoHash,hidport,err :=  presync()
-		if err != nil {
+		if err != nil || path == "" {
 			log.PushLog("invalid initialization")	
 			continue
 		}

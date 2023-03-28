@@ -69,6 +69,7 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
 	procs.handleProcess(id)
 	go func ()  {
 		procs.WaitID(id);
+		fmt.Printf("process id %d closed\n",id)
 		procs.CloseID(id)
 	}()
 	return id,nil
