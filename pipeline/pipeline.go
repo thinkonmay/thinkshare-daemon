@@ -21,49 +21,41 @@ const (
 	defaultVideoBitrate = 6000
 )
 
-
-
-func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline,error) {
-	result,err := GstTestAudio(card.Api,card.DeviceID)
+func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
+	result, err := GstTestAudio(card.Api, card.DeviceID)
 	if err != nil {
-		log.PushLog("unable to find pipeline for soundcard %s",card.DeviceID)
-		return nil,err
+		log.PushLog("unable to find pipeline for soundcard %s", card.DeviceID)
+		return nil, err
 	}
 
 	pipeline := &packet.Pipeline{}
-	pipeline.PipelineString = result;
-	pipeline.Plugin = card.Api;
+	pipeline.PipelineString = result
+	pipeline.Plugin = card.Api
 
 	bytes, _ := json.Marshal(pipeline.PipelineString)
 	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
-	return pipeline,nil
+	return pipeline, nil
 }
 
-
-func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline,error) {
-	result,plugin,err := GstTestVideo(int(monitor.MonitorHandle))
+func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline, error) {
+	result, plugin, err := GstTestVideo(int(monitor.MonitorHandle))
 	if err != nil {
-		log.PushLog("unable to find pipeline for monitor %s",monitor.MonitorName)
-		return nil,err
+		log.PushLog("unable to find pipeline for monitor %s", monitor.MonitorName)
+		return nil, err
 	}
 
 	pipeline := &packet.Pipeline{}
-	pipeline.PipelineString = result;	
-	pipeline.Plugin = plugin;	
+	pipeline.PipelineString = result
+	pipeline.Plugin = plugin
 
 	// possible memory leak here, severity HIGH, avoid calling this if possible
 	bytes, _ := json.Marshal(pipeline.PipelineString)
 	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
-	return pipeline,nil
+	return pipeline, nil
 }
 
-
-
-
-
-
 func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
-	path, err := path.FindProcessPath("","gst-launch-1.0.exe")
+	path, err := path.FindProcessPath("", "gst-launch-1.0.exe")
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +64,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),clock-rate=%d", VideoClockRate),
+			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"d3d11convert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -84,7 +76,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),clock-rate=%d", VideoClockRate),
+			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"d3d11convert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -96,7 +88,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),clock-rate=%d", VideoClockRate),
+			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"d3d11convert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -108,7 +100,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),clock-rate=%d", VideoClockRate),
+			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"d3d11convert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -122,7 +114,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),clock-rate=%d", VideoClockRate),
+			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"d3d11convert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -133,7 +125,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "wasapi2":
-		return exec.Command(path, "wasapi2src", "name=source", "slave-method=1","loopback=true","low-latency=true",
+		return exec.Command(path, "wasapi2src", "name=source", "slave-method=1", "loopback=true", "low-latency=true",
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
 			"!", "audio/x-raw",
 			"!", "queue", "!",
@@ -142,7 +134,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "!",
 			"audioconvert",
 			"!", "queue", "!",
-			"opusenc","audio-type=2051","perfect-timestamp=true","bitrate-type=0","hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			"opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	default:
@@ -170,57 +162,55 @@ func formatAudioDeviceID(in string) string {
 	return string(ret)
 }
 
-
-func GstTestAudio(API string,DeviceID string) (string,error) {
+func GstTestAudio(API string, DeviceID string) (string, error) {
 	testcase := findTestCmd(API, 0, DeviceID)
 	return gstTestGeneric(API, testcase)
 }
 
-
-func GstTestVideo(MonitorHandle int) (pipeline string,plugin string,err error) {
+func GstTestVideo(MonitorHandle int) (pipeline string, plugin string, err error) {
 	video_plugins := []string{"nvcodec", "amf", "quicksync", "media foundation", "opencodec"}
 
 	for _, _plugin := range video_plugins {
-		log.PushLog("testing pipeline plugin %s, monitor handle %d\n",_plugin, MonitorHandle)
+		log.PushLog("testing pipeline plugin %s, monitor handle %d\n", _plugin, MonitorHandle)
 		testcase := findTestCmd(_plugin, MonitorHandle, "")
-		pipeline,err := gstTestGeneric(_plugin, testcase)
+		pipeline, err := gstTestGeneric(_plugin, testcase)
 		if err != nil {
 			log.PushLog("test failted %s\n", err.Error())
-			continue;
-		} 
+			continue
+		}
 
-		log.PushLog("pipeline %s test success",pipeline)
-		return pipeline,_plugin,nil;
+		log.PushLog("pipeline %s test success", pipeline)
+		return pipeline, _plugin, nil
 	}
 
-	return "","",fmt.Errorf("no suitable pipeline found")
+	return "", "", fmt.Errorf("no suitable pipeline found")
 }
 
-func gstTestGeneric(plugin string, testcase *exec.Cmd) (string,error) {
+func gstTestGeneric(plugin string, testcase *exec.Cmd) (string, error) {
 	if testcase == nil {
-		return "",fmt.Errorf("nil test case")
+		return "", fmt.Errorf("nil test case")
 	}
 
-	done := make(chan bool,2)
+	done := make(chan bool, 2)
 
 	var err error
 	go func() {
 		err = testcase.Run()
-		done<-false
+		done <- false
 	}()
 	go func() {
 		time.Sleep(5 * time.Second)
-		done<-true 
+		done <- true
 	}()
 
-	success:=<-done
+	success := <-done
 
 	if success {
 		testcase.Process.Kill()
-		return strings.Join(testcase.Args[1:], " "),nil
-	} else if err != nil{
-		return "",fmt.Errorf("test program failed, err: %s",err.Error())
+		return strings.Join(testcase.Args[1:], " "), nil
+	} else if err != nil {
+		return "", fmt.Errorf("test program failed, err: %s", err.Error())
 	} else {
-		return "",fmt.Errorf("test program failed")
+		return "", fmt.Errorf("test program failed")
 	}
 }

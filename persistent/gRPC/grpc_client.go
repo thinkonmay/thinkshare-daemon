@@ -53,13 +53,13 @@ func InitGRPCClient(host string,
 		username : account.Username,
 		password : account.Password,
 
-		logger     : make(chan *packet.WorkerLog),
-		monitoring : make(chan *packet.WorkerMetric),
-		infor      : make(chan *packet.WorkerInfor),
-		devices    : make(chan *packet.MediaDevice),
+		logger     : make(chan *packet.WorkerLog,100),
+		monitoring : make(chan *packet.WorkerMetric,100),
+		infor      : make(chan *packet.WorkerInfor,100),
+		devices    : make(chan *packet.MediaDevice,100),
 
-		state_out : make(chan *packet.WorkerSessions),
-		state_in  : make(chan *packet.WorkerSessions),
+		state_out : make(chan *packet.WorkerSessions,100),
+		state_in  : make(chan *packet.WorkerSessions,100),
 	}
 
 
