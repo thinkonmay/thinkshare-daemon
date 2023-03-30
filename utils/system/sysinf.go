@@ -3,6 +3,7 @@ package system
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/jaypipes/ghw"
@@ -67,6 +68,25 @@ func GetPublicIP() string {
 	return result
 }
 
+func GetPublicIPCurl() string {
+
+	resp,err := http.Get("https://ifconfig.me/ip")	
+	if err != nil {
+		log.PushLog(err.Error())
+		return ""
+	}
+
+	ip := make([]byte,1000)
+	size,err := resp.Body.Read(ip)
+	if err != nil {
+		log.PushLog(err.Error())
+		return ""
+	}
+
+	return string(ip[:size]) 
+}
+
+
 func GetInfor() (*packet.WorkerInfor,error) {
 	hostStat,err := host.Info()
 	if err != nil {
@@ -114,7 +134,7 @@ func GetInfor() (*packet.WorkerInfor,error) {
 		GPUs:  make([]string, 0),
 
 		// Get preferred outbound ip of this machine
-		PublicIP : GetPublicIP(),
+		PublicIP : GetPublicIPCurl(),
 		PrivateIP : GetPrivateIP(),
 
 		Timestamp: time.Now().Format(time.RFC3339),

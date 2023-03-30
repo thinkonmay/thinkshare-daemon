@@ -14,12 +14,14 @@ import (
 const (
 	worker_register_url = "https://kczvtfaouddunjtxcemk.functions.supabase.co/worker_register"
 	anon_key 			= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtjenZ0ZmFvdWRkdW5qdHhjZW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE2Nzk1NDc0MTcsImV4cCI6MTk5NTEyMzQxN30.dJqF_ipAx8NF_P__tsR-KkghVSc2McQo8B3MxeEup58"
+	conductor_domain    = "conductor.thinkmay.net"
+	conductor_port      = 5000
 )
 
 func main() {
 	authonly := false
 	address := credential.Address{
-		PublicIP:  system.GetPublicIP(),
+		PublicIP:  system.GetPublicIPCurl(),
 		PrivateIP: system.GetPrivateIP(),
 	}
 	for _, arg := range os.Args[1:]{
@@ -47,7 +49,7 @@ func main() {
 	}
 
 
-	grpc,err := grpc.InitGRPCClient("192.168.1.4",5000,*worker_cred)
+	grpc,err := grpc.InitGRPCClient(conductor_domain,conductor_port,*worker_cred)
 	if err != nil {
 		fmt.Printf("failed to setup grpc: %s", err.Error())
 		return
