@@ -241,9 +241,13 @@ func (daemon *Daemon) sync(ss packet.WorkerSessions)packet.WorkerSessions {
 
 
 func (daemon *Daemon) handleHID() (){
-	presync := func() (string,int,error)  {
+	presync := func() (string,int,error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
+
+		if len(daemon.current) == 0 {
+			return "",0,fmt.Errorf("no current session")
+		}
 
 		current := &daemon.current[0]
 		session := &SessionManifest{}
@@ -278,9 +282,13 @@ func (daemon *Daemon) handleHID() (){
 		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hid.exe at path : %s",path))
 		return path,session.HidPort,nil
 	}
-	aftersync := func(id childprocess.ProcessID) {
+	aftersync := func(id childprocess.ProcessID) error {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
+
+		if len(daemon.current) == 0 {
+			return fmt.Errorf("no current session")
+		}
 
 		current := &daemon.current[0]
 		session := &SessionManifest{}
@@ -300,24 +308,24 @@ func (daemon *Daemon) handleHID() (){
 
 		session.HidProcessID = id
 		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("started hid.exe with processID %d",id))
+		return nil
 	}
 
 	for {
-		if len(daemon.current) == 0 {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		} 
-
+		time.Sleep(time.Millisecond * 100)
 
 
 		path,free_port,err := presync()
 		if err != nil || path == "" {
-			time.Sleep(time.Second)
 			continue
 		}
 		process := exec.Command(path, fmt.Sprintf("--urls=http://localhost:%d", free_port))
 		id,err := daemon.childprocess.NewChildProcess(process)
-		aftersync(id)
+		if err != nil {
+			log.PushLog("fail to start hid process: %s",err.Error())
+			continue
+		}
+		err = aftersync(id)
 
 		if err != nil {
 			log.PushLog("fail to start hid process: %s",err.Error())
@@ -333,6 +341,10 @@ func (daemon *Daemon) handleHub() (){
 	presync := func() (path string,authHash string, signalingHash string, webrtcHash string, audioHash string, videoHash string, hidport int,err error){
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
+
+		if len(daemon.current) == 0 {
+			return "","","","","","",0,fmt.Errorf("no current session")
+		}
 
 		current := &daemon.current[0]
 		session := &SessionManifest{}
@@ -386,12 +398,16 @@ func (daemon *Daemon) handleHub() (){
 		audioHash = current.MediaConfig.Soundcard.Pipeline.PipelineHash
 		videoHash = current.MediaConfig.Monitor.Pipeline.PipelineHash
 
-		return
+		return 
 	}
 
-	aftersync := func (id childprocess.ProcessID)  {
+	aftersync := func (id childprocess.ProcessID) error {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
+
+		if len(daemon.current) == 0 {
+			return fmt.Errorf("no current session")
+		}
 
 		current := &daemon.current[0]
 		session := &SessionManifest{}
@@ -410,16 +426,12 @@ func (daemon *Daemon) handleHub() (){
 
 		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("started hub.exe with processID %d",id))
 		session.HubProcessID = id
+		return nil
 	}
 	for {
-		if len(daemon.current) == 0 {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
-
+		time.Sleep(time.Millisecond * 500)
 		path,authHash,signaling,webrtc,audioHash,videoHash,hidport,err :=  presync()
 		if err != nil || path == "" {
-			log.PushLog("invalid initialization")	
 			continue
 		}
 
@@ -432,10 +444,14 @@ func (daemon *Daemon) handleHub() (){
 			"--webrtc", 	webrtc)
 
 		id,err := daemon.childprocess.NewChildProcess(process)
-		aftersync(id)
+		if err != nil {
+			log.PushLog("fail to start hub process: %s",err.Error())
+			continue
+		}
+		err = aftersync(id)
 
 		if err != nil{
-			log.PushLog("fail to start hid process: %s",err.Error())
+			log.PushLog("fail to start hub process: %s",err.Error())
 		} else {
 			daemon.childprocess.WaitID(id)
 		}
