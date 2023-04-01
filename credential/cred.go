@@ -24,26 +24,46 @@ type Address struct {
 }
 
 type Secret struct {
-	AnonKey string
-	URL		string
+	EdgeFunctions struct {
+		ProxyRegister           string `json:"proxy_register"`
+		SessionAuthenticate     string `json:"session_authenticate"`
+		SignalingAuthenticate   string `json:"signaling_authenticate"`
+		TurnRegister            string `json:"turn_register"`
+		WorkerProfileFetch      string `json:"worker_profile_fetch"`
+		WorkerRegister          string `json:"worker_register"`
+		WorkerSessionCreate     string `json:"worker_session_create"`
+		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
+	} `json:"edge_functions"`
 
-	WorkerURL		string
-	ProxyURL		string
-	TurnURL         string
+	Secret struct {
+		Anon			string `json:"anon"`
+		Url 			string `json:"url"`
+    } `json:"secret"` 
+
+    Google struct {
+		ClientId       string `json:"client_id"`
+    } `json:"google"`
 }
 
 var secret *Secret
 
-
-// TODO fetch from edge function
 func init() {
-	for _, arg := range os.Args[1:]{
-		if arg == "--auth" {
-			os.Remove("./cache.secret.json")
-		}
+	proj := os.Getenv("PROJECT")
+	proj = "avmvymkexjarplbxwlnj"
+	resp,err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant",proj),"application/json",bytes.NewBuffer([]byte("{}")))
+	if err != nil {
+		panic(err)
 	}
+	
 
+	data := make([]byte, 100000)
+	n,_ := resp.Body.Read(data)
 
+	secret = &Secret{}
+	err = json.Unmarshal(data[:n],secret)
+	if err != nil {
+		panic(err)
+	}
 }
 
 
@@ -87,14 +107,14 @@ func SetupWorkerAccount(data Address,
 						err error) {
 
 	b, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", secret.WorkerURL, bytes.NewBuffer(b))
+	req, err := http.NewRequest("POST", secret.EdgeFunctions.WorkerRegister, bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("username", proxy.Username)
 	req.Header.Set("password", proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", secret.AnonKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", secret.Secret.Anon))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
