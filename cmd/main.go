@@ -42,7 +42,7 @@ func main() {
 	}
 
 	fmt.Println("proxy account found, continue")
-	worker_cred, err := credential.SetupWorkerAccount(worker_register_url,anon_key, address, *proxy_cred)
+	worker_cred, err := credential.SetupWorkerAccount(address, proxy_cred)
 	if err != nil {
 		fmt.Printf("failed to setup worker account: %s", err.Error())
 		return

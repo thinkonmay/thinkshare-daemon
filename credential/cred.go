@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+)
 
-	"github.com/pigeatgarlic/oauth2l"
+
+
+const (
+	secret_file = "./secret.json"
 )
 
 type Account struct {
@@ -19,59 +23,78 @@ type Address struct {
 	PrivateIP string `json:"private_ip"`
 }
 
-func SetupProxyAccount(sysinf interface{}) (cred *Account, err error) {
-	cred = &Account{}
-	secret, err := os.OpenFile("./cache.secret.json", os.O_RDWR|os.O_CREATE, 0755)
-	defer func() {
-		if err := secret.Close(); err != nil {
-			fmt.Printf("%s", err.Error())
-		}
-	}()
+type Secret struct {
+	AnonKey string
+	URL		string
 
-	if err == nil {
+	WorkerURL		string
+	ProxyURL		string
+	TurnURL         string
+}
+
+var secret *Secret
+
+
+// TODO fetch from edge function
+func init() {
+	for _, arg := range os.Args[1:]{
+		if arg == "--auth" {
+			os.Remove("./cache.secret.json")
+		}
+	}
+
+
+}
+
+
+func SetupProxyAccount(addr Address) (cred Account, err error) {
+	secret, err := os.OpenFile(secret_file, os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return Account{}, err
+	} else {
 		bytes := make([]byte, 1000)
 		count, _ := secret.Read(bytes)
-		err = json.Unmarshal(bytes[:count], cred)
+		err = json.Unmarshal(bytes[:count], &cred)
 		if err == nil {
 			return cred, nil
 		}
 	}
+	defer func ()  {
+		defer secret.Close()
+		bytes, err := json.MarshalIndent(cred, "", "")
+		if err != nil { return }
+		if _, err = secret.Write(bytes); err != nil {
+			fmt.Printf("%s\n", err.Error())
+		}
+	}()
 
-	account, err := oauth2l.StartAuth(sysinf)
+
+
+
+	// oauth2_code, err := oauth2l.StartAuth(sysinf)
 	if err != nil {
-		return nil, err
+		return Account{}, err
 	}
 
-	cred.Username = account.Username
-	cred.Password = account.Password
-	bytes, err := json.MarshalIndent(cred, "", "")
-	if err != nil {
-		return nil, err
-	}
 
-	if _, err = secret.Write(bytes); err != nil {
-		fmt.Printf("%s\n", err.Error())
-	}
 
 	return cred, nil
 }
 
-func SetupWorkerAccount(URL string,
-						anon_key string,
-						data Address,
+func SetupWorkerAccount(data Address,
 						proxy Account) (
 						cred *Account,
 						err error) {
 
 	b, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", URL, bytes.NewBuffer(b))
+	req, err := http.NewRequest("POST", secret.WorkerURL, bytes.NewBuffer(b))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("username", proxy.Username)
 	req.Header.Set("password", proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", anon_key))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", secret.AnonKey))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
