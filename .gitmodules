@@ -1,0 +1,6 @@
+[submodule "hid"]
+	path = hid
+	url = https://github.com/thinkonmay/hid-server
+[submodule "hub"]
+	path = hub
+	url = https://github.com/thinkonmay/thinkremote-rtchub
