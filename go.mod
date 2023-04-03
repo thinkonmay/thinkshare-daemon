@@ -8,6 +8,7 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/thinkonmay/conductor v0.0.0-20230324111444-6996fb93ced7
 	google.golang.org/grpc v1.50.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
