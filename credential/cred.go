@@ -301,7 +301,7 @@ type Filter struct {
 }
 
 
-func CreateSession(filter Filter,cred ApiKey) (URL string, err error) {
+func CreateSession(filter Filter,cred ApiKey) (out string, err error) {
 	body,_ := json.Marshal(filter)
 
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerSessionCreate, bytes.NewBuffer(body))

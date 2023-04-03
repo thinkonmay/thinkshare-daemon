@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
@@ -100,7 +101,7 @@ func InitGRPCClient(host string,
 
 			for {
 				if err := client.Send(<-ret.monitoring); err != nil {
-					log.PushLog("error sending log to conductor %s", err.Error())
+					log.PushLog("error sending metric to conductor %s", err.Error())
 					break
 				}
 			}
@@ -120,7 +121,7 @@ func InitGRPCClient(host string,
 			for {
 				dv := <-ret.devices
 				if err := client.Send(dv); err != nil {
-					log.PushLog("error sending log to conductor %s", err.Error())
+					log.PushLog("error sync media device : %s", err.Error())
 					break
 				}
 			}
@@ -139,7 +140,7 @@ func InitGRPCClient(host string,
 
 			for {
 				if err := client.Send(<-ret.infor); err != nil {
-					log.PushLog("error sending log to conductor %s", err.Error())
+					log.PushLog("error sending hwinfor to conductor %s", err.Error())
 					break
 				}
 			}
@@ -161,8 +162,8 @@ func InitGRPCClient(host string,
 			done := make(chan bool, 2)
 			go func() {
 				for {
-					if err := client.Send(<-ret.state_in); err != nil {
-						log.PushLog("error sending log to conductor %s", err.Error())
+					if err := client.Send(<-ret.state_in); err != nil && err != io.EOF{
+						log.PushLog("error sending session state to conductor %s", err.Error())
 						done <- true
 						break
 					}
@@ -171,8 +172,8 @@ func InitGRPCClient(host string,
 			go func() {
 				for {
 					msg := &packet.WorkerSessions{}
-					if msg, err = client.Recv(); err != nil {
-						log.PushLog("error sending log to conductor %s", err.Error())
+					if msg, err = client.Recv(); err != nil && err != io.EOF{
+						log.PushLog("error receive session state from conductor %s", err.Error())
 						done <- true
 						break
 					}

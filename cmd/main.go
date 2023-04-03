@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -33,7 +34,7 @@ func main() {
 		}
 
 		if arg == "vendor" {
-			for _,arg1 := range os.Args[i:]{
+			for t,arg1 := range os.Args[i:]{
 				if arg1 == "keygen" {
 					api_key,err = credential.SetupApiKey()
 					out = fmt.Sprintf("api key : %s",api_key.Key)
@@ -41,6 +42,38 @@ func main() {
 				} else if arg1 == "workers" {
 					api_key,_ = credential.SetupApiKey()
 				    out,err = credential.FetchWorker(false,api_key)
+					short_task = true
+				} else if arg1 == "create-session" {
+					id,soundcard,monitor := -1,"Default Audio Render Device","Generic PnP Monitor"
+					api_key,_ = credential.SetupApiKey()
+					for v,arg2 := range os.Args[t:]{
+						if arg2 == "--worker-id" {
+							id,err = strconv.Atoi(os.Args[t:][v+1])	
+							if err != nil { panic(err) }
+						} else if arg2 == "--monitor" {
+							monitor = os.Args[t:][v+1]
+						} else if arg2 == "--soundcard" {
+							soundcard = os.Args[t:][v+1]
+						}
+					}
+
+				    out,err = credential.CreateSession(credential.Filter{
+						WorkerId: id,
+						SoudcardName: soundcard,
+						MonitorName: monitor,
+					},api_key)
+					short_task = true
+				} else if arg1 == "deactivate-session" {
+					id := -1
+					api_key,_ = credential.SetupApiKey()
+					for v,arg2 := range os.Args[t:]{
+						if arg2 == "--session-id" {
+							id,err = strconv.Atoi(os.Args[t:][v+1])	
+							if err != nil { panic(err) }
+						}
+					}
+
+				    out,err = credential.DeactivateSession(id,api_key)
 					short_task = true
 				}
 			}
@@ -55,8 +88,13 @@ func main() {
 		fmt.Sprintf("",worker_account,proxy_account,api_key)
 		return
 	} else if short_task {
-		fmt.Println("task result :")
 		fmt.Println(out)
+		secret_f, err := os.OpenFile("./task_result.yaml", os.O_RDWR|os.O_CREATE, 0755)
+		if err != nil { panic(err) }
+		defer secret_f.Close()
+
+		secret_f.Truncate(0)
+		secret_f.WriteAt([]byte(out),0)
 		return
 	}
 

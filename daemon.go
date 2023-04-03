@@ -94,6 +94,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	go func ()  {
 		for {
 			ss := daemon.persist.RecvSession()
+			if ss == nil { break }
 			result := daemon.sync(*ss)
 			daemon.persist.SyncSession(&result)
 			time.Sleep(1 * time.Second)

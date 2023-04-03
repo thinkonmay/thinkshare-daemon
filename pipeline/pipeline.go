@@ -24,7 +24,6 @@ const (
 func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
 	result, err := GstTestAudio(card.Api, card.DeviceID)
 	if err != nil {
-		log.PushLog("unable to find pipeline for soundcard %s", card.DeviceID)
 		return nil, err
 	}
 
@@ -40,7 +39,6 @@ func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
 func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline, error) {
 	result, plugin, err := GstTestVideo(int(monitor.MonitorHandle))
 	if err != nil {
-		log.PushLog("unable to find pipeline for monitor %s", monitor.MonitorName)
 		return nil, err
 	}
 
