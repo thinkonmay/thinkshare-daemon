@@ -66,6 +66,8 @@ var Addresses *Address
 var proj string = os.Getenv("PROJECT")
 
 func init() {
+	os.Mkdir("./secret",os.ModeDir)
+
 	Secrets = &Secret{}
 	Addresses = &Address{
 		PublicIP:  system.GetPublicIPCurl(),
@@ -258,11 +260,11 @@ func SetupApiKey() (cred ApiKey,
 
 
 
-func FetchWorker(only_active bool,cred ApiKey) (result string, err error) {
+func FetchWorker(cred ApiKey) (result string, err error) {
 	body,_ := json.Marshal(struct{
 		OnlyActive bool `json:"only_active"`
 	}{
-		OnlyActive: only_active,
+		OnlyActive: false,
 	})
 
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerProfileFetch, bytes.NewBuffer(body))
