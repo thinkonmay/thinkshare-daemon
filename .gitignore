@@ -5,3 +5,4 @@ build/
 __debug_bin.exe
 secret/
 task_result.yaml
+*.zip
