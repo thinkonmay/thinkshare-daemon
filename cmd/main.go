@@ -66,7 +66,7 @@ func main() {
 
 func ShortTask() (task RunType,err error) {
 	out := ""
-
+	task = worker_node
 	for i,arg := range os.Args[1:]{ switch arg {
 	case "proxy" :
 	task = short_task
