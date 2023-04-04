@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
