@@ -162,7 +162,7 @@ func InitGRPCClient(host string,
 			done := make(chan bool, 2)
 			go func() {
 				for {
-					if err := client.Send(<-ret.state_in); err != nil && err != io.EOF{
+					if err := client.Send(<-ret.state_in); err != nil {
 						log.PushLog("error sending session state to conductor %s", err.Error())
 						done <- true
 						break
@@ -172,7 +172,7 @@ func InitGRPCClient(host string,
 			go func() {
 				for {
 					msg := &packet.WorkerSessions{}
-					if msg, err = client.Recv(); err != nil && err != io.EOF{
+					if msg, err = client.Recv(); err != nil {
 						log.PushLog("error receive session state from conductor %s", err.Error())
 						done <- true
 						break
