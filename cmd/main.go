@@ -20,8 +20,10 @@ const (
 
 
 func main() {
-	switch int(ShortTask()) {
+	task,err := ShortTask()
+	switch int(task) {
 	case failed:
+		fmt.Printf("failed : %s\n",err.Error())
 		return
 	case short_task:
 		return
@@ -62,44 +64,34 @@ func main() {
 
 
 
-func ShortTask() (RunType) {
-	var task RunType
-
-	var err error
-	out,worker_account,proxy_account,api_key := "",credential.Account{},credential.Account{},credential.ApiKey{}
+func ShortTask() (task RunType,err error) {
+	out := ""
 
 	for i,arg := range os.Args[1:]{ switch arg {
 	case "proxy" :
 	task = short_task
 	for _,arg1 := range os.Args[i:]{ switch arg1 {
 		case "current" :
-			proxy_account,err = credential.SetupProxyAccount()
-			out = fmt.Sprintf("proxy account : %s",proxy_account.Username)
 		case "reset" :
 			os.Remove(credential.ProxySecretFile)
-			proxy_account,err = credential.SetupProxyAccount()
-			out = fmt.Sprintf("proxy account generated : %s",proxy_account.Username)
 		}
 	}
+	proxy_account,err := credential.SetupProxyAccount()
+	if err != nil { return -1,err }
+	out = fmt.Sprintf("proxy account generated : %s",proxy_account.Username)
+
 	case "vendor" :
 	task = short_task
+	api_key,err := credential.SetupApiKey()
+	if err != nil { return -1,err }
 	for t,arg1 := range os.Args[i:]{ switch arg1 {
 		case "keygen" :
-			api_key,err = credential.SetupApiKey()
 			out = fmt.Sprintf("api key : %s",api_key.Key)
 		case  "list-workers" :
-			api_key,err = credential.SetupApiKey()
-			if err != nil {
-				break
-			}
-
 			out,err = credential.FetchWorker(api_key)
+			if err != nil { return -1,err }
 		case  "create-session" :
 			id,soundcard,monitor := -1,"Default Audio Render Device","Generic PnP Monitor"
-			api_key,err = credential.SetupApiKey()
-			if err != nil {
-				break
-			}
 			for v,arg2 := range os.Args[t:]{
 				switch arg2{
 				case  "--worker-id" :
@@ -114,11 +106,11 @@ func ShortTask() (RunType) {
 			out,err = credential.CreateSession(credential.Filter{
 				WorkerId: id,
 				SoudcardName: soundcard,
-				MonitorName: monitor,
-			},api_key)
+				MonitorName: monitor},api_key)
+
+			if err != nil { return -1,err }
 		case  "deactivate-session" :
 			id := -1
-			if api_key,err = credential.SetupApiKey();err != nil { break }
 			for v,arg2 := range os.Args[t:]{
 				switch arg2 {
 				case  "--session-id" :
@@ -127,6 +119,7 @@ func ShortTask() (RunType) {
 			}
 
 			out,err = credential.DeactivateSession(id,api_key)
+			if err != nil { return -1,err }
 		}
 	}
 	case "--help":
@@ -135,14 +128,6 @@ func ShortTask() (RunType) {
 	}
 
 
-	
-
-	if err != nil {
-		fmt.Printf("failed : %s",err.Error())
-		fmt.Sprintf("",worker_account,proxy_account,api_key)
-		return failed
-	} 
-	
 	if task == short_task {
 		fmt.Println(out)
 		secret_f, err := os.OpenFile("./task_result.yaml", os.O_RDWR|os.O_CREATE, 0755)
@@ -151,10 +136,10 @@ func ShortTask() (RunType) {
 
 		secret_f.Truncate(0)
 		secret_f.WriteAt([]byte(out),0)
-		return short_task
+		return short_task,nil
 	}
 
-	return worker_node
+	return worker_node,nil
 }
 
 

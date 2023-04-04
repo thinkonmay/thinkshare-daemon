@@ -94,8 +94,8 @@ func init() {
 			panic(err)
 		}
 
+		bytes,_ := json.MarshalIndent(Secrets, "", "	")
 		secret_f.Truncate(0)
-		bytes, _ := json.MarshalIndent(Secrets, "", "	")
 		secret_f.WriteAt(bytes, 0)
 	}
 }
@@ -128,14 +128,12 @@ func SetupProxyAccount() (account Account, err error) {
 		bytes, _ := json.MarshalIndent(account, "", "	")
 
 		secret_f.Truncate(0)
-		if _, err = secret_f.WriteAt(bytes, 0); err != nil {
-			fmt.Printf("%s\n", err.Error())
-		}
+		secret_f.WriteAt(bytes, 0)
 	}()
 
 	content,_ := io.ReadAll(secret_f)
 	err = json.Unmarshal(content, &account)
-	if err == nil {
+	if err == nil && account.Username != "" {
 		return account, nil
 	}
 
@@ -215,14 +213,12 @@ func SetupApiKey() (cred ApiKey,
 		bytes, _ := json.MarshalIndent(cred, "", "	")
 
 		secret_f.Truncate(0)
-		if _, err = secret_f.WriteAt(bytes, 0); err != nil {
-			fmt.Printf("%s\n", err.Error())
-		}
+		secret_f.WriteAt(bytes, 0)
 	}()
 
 	content, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(content, &cred)
-	if err == nil {
+	if err == nil && cred.Key != "" {
 		return cred, nil
 	}
 

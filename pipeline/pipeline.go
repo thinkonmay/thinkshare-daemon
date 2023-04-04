@@ -197,7 +197,7 @@ func gstTestGeneric(plugin string, testcase *exec.Cmd) (string, error) {
 		done <- false
 	}()
 	go func() {
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		done <- true
 	}()
 
