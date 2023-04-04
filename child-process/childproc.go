@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
@@ -143,6 +144,7 @@ func (procs *ChildProcesses) handleProcess(id ProcessID) {
 	stderrIn, _ := proc.cmd.StderrPipe()
 	
 	log.PushLog("starting %s : %s\n", processname, strings.Join(proc.cmd.Args, " "))
+	proc.cmd.SysProcAttr = &syscall.SysProcAttr{ HideWindow: true, }
 	err := proc.cmd.Start()
 	if err != nil {
 		log.PushLog("error init process %s\n", err.Error())
