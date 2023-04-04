@@ -14,7 +14,6 @@ import (
 )
 
 type GRPCclient struct {
-	conn   *grpc.ClientConn
 	stream packet.ConductorClient
 
 	username string
@@ -36,18 +35,9 @@ func InitGRPCClient(host string,
 					port int,
 					account credential.Account,
 					) (ret *GRPCclient, err error) {
-	conn, err := grpc.Dial(
-		fmt.Sprintf("%s:%d", host, port),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-
-	if err != nil {
-		return nil, err
-	}
 
 	ret = &GRPCclient{
-		conn:  conn,
-		stream : packet.NewConductorClient(conn),
-		connected: true,
+		connected: false,
 		done:      false,
 
 		username : account.Username,
@@ -64,24 +54,51 @@ func InitGRPCClient(host string,
 
 
 	go func() {
+		var conn *grpc.ClientConn = nil
+		for {
+			if ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			} else if conn != nil {
+				conn.Close()
+			}
+
+			conn, err = grpc.Dial(
+				fmt.Sprintf("%s:%d", host, port),
+				grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+			if err != nil {
+				fmt.Printf("failed to dial : %s",err.Error())
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
+			ret.stream = packet.NewConductorClient(conn)
+			ret.connected = true
+		}	
+	}()
+
+
+	go func() {
 		for {
 			if ret.done {
 				return
-			}
-			if ret.stream == nil {
-				time.Sleep(2 * time.Second)
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
 				continue
-			}
+			} 
 
 			client, err := ret.stream.Logger(ret.genContext())
 			if err != nil {
 				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
 				continue
 			}
 
 			for {
 				if err := client.Send(<-ret.logger); err != nil {
 					log.PushLog("error sending log to conductor %s", err.Error())
+					ret.connected = false
 					break
 				}
 			}
@@ -91,16 +108,21 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			client, err := ret.stream.Monitor(ret.genContext())
 			if err != nil {
 				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
 				continue
 			}
 
 			for {
 				if err := client.Send(<-ret.monitoring); err != nil {
 					log.PushLog("error sending metric to conductor %s", err.Error())
+					ret.connected = false
 					break
 				}
 			}
@@ -110,10 +132,14 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			client, err := ret.stream.Mediadevice(ret.genContext())
 			if err != nil {
 				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
 				continue
 			}
 
@@ -121,6 +147,7 @@ func InitGRPCClient(host string,
 				dv := <-ret.devices
 				if err := client.Send(dv); err != nil {
 					log.PushLog("error sync media device : %s", err.Error())
+					ret.connected = false
 					break
 				}
 			}
@@ -130,16 +157,21 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 			client, err := ret.stream.Infor(ret.genContext())
 			if err != nil {
 				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
 				continue
 			}
 
 			for {
 				if err := client.Send(<-ret.infor); err != nil {
 					log.PushLog("error sending hwinfor to conductor %s", err.Error())
+					ret.connected = false
 					break
 				}
 			}
@@ -149,12 +181,15 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
 
-			ctx, cancel := context.WithCancel(ret.genContext())
-			client, err := ret.stream.Sync(ctx)
+			client, err := ret.stream.Sync(ret.genContext())
 			if err != nil {
 				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
 				continue
 			}
 
@@ -180,7 +215,7 @@ func InitGRPCClient(host string,
 				}
 			}()
 			<-done
-			cancel()
+			ret.connected = false
 		}
 	}()
 	return ret, nil
@@ -197,7 +232,6 @@ func (ret *GRPCclient) genContext() context.Context {
 }
 
 func (client *GRPCclient) Stop() {
-	client.conn.Close()
 	client.connected = false
 	client.done = true
 }
