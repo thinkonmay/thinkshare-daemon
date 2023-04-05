@@ -91,16 +91,14 @@ func ShortTask() (RunType,error) {
 			if err != nil { return failed,err }
 		case  "create-session" :
 			id,soundcard,monitor := -1,"Default Audio Render Device","Generic PnP Monitor"
-			for v,arg2 := range os.Args[t:]{
-				switch arg2{
-				case  "--worker-id" :
-					if id,err = strconv.Atoi(os.Args[t:][v+1]);err != nil { panic(err) }
-				case  "--monitor" :
-					monitor = os.Args[t:][v+1]
-				case  "--soundcard" :
-					soundcard = os.Args[t:][v+1]
-				}
-			}
+			for v,arg2 := range os.Args[t:]{ switch arg2{
+			case  "--worker-id" :
+				if id,err = strconv.Atoi(os.Args[t:][v+1]);err != nil { panic(err) }
+			case  "--monitor" :
+				monitor = os.Args[t:][v+1]
+			case  "--soundcard" :
+				soundcard = os.Args[t:][v+1]
+			}}
 
 			out,err = credential.CreateSession(credential.Filter{
 				WorkerId: id,
@@ -109,12 +107,10 @@ func ShortTask() (RunType,error) {
 			if err != nil { return failed,err }
 		case  "deactivate-session" :
 			id := -1
-			for v,arg2 := range os.Args[t:]{
-				switch arg2 {
-				case  "--session-id" :
-					if id,err = strconv.Atoi(os.Args[t:][v+1]);err != nil { panic(err) }
-				}
-			}
+			for v,arg2 := range os.Args[t:]{ switch arg2 {
+			case  "--session-id" :
+				if id,err = strconv.Atoi(os.Args[t:][v+1]);err != nil { panic(err) }
+			} }
 
 			out,err = credential.DeactivateSession(id,api_key)
 			if err != nil { return failed,err }
