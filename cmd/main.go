@@ -64,32 +64,31 @@ func main() {
 
 
 
-func ShortTask() (task RunType,err error) {
+func ShortTask() (RunType,error) {
 	out := ""
-	task = worker_node
+
 	for i,arg := range os.Args[1:]{ switch arg {
 	case "proxy" :
-	task = short_task
-	for _,arg1 := range os.Args[i:]{ switch arg1 {
-		case "current" :
-		case "reset" :
-			os.Remove(credential.ProxySecretFile)
+		for _,arg1 := range os.Args[i:]{ switch arg1 {
+			case "current" :
+			case "reset" :
+				os.Remove(credential.ProxySecretFile)
+			}
 		}
-	}
-	proxy_account,err := credential.SetupProxyAccount()
-	if err != nil { return -1,err }
-	out = fmt.Sprintf("proxy account generated : %s",proxy_account.Username)
 
+		proxy_account,err := credential.SetupProxyAccount()
+		if err != nil { return failed,err }
+		out = fmt.Sprintf("proxy account generated : %s",proxy_account.Username)
 	case "vendor" :
-	task = short_task
-	api_key,err := credential.SetupApiKey()
-	if err != nil { return -1,err }
-	for t,arg1 := range os.Args[i:]{ switch arg1 {
+		api_key,err := credential.SetupApiKey()
+		if err != nil { return failed,err }
+
+		for t,arg1 := range os.Args[i:]{ switch arg1 {
 		case "keygen" :
 			out = fmt.Sprintf("api key : %s",api_key.Key)
 		case  "list-workers" :
 			out,err = credential.FetchWorker(api_key)
-			if err != nil { return -1,err }
+			if err != nil { return failed,err }
 		case  "create-session" :
 			id,soundcard,monitor := -1,"Default Audio Render Device","Generic PnP Monitor"
 			for v,arg2 := range os.Args[t:]{
@@ -107,8 +106,7 @@ func ShortTask() (task RunType,err error) {
 				WorkerId: id,
 				SoudcardName: soundcard,
 				MonitorName: monitor},api_key)
-
-			if err != nil { return -1,err }
+			if err != nil { return failed,err }
 		case  "deactivate-session" :
 			id := -1
 			for v,arg2 := range os.Args[t:]{
@@ -119,16 +117,18 @@ func ShortTask() (task RunType,err error) {
 			}
 
 			out,err = credential.DeactivateSession(id,api_key)
-			if err != nil { return -1,err }
-		}
-	}
+			if err != nil { return failed,err }
+		}}
 	case "--help":
 		printHelp()
-	}
-	}
+	case "-h":
+		printHelp()
+	case "help":
+		printHelp()
+	}}
 
 
-	if task == short_task {
+	if out != "" {
 		fmt.Println(out)
 		secret_f, err := os.OpenFile("./task_result.yaml", os.O_RDWR|os.O_CREATE, 0755)
 		if err != nil { panic(err) }
