@@ -83,6 +83,10 @@ func init() {
 	data, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(data, Secrets)
 	if err != nil {
+		if proj == "" {
+			proj = "avmvymkexjarplbxwlnj"
+		}
+
 		resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer([]byte("{}")))
 		if err != nil {
 			panic(err)
