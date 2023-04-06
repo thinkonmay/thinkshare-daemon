@@ -16,6 +16,6 @@ $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.4
 ./msi/gcc.exe
 ./msi/git.exe
 
-MSIEXEC /i msi/go.msi /qb                      
-MSIEXEC /i msi/gstreamer-dev.msi /qb           
-MSIEXEC /i msi/gstreamer.msi /qb               
+./msi/go.msi /qb                      
+./msi/gstreamer-dev.msi /qb           
+./msi/gstreamer.msi /qb            
