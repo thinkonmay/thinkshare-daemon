@@ -19,3 +19,5 @@ $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.4
 Start-Process ./msi/go.msi  -ArgumentList "/qn" -Wait                      
 Start-Process ./msi/gstreamer-dev.msi  -ArgumentList "/qn" -Wait           
 Start-Process ./msi/gstreamer.msi  -ArgumentList "/qn" -Wait            
+
+setx /M PATH "$($env:path);C:\gstreamer\1.0\msvc_x86_64\bin"
