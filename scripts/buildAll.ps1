@@ -1,6 +1,10 @@
 $env:Path += ';C:\gstreamer\1.22.0\msvc_x86_64\bin'
 $env:PKG_CONFIG_PATH = "C:\gstreamer\1.22.0\msvc_x86_64\lib\pkgconfig"
 
+git clone "https://github.com/thinkonmay/thinkshare-daemon" daemon
+git checkout master
+Set-Location .\daemon
+
 git submodule update --init --recursive
 
 # build GO 

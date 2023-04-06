@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"strings"
 
 	oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
@@ -14,6 +16,7 @@ import (
 )
 
 const (
+	SecretDir		= "./secret"
 	ProxySecretFile = "./secret/proxy.json"
 	UserSecretFile  = "./secret/user.json"
 	ConfigFile 		= "./secret/config.json"
@@ -29,8 +32,9 @@ type Account struct {
 	Project  string `json:"project"`
 }
 type Address struct {
-	PublicIP  string `json:"public_ip"`
-	PrivateIP string `json:"private_ip"`
+	PublicIP   string `json:"public_ip"`
+	PrivateIP  string `json:"private_ip"`
+	CommitHash string `json:"commit"`
 }
 
 type Secret struct {
@@ -61,47 +65,53 @@ type Secret struct {
 	} `json:"conductor"`
 }
 
-var Secrets *Secret
-var Addresses *Address
+var Secrets *Secret = &Secret{}
 var proj string = os.Getenv("PROJECT")
+var Addresses *Address = &Address{
+	PublicIP:  system.GetPublicIPCurl(),
+	PrivateIP: system.GetPrivateIP(),
+	CommitHash: "unknown",
+}
 
 func init() {
-	os.Mkdir("./secret",os.ModeDir)
-
-	Secrets = &Secret{}
-	Addresses = &Address{
-		PublicIP:  system.GetPublicIPCurl(),
-		PrivateIP: system.GetPrivateIP(),
+	if proj == "" { proj = "avmvymkexjarplbxwlnj" }
+	commitHash,err := exec.Command("git","rev-parse","HEAD").Output()
+	if err == nil {
+		fmt.Printf("current commit hash: %s \n",commitHash)
+		Addresses.CommitHash = string(commitHash)
+	} else if commitHash == nil {
+		fmt.Println("you are not using git, please download git to have auto update")
+	} else if strings.Contains(string(commitHash),"fatal") {
+		fmt.Println("you did not clone this repo, please use clone")
 	}
 
-	secret_f, err := os.OpenFile(ConfigFile, os.O_RDWR|os.O_CREATE, 0755)
+	os.Mkdir(SecretDir,os.ModeDir)
+	secretFile, err := os.OpenFile(ConfigFile, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err)
 	}
-	defer secret_f.Close()
-
-	data, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(data, Secrets)
-	if err != nil {
-		if proj == "" {
-			proj = "avmvymkexjarplbxwlnj"
-		}
-
-		resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer([]byte("{}")))
-		if err != nil {
-			panic(err)
-		}
-
-		body,_ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(body, Secrets)
-		if err != nil {
-			panic(err)
-		}
-
+	defer  func ()  {
+		defer secretFile.Close()
 		bytes,_ := json.MarshalIndent(Secrets, "", "	")
-		secret_f.Truncate(0)
-		secret_f.WriteAt(bytes, 0)
+		secretFile.Truncate(0)
+		secretFile.WriteAt(bytes, 0)
+	}()
+
+	data,_ := io.ReadAll(secretFile)
+	err = json.Unmarshal(data, Secrets)
+
+	if err == nil { return } // avoid fetch if there is already secrets
+	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer([]byte("{}")))
+	if err != nil {
+		fmt.Printf("unable to fetch constant from server %s\n",err.Error())
+		return
+	} else if resp.StatusCode != 200 {
+		fmt.Println("unable to fetch constant from server")
+		return
 	}
+
+	body,_ := io.ReadAll(resp.Body)
+	json.Unmarshal(body, Secrets)
 }
 
 func UseProxyAccount() (account Account, err error) {
@@ -110,13 +120,27 @@ func UseProxyAccount() (account Account, err error) {
 		return Account{}, err
 	}
 
-	defer secret_f.Close()
 	bytes,_ := io.ReadAll(secret_f)
 	err = json.Unmarshal(bytes, &account)
 	if err != nil {
-		return Account{}, fmt.Errorf("nil proxy account")
+		fmt.Println("none proxy account provided, please provide (look into ./secret folder on the machine you setup proxy account)")
+		fmt.Printf("username : ")
+		fmt.Scanln(&account.Username)
+		fmt.Printf("password : ")
+		fmt.Scanln(&account.Password)
+		account.Project = proj
+
+		defer func() {
+			bytes, _ := json.MarshalIndent(account, "", "	")
+			secret_f.Truncate(0)
+			secret_f.WriteAt(bytes, 0)
+			secret_f.Close()
+		}()
+
+		return account,nil
 	}
 
+	secret_f.Close()
 	return account, nil
 }
 
