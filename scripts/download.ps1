@@ -12,9 +12,9 @@ $gstreamer.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22
 $git = New-Object net.webclient
 $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.40.0.windows.1/Git-2.40.0-64-bit.exe"                                                                 ,"msi/git.exe")
 
-./msi/dotnet.exe 
+./msi/dotnet.exe  /passive
 ./msi/gcc.exe
-./msi/git.exe
+./msi/git.exe /SILENT
 
 Start-Process ./msi/go.msi  -ArgumentList "/qn" -Wait                      
 Start-Process ./msi/gstreamer-dev.msi  -ArgumentList "/qn" -Wait           
