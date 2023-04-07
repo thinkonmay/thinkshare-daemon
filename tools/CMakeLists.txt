@@ -12,10 +12,10 @@ list(PREPEND PLATFORM_LIBRARIES
         dwmapi
         userenv
         synchronization.lib)
-add_executable(thinkremote-svc ./tools/thinkremote-svc.cpp)
-set_target_properties(thinkremote-svc PROPERTIES CXX_STANDARD 17)
-target_link_libraries(thinkremote-svc
+add_executable(thinkremotesvc ./thinkremote-svc.cpp)
+set_target_properties(thinkremotesvc PROPERTIES CXX_STANDARD 17)
+target_link_libraries(thinkremotesvc
         ${CMAKE_THREAD_LIBS_INIT}
         wtsapi32
         ${PLATFORM_LIBRARIES})
-target_compile_options(thinkremote-svc PRIVATE ${SVC_COMPILE_OPTIONS})
+target_compile_options(thinkremotesvc PRIVATE ${SVC_COMPILE_OPTIONS})

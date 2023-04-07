@@ -1,5 +1,8 @@
 .vscode/launch.json
-*.exe
+cmd.exe
+daemon.exe
+main.exe
+
 log.txt
 build/
 __debug_bin.exe
