@@ -17,7 +17,7 @@ const (
 	VideoClockRate = 90000
 	AudioClockRate = 48000
 
-	defaultAudioBitrate = 256000
+	defaultAudioBitrate = 128000
 	defaultVideoBitrate = 6000
 )
 
@@ -123,16 +123,17 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "wasapi2":
-		return exec.Command(path, "wasapi2src", "name=source", "slave-method=1", "loopback=true", "low-latency=true",
+		return exec.Command(path, "wasapi2src", "name=source", "loopback=true",
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
 			"!", "audio/x-raw",
-			"!", "queue", "!",
+			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"audioresample",
 			"!", fmt.Sprintf("audio/x-raw,clock-rate=%d", AudioClockRate),
-			"!", "queue", "!",
+			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"audioconvert",
-			"!", "queue", "!",
-			"opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"opusenc", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			// "opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	default:
@@ -162,7 +163,13 @@ func formatAudioDeviceID(in string) string {
 
 func GstTestAudio(API string, DeviceID string) (string, error) {
 	testcase := findTestCmd(API, 0, DeviceID)
-	return gstTestGeneric(API, testcase)
+	pipeline,err := gstTestGeneric(API, testcase)
+	if err != nil {
+		return "", err
+	}
+
+	log.PushLog("pipeline %s test success", pipeline)
+	return pipeline,nil
 }
 
 func GstTestVideo(MonitorHandle int) (pipeline string, plugin string, err error) {

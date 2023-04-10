@@ -75,7 +75,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 				monitor.Pipeline = video;
 			}
 			daemon.persist.Media(media)
-			time.Sleep(3 * time.Minute)
+			time.Sleep(10 * time.Minute)
 		}
 	}()
 	go func ()  {
