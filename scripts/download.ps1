@@ -20,4 +20,4 @@ Start-Process ./msi/go.msi  -ArgumentList "/qb" -Wait
 Start-Process ./msi/gstreamer-dev.msi  -ArgumentList "/qb" -Wait           
 Start-Process ./msi/gstreamer.msi  -ArgumentList "/qb" -Wait            
 
-setx /M PATH "$($env:path);C:\gstreamer\1.0\msvc_x86_64\bin"
+setx /M PATH "$($env:path);C:\gstreamer\1.0\msvc_x86_64\bin;C:\Program Files\Go\bin;C:\TDM-GCC-64\bin;C:\Program Files\dotnet;C:\gstreamer\1.0\msvc_x86_64\bin;C:\Program Files\Git\bin"
