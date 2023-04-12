@@ -17,7 +17,7 @@ const (
 	VideoClockRate = 90000
 	AudioClockRate = 48000
 
-	defaultAudioBitrate = 128000
+	defaultAudioBitrate = 256000
 	defaultVideoBitrate = 6000
 )
 
@@ -123,7 +123,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "wasapi2":
-		return exec.Command(path, "wasapi2src", "name=source", "loopback=true",
+		return exec.Command(path, "wasapi2src", "name=source", "loopback=true","low-latency=true",
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
 			"!", "audio/x-raw",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -132,8 +132,8 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"audioconvert",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"opusenc", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
-			// "opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			// "opusenc", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			"opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	default:
