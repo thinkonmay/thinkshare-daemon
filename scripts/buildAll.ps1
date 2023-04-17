@@ -5,7 +5,8 @@ Set-Location .\daemon
 git submodule update --init --recursive
 
 # build GO 
-go build  -o daemon.exe ./cmd/
+go build  -o daemon.exe ./cmd/daemon/
+go build  -o cli.exe ./cmd/cli/
 
 Set-Location .\hub
 go build -o hub.exe  ./cmd/server/

@@ -5,9 +5,7 @@ import (
 	"os"
 	"strconv"
 
-	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
-	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 )
 
 
@@ -15,7 +13,6 @@ type RunType int
 const (
 	failed = -1
 	short_task = 0
-	worker_node = 1
 )
 
 
@@ -25,39 +22,7 @@ func main() {
 	case failed:
 		fmt.Printf("failed : %s\n",err.Error())
 		return
-	case short_task:
-		return
-	case worker_node:
 	}
-
-
-	proxy_cred, err := credential.UseProxyAccount()
-	if err != nil {
-		fmt.Printf("failed to find proxy account: %s", err.Error())
-		return
-	}
-
-
-	fmt.Println("proxy account found, continue")
-	worker_cred, err := credential.SetupWorkerAccount(proxy_cred)
-	if err != nil {
-		fmt.Printf("failed to setup worker account: %s", err.Error())
-		return
-	}
-
-
-	grpc,err := grpc.InitGRPCClient(
-		credential.Secrets.Conductor.Hostname,
-		credential.Secrets.Conductor.GrpcPort,
-		worker_cred)
-	if err != nil {
-		fmt.Printf("failed to setup grpc: %s", err.Error())
-		return
-	}
-
-	dm := daemon.NewDaemon(grpc)
-	dm.TerminateAtTheEnd()
-	<-dm.Shutdown
 }
 
 
@@ -70,7 +35,9 @@ func ShortTask() (RunType,error) {
 	for i,arg := range os.Args[1:]{ switch arg {
 	case "proxy" :
 		for _,arg1 := range os.Args[i:]{ switch arg1 {
+			case "gen" :
 			case "current" :
+				credential.UseProxyAccount()
 			case "reset" :
 				os.Remove(credential.ProxySecretFile)
 			}
@@ -135,7 +102,7 @@ func ShortTask() (RunType,error) {
 		return short_task,nil
 	}
 
-	return worker_node,nil
+	return short_task,nil
 }
 
 

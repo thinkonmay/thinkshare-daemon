@@ -2,6 +2,7 @@
 cmd.exe
 daemon.exe
 main.exe
+cli.exe
 
 log.txt
 build/

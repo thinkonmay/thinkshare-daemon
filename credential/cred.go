@@ -285,12 +285,7 @@ func SetupApiKey() (cred ApiKey,
 
 
 func FetchWorker(cred ApiKey) (result string, err error) {
-	body,_ := json.Marshal(struct{
-		OnlyActive bool `json:"only_active"`
-	}{
-		OnlyActive: false,
-	})
-
+	body := []byte("{\"use_case\":\"cli\"}")
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerProfileFetch, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err
