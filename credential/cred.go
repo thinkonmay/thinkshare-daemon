@@ -34,7 +34,6 @@ type Account struct {
 type Address struct {
 	PublicIP   string `json:"public_ip"`
 	PrivateIP  string `json:"private_ip"`
-	CommitHash string `json:"commit"`
 }
 
 type Secret struct {
@@ -70,7 +69,6 @@ var proj string = os.Getenv("PROJECT")
 var Addresses *Address = &Address{
 	PublicIP:  system.GetPublicIPCurl(),
 	PrivateIP: system.GetPrivateIP(),
-	CommitHash: "unknown",
 }
 
 func init() {
@@ -78,7 +76,6 @@ func init() {
 	commitHash,err := exec.Command("git","rev-parse","HEAD").Output()
 	if err == nil {
 		fmt.Printf("current commit hash: %s \n",commitHash)
-		Addresses.CommitHash = string(commitHash)
 	} else if commitHash == nil {
 		fmt.Println("you are not using git, please download git to have auto update")
 	} else if strings.Contains(string(commitHash),"fatal") {
@@ -284,21 +281,19 @@ func SetupApiKey() (cred ApiKey,
 
 
 
-func FetchWorker(cred ApiKey, worker_ip *string) (result string, err error) {
+func FetchWorker(cred ApiKey, wait *Address) (result string, err error) {
 	data := struct{
 		UseCase string `json:"use_case"`
 		WaitFor *struct{
-			WorkerIp string `json:"worker_ip"`
+			Worker Address `json:"worker"`
 		}`json:"wait_for"`
 	}{
 		UseCase: "cli",
 	}
 
-	if worker_ip != nil {
-		data.WaitFor = &struct{
-			WorkerIp string "json:\"worker_ip\"" 
-		}{
-			WorkerIp: *worker_ip,
+	if wait != nil {
+		data.WaitFor = &struct{Worker Address "json:\"worker\""}{
+			Worker: *wait,
 		}
 	}
 
