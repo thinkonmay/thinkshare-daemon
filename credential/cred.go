@@ -298,7 +298,7 @@ func FetchWorker(cred ApiKey, worker_ip *string) (result string, err error) {
 		data.WaitFor = &struct{
 			WorkerIp string "json:\"worker_ip\"" 
 		}{
-			WorkerIp: "abc",
+			WorkerIp: *worker_ip,
 		}
 	}
 
