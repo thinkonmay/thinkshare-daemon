@@ -284,8 +284,26 @@ func SetupApiKey() (cred ApiKey,
 
 
 
-func FetchWorker(cred ApiKey) (result string, err error) {
-	body := []byte("{\"use_case\":\"cli\"}")
+func FetchWorker(cred ApiKey, worker_ip *string) (result string, err error) {
+	data := struct{
+		UseCase string `json:"use_case"`
+		WaitFor *struct{
+			WorkerIp string `json:"worker_ip"`
+		}`json:"wait_for"`
+	}{
+		UseCase: "cli",
+	}
+
+	if worker_ip != nil {
+		data.WaitFor = &struct{
+			WorkerIp string "json:\"worker_ip\"" 
+		}{
+			WorkerIp: "abc",
+		}
+	}
+
+
+	body,_ := json.Marshal(data)
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerProfileFetch, bytes.NewBuffer(body))
 	if err != nil {
 		return "", err

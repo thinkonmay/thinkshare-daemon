@@ -54,7 +54,7 @@ func ShortTask() (RunType,error) {
 		case "keygen" :
 			out = fmt.Sprintf("api key : %s",api_key.Key)
 		case  "list-workers" :
-			out,err = credential.FetchWorker(api_key)
+			out,err = credential.FetchWorker(api_key,nil)
 			if err != nil { return failed,err }
 		case  "create-session" :
 			id,soundcard,monitor := -1,"Default Audio Render Device","Generic PnP Monitor"
