@@ -125,16 +125,20 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"appsink", "name=appsink")
 	case "wasapi2":
 		return exec.Command(path, "wasapi2src", "name=source", "loopback=true","low-latency=true",
+			"do-timestamp=true","slave-method=2","provide-clock=false",
+			"latency-time=80000","buffer-time=80000","blocksize=8192",
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
-			"!", "audio/x-raw",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioresample",
-			"!", fmt.Sprintf("audio/x-raw,clock-rate=%d", AudioClockRate),
+			"audioresample","quality=10","qos=true",
+			"!", fmt.Sprintf("audio/x-raw,rate=%d", AudioClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioconvert",
+			"audioconvert","noise-shaping=4","qos=true",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			// "opusenc", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
-			"opusenc", "audio-type=2051", "perfect-timestamp=true", "bitrate-type=0", "hard-resync=true", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			"opusenc", "name=encoder",
+			"perfect-timestamp=true", "hard-resync=true", 
+			// "bitrate-type=0", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
+			"audio-type=2049", "bitrate-type=1", "bandwidth=1104", 
+			"inband-fec=true","packet-loss-percentage=50", "dtx=true",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	default:
