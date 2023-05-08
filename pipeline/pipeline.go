@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 )
@@ -72,7 +72,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "nvcodec":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true","show-cursor=true",
+		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
 			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
@@ -84,7 +84,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "quicksync":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true","show-cursor=true",
+		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
 			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
@@ -96,7 +96,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "amf":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true","show-cursor=true",
+		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
 			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
@@ -110,7 +110,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "opencodec":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true","show-cursor=true",
+		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
 			fmt.Sprintf("monitor-handle=%d", handle),
 			"!", "capsfilter", "name=framerateFilter",
 			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
@@ -124,21 +124,21 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "wasapi2":
-		return exec.Command(path, "wasapi2src", "name=source", "loopback=true","low-latency=true",
-			"do-timestamp=true","slave-method=2","provide-clock=false",
-			"latency-time=80000","buffer-time=80000","blocksize=8192",
+		return exec.Command(path, "wasapi2src", "name=source", "loopback=true", "low-latency=true",
+			"do-timestamp=true", "slave-method=2", "provide-clock=false",
+			"latency-time=80000", "buffer-time=80000", "blocksize=8192",
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioresample","quality=10","qos=true",
+			"audioresample", "quality=10", "qos=true",
 			"!", fmt.Sprintf("audio/x-raw,rate=%d", AudioClockRate),
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioconvert","noise-shaping=4","qos=true",
+			"audioconvert", "noise-shaping=4", "qos=true",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"opusenc", "name=encoder",
-			"perfect-timestamp=true", "hard-resync=true", 
+			"perfect-timestamp=true", "hard-resync=true",
 			// "bitrate-type=0", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
-			"audio-type=2049", "bitrate-type=1", "bandwidth=1104", 
-			"inband-fec=true","packet-loss-percentage=50", "dtx=true",
+			"audio-type=2049", "bitrate-type=1", "bandwidth=1104",
+			"inband-fec=true", "packet-loss-percentage=50", "dtx=true",
 			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	default:
@@ -168,13 +168,13 @@ func formatAudioDeviceID(in string) string {
 
 func GstTestAudio(API string, DeviceID string) (string, error) {
 	testcase := findTestCmd(API, 0, DeviceID)
-	pipeline,err := gstTestGeneric(API, testcase)
+	pipeline, err := gstTestGeneric(API, testcase)
 	if err != nil {
 		return "", err
 	}
 
 	log.PushLog("pipeline %s test success", pipeline)
-	return pipeline,nil
+	return pipeline, nil
 }
 
 func GstTestVideo(MonitorHandle int) (pipeline string, plugin string, err error) {
@@ -205,7 +205,7 @@ func gstTestGeneric(plugin string, testcase *exec.Cmd) (string, error) {
 
 	var err error
 	go func() {
-		testcase.SysProcAttr = &syscall.SysProcAttr{ HideWindow: true, }
+		testcase.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		err = testcase.Run()
 		done <- false
 	}()

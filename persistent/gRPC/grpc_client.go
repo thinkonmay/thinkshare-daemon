@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"google.golang.org/grpc"

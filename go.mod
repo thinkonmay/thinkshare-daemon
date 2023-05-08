@@ -6,8 +6,8 @@ require (
 	github.com/jaypipes/ghw v0.9.0
 	github.com/pion/stun v0.4.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
-	github.com/thinkonmay/conductor v0.0.0-20230324111444-6996fb93ced7
 	google.golang.org/grpc v1.50.1
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -17,7 +17,6 @@ require (
 	github.com/pion/transport/v2 v2.0.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/genproto v0.0.0-20221202195650-67e5cbc046fd // indirect
-	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 )
 

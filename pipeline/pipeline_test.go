@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/pipeline/device"
 )
 
 func TestTest(t *testing.T) {
 	dev := device.GetDevice()
-	result,_,err := GstTestVideo(int(dev.Monitors[0].MonitorHandle))
+	result, _, err := GstTestVideo(int(dev.Monitors[0].MonitorHandle))
 	if err != nil {
 		panic(err)
 	}
@@ -24,18 +24,15 @@ func TestTest(t *testing.T) {
 		}
 	}
 
-	result,err = GstTestAudio(souncard.Api,souncard.DeviceID)
+	result, err = GstTestAudio(souncard.Api, souncard.DeviceID)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("%s\n", result)
 }
 
-
-
 func TestSync(t *testing.T) {
 	// dev := device.GetDevice()
-
 
 	// video := &VideoPipeline { }
 	// video.SyncPipeline(dev.Monitors[0])

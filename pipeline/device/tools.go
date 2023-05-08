@@ -2,6 +2,8 @@ package device
 
 import (
 	"unsafe"
+
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
 // #cgo pkg-config: gstreamer-1.0 gstreamer-app-1.0
@@ -9,18 +11,11 @@ import (
 // #include "util.h"
 import "C"
 
-import (
-	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
-)
-
 type DeviceQuery unsafe.Pointer
-
-
-
 
 func GetDevice() *packet.MediaDevice {
 	result := &packet.MediaDevice{
-		Monitors: make([]*packet.Monitor, 0),
+		Monitors:   make([]*packet.Monitor, 0),
 		Soundcards: make([]*packet.Soundcard, 0),
 	}
 
@@ -42,7 +37,7 @@ func GetDevice() *packet.MediaDevice {
 		prim := C.monitor_is_primary(query, count_monitor)
 
 		result.Monitors = append(result.Monitors, &packet.Monitor{
-			Framerate: 	   60,
+			Framerate:     60,
 			MonitorHandle: int32(mhandle),
 			MonitorName:   string(C.GoBytes(monitor_name, C.string_get_length(monitor_name))),
 			Adapter:       string(C.GoBytes(adapter, C.string_get_length(adapter))),

@@ -10,7 +10,7 @@ import (
 	"github.com/pion/stun"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
-	"github.com/thinkonmay/conductor/protocol/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
@@ -70,72 +70,71 @@ func GetPublicIP() string {
 
 func GetPublicIPCurl() string {
 
-	resp,err := http.Get("https://ifconfig.me/ip")	
+	resp, err := http.Get("https://ifconfig.me/ip")
 	if err != nil {
 		log.PushLog(err.Error())
 		return ""
 	}
 
-	ip := make([]byte,1000)
-	size,err := resp.Body.Read(ip)
+	ip := make([]byte, 1000)
+	size, err := resp.Body.Read(ip)
 	if err != nil {
 		log.PushLog(err.Error())
 		return ""
 	}
 
-	return string(ip[:size]) 
+	return string(ip[:size])
 }
 
-
-func GetInfor() (*packet.WorkerInfor,error) {
-	hostStat,err := host.Info()
+func GetInfor() (*packet.WorkerInfor, error) {
+	hostStat, err := host.Info()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
-	vmStat,err := mem.VirtualMemory()
+	vmStat, err := mem.VirtualMemory()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 	gpu, err := ghw.GPU()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 	bios, err := ghw.BIOS()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 	pcies, err := ghw.Block()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 	cpus, err := ghw.CPU()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 	networks, err := ghw.Network()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 
 	ret := &packet.WorkerInfor{
-		CPU:   cpus.Processors[0].Model,
-		RAM:   fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
-		BIOS:  fmt.Sprintf("%s version %s", bios.Vendor, bios.Version),
+		CPU:  cpus.Processors[0].Model,
+		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
+		BIOS: fmt.Sprintf("%s version %s", bios.Vendor, bios.Version),
 
 		NICs:  make([]string, 0),
 		Disks: make([]string, 0),
 		GPUs:  make([]string, 0),
 
 		// Get preferred outbound ip of this machine
-		PublicIP : GetPublicIPCurl(),
-		PrivateIP : GetPrivateIP(),
+		PublicIP:  GetPublicIPCurl(),
+		PrivateIP: GetPrivateIP(),
 
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -161,5 +160,5 @@ func GetInfor() (*packet.WorkerInfor,error) {
 		}
 	}
 
-	return ret,nil
+	return ret, nil
 }
