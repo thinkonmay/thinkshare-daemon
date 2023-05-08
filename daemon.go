@@ -29,7 +29,9 @@ type Daemon struct {
 	persist      persistent.Persistent
 
 	mutex   *sync.Mutex
-	current []packet.WorkerSession
+
+	sessions []packet.WorkerSession
+	apps     []packet.AppSession
 }
 
 func NewDaemon(persistent persistent.Persistent) *Daemon {
@@ -39,12 +41,12 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		childprocess: childprocess.NewChildProcessSystem(),
 
 		mutex:   &sync.Mutex{},
-		current: []packet.WorkerSession{},
+		sessions: []packet.WorkerSession{},
+		apps: 	  []packet.AppSession{},
 	}
 	go func() {
 		for {
 			child_log := <-daemon.childprocess.LogChan
-			fmt.Println(fmt.Sprintf("childprocess %d : %s", child_log.ID, child_log.Log))
 			daemon.persist.Log(fmt.Sprintf("childprocess %d", child_log.ID), child_log.LogType, child_log.Log)
 		}
 	}()
@@ -96,14 +98,15 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 			if ss == nil {
 				break
 			}
-			result := daemon.sync(*ss)
-			daemon.persist.SyncSession(&result)
+			result := daemon.sync(ss)
+			daemon.persist.SyncSession(result)
 			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	go daemon.handleHID()
 	go daemon.handleHub()
+	go daemon.handleApp()
 	return daemon
 }
 
@@ -136,86 +139,179 @@ func (manifest SessionManifest) Default() *SessionManifest {
 	}
 }
 
-func (daemon *Daemon) sync(ss packet.WorkerSessions) packet.WorkerSessions {
+type AppManifest struct {
+	FailCount int `json:"fail_count"`
+	ProcessID childprocess.ProcessID `json:"process_id"`
+}
+
+func (manifest AppManifest) Default() *AppManifest {
+	return &AppManifest{
+		ProcessID: childprocess.NullProcID,
+	}
+}
+func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSessions) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
-	reset := func() {
-		current := &daemon.current[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		if session.HubProcessID.Valid() {
-			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
-		}
-	}
-	kill := func() {
-		current := &daemon.current[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		if session.HidProcessID.Valid() {
-			daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
-		}
-		if session.HubProcessID.Valid() {
-			daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
-		}
+	ret = &packet.WorkerSessions{
+		Sessions: []*packet.WorkerSession{},
+		Apps: []*packet.AppSession{},
 	}
 
-	// TODO multiple sessions
-	if len(ss.Sessions) > 1 {
-		log.PushLog("number of session is more than 1, not valid")
-		return packet.WorkerSessions{Sessions: []*packet.WorkerSession{ss.Sessions[0]}}
-	} else if len(ss.Sessions) == 0 && len(daemon.current) > 0 {
-		kill()
-		daemon.current = []packet.WorkerSession{}
-		return ss
-	} else if len(ss.Sessions) == 0 && len(daemon.current) == 0 {
-		return ss
-	}
+	func(){
+		reset := func() {
+			current := &daemon.sessions[0]
+			session := &SessionManifest{}
+			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
+				session = SessionManifest{}.Default()
+			}
+			defer func() {
+				bytes, _ := json.Marshal(session)
+				current.Manifest = string(bytes)
+			}()
 
-	desired := ss.Sessions[0]
-	if len(ss.Sessions) == 1 && len(daemon.current) == 0 {
-		defaultManifest, _ := json.Marshal(SessionManifest{}.Default())
-		daemon.current = []packet.WorkerSession{{
-			Manifest: string(defaultManifest),
-		}}
-	}
+			if session.HubProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			}
+		}
+		kill := func() {
+			current := &daemon.sessions[0]
+			session := &SessionManifest{}
+			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
+				session = SessionManifest{}.Default()
+			}
+			defer func() {
+				bytes, _ := json.Marshal(session)
+				current.Manifest = string(bytes)
+			}()
 
-	current := &daemon.current[0]
+			if session.HidProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
+			}
+			if session.HubProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			}
+		}
 
-	// check if sync-required feature need to resync
-	if desired.Id != current.Id && desired.AuthConfig != "{}" {
+		// TODO multiple sessions
+		if len(ss.Sessions) > 1 {
+			log.PushLog("number of session is more than 1, not valid")
+			ret.Sessions = []*packet.WorkerSession{ss.Sessions[0]}
+			return 
+		} else if len(ss.Sessions) == 0 && len(daemon.sessions) > 0 {
+			daemon.sessions = []packet.WorkerSession{}
+			kill()
+			return 
+		} else if len(ss.Sessions) == 0 && len(daemon.sessions) == 0 {
+			return 
+		}
+
+		desired_session := ss.Sessions[0]
+		if len(ss.Sessions) == 1 && len(daemon.sessions) == 0 {
+			defaultManifest, _ := json.Marshal(SessionManifest{}.Default())
+			daemon.sessions = []packet.WorkerSession{{
+				Manifest: string(defaultManifest),
+			}}
+		}
+
+		current_session := &daemon.sessions[0]
+
+		// check if sync-required feature need to resync
+		if desired_session.Id != current_session.Id && desired_session.AuthConfig != "{}" {
+
+			// reset daemon current session state if sync is required
+			current_session.MediaConfig = desired_session.MediaConfig
+			current_session.WebrtcConfig = desired_session.WebrtcConfig
+			current_session.SignalingConfig = desired_session.SignalingConfig
+			current_session.AuthConfig = desired_session.AuthConfig
+			current_session.Id = desired_session.Id
+
+			reset()
+		}
 
 		// reset daemon current session state if sync is required
-		current.MediaConfig = desired.MediaConfig
-		current.WebrtcConfig = desired.WebrtcConfig
-		current.SignalingConfig = desired.SignalingConfig
-		current.AuthConfig = desired.AuthConfig
-		current.Id = desired.Id
+		// desired.SessionLog = current.SessionLog
+		desired_session.Manifest = current_session.Manifest
 
-		reset()
-	}
+		ret.Sessions = []*packet.WorkerSession{ desired_session }
+	}()
 
-	// reset daemon current session state if sync is required
-	// desired.SessionLog = current.SessionLog
-	desired.Manifest = current.Manifest
 
-	return packet.WorkerSessions{
-		Sessions: []*packet.WorkerSession{desired},
-	}
+
+
+
+
+	func ()  {
+		reset := func() {
+			current := &daemon.sessions[0]
+			session := &SessionManifest{}
+			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
+				session = SessionManifest{}.Default()
+			}
+			defer func() {
+				bytes, _ := json.Marshal(session)
+				current.Manifest = string(bytes)
+			}()
+
+			if session.HubProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			}
+		}
+		kill := func() {
+			current := &daemon.sessions[0]
+			session := &SessionManifest{}
+			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
+				session = SessionManifest{}.Default()
+			}
+			defer func() {
+				bytes, _ := json.Marshal(session)
+				current.Manifest = string(bytes)
+			}()
+
+			if session.HidProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
+			}
+			if session.HubProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			}
+		}
+
+		if len(ss.Apps) > 1 {
+			log.PushLog("number of appp is more than 1, not valid")
+			ret.Apps = []*packet.AppSession{ss.Apps[0]}
+			return 
+		} else if len(ss.Apps) == 0 && len(daemon.apps) > 0 {
+			daemon.sessions = []packet.WorkerSession{}
+			kill()
+			return
+		} else if len(ss.Sessions) == 0 && len(daemon.sessions) == 0 {
+			return
+		}
+
+		desired_app := ss.Apps[0]
+		if len(ss.Apps) == 1 && len(daemon.apps) == 0 {
+			defaultManifest, _ := json.Marshal(AppManifest{}.Default())
+			daemon.apps = []packet.AppSession{{
+				Manifest: string(defaultManifest),
+			}}
+		}
+
+		current_app := &daemon.apps[0]
+		if desired_app.Id != current_app.Id {
+			current_app.Envs =  desired_app.Envs
+			current_app.Args = desired_app.Args
+			current_app.Exe = desired_app.Exe
+			current_app.Folder = desired_app.Folder
+			current_app.Id = desired_app.Id
+
+			reset()
+		}
+	}()
+
+
+
+
+	return ret
 }
 
 func (daemon *Daemon) handleHID() {
@@ -223,11 +319,11 @@ func (daemon *Daemon) handleHID() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.current) == 0 {
+		if len(daemon.sessions) == 0 {
 			return "", 0, fmt.Errorf("no current session")
 		}
 
-		current := &daemon.current[0]
+		current := &daemon.sessions[0]
 		session := &SessionManifest{}
 		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
 			session = SessionManifest{}.Default()
@@ -263,11 +359,11 @@ func (daemon *Daemon) handleHID() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.current) == 0 {
+		if len(daemon.sessions) == 0 {
 			return fmt.Errorf("no current session")
 		}
 
-		current := &daemon.current[0]
+		current := &daemon.sessions[0]
 		session := &SessionManifest{}
 		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
 			session = SessionManifest{}.Default()
@@ -315,11 +411,11 @@ func (daemon *Daemon) handleHub() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.current) == 0 {
+		if len(daemon.sessions) == 0 {
 			return "", "", "", "", "", "", 0, fmt.Errorf("no current session")
 		}
 
-		current := &daemon.current[0]
+		current := &daemon.sessions[0]
 		session := &SessionManifest{}
 		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
 			session = SessionManifest{}.Default()
@@ -374,11 +470,11 @@ func (daemon *Daemon) handleHub() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.current) == 0 {
+		if len(daemon.sessions) == 0 {
 			return fmt.Errorf("no current session")
 		}
 
-		current := &daemon.current[0]
+		current := &daemon.sessions[0]
 		session := &SessionManifest{}
 		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
 			session = SessionManifest{}.Default()
@@ -426,3 +522,74 @@ func (daemon *Daemon) handleHub() {
 		}
 	}
 }
+
+func (daemon *Daemon) handleApp() {
+
+	presync := func() (path string, args []string, envs []string,err error) {
+		daemon.mutex.Lock()
+		defer daemon.mutex.Unlock()
+
+		if len(daemon.apps) == 0 {
+			err = fmt.Errorf("no current session")
+			return 
+		}
+
+		current := &daemon.apps[0]
+		path, err = utils.FindProcessPath(current.Folder, current.Exe)
+		if err != nil {
+			return
+		}
+
+		return path,current.Args,current.Envs,nil
+	}
+
+	aftersync := func(id childprocess.ProcessID) error {
+		daemon.mutex.Lock()
+		defer daemon.mutex.Unlock()
+
+		if len(daemon.apps) == 0 {
+			return fmt.Errorf("no current session")
+		}
+
+		current := &daemon.apps[0]
+		session := &AppManifest{}
+		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
+			session = (&AppManifest{}).Default()
+		}
+		defer func() {
+			bytes, _ := json.Marshal(session)
+			current.Manifest = string(bytes)
+		}()
+
+		if !session.ProcessID.Valid() {
+			session.FailCount++
+		}
+
+		session.ProcessID = id
+		return nil
+	}
+
+	for {
+		time.Sleep(time.Millisecond * 500)
+		path,args,envs,err := presync()
+		if path == "" || err != nil{
+			continue
+		}
+
+		process := exec.Command(path,args...)
+		process.Env = envs
+		id, err := daemon.childprocess.NewChildProcess(process)
+		if err != nil {
+			log.PushLog("fail to start app process: %s", err.Error())
+			continue
+		}
+		err = aftersync(id)
+
+		if err != nil {
+			log.PushLog("fail to start app process: %s", err.Error())
+		} else {
+			daemon.childprocess.WaitID(id)
+		}
+	}
+}
+
