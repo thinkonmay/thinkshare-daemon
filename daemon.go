@@ -198,8 +198,8 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 			ret.Sessions = []*packet.WorkerSession{ss.Sessions[0]}
 			return 
 		} else if len(ss.Sessions) == 0 && len(daemon.sessions) > 0 {
-			daemon.sessions = []packet.WorkerSession{}
 			kill()
+			daemon.sessions = []packet.WorkerSession{}
 			return 
 		} else if len(ss.Sessions) == 0 && len(daemon.sessions) == 0 {
 			return 
@@ -277,8 +277,8 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 			ret.Apps = []*packet.AppSession{ss.Apps[0]}
 			return 
 		} else if len(ss.Apps) == 0 && len(daemon.apps) > 0 {
-			ret.Apps = []*packet.AppSession{}
 			kill()
+			daemon.apps = []packet.AppSession{}
 			return
 		} else if len(ss.Apps) == 0 && len(daemon.apps) == 0 {
 			return
