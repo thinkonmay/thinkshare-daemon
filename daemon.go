@@ -284,7 +284,7 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 			daemon.sessions = []packet.WorkerSession{}
 			kill()
 			return
-		} else if len(ss.Sessions) == 0 && len(daemon.sessions) == 0 {
+		} else if len(ss.Apps) == 0 && len(daemon.apps) == 0 {
 			return
 		}
 
@@ -391,7 +391,7 @@ func (daemon *Daemon) handleHID() {
 			continue
 		}
 		process := exec.Command(path, fmt.Sprintf("--urls=http://localhost:%d", free_port))
-		id, err := daemon.childprocess.NewChildProcess(process)
+		id, err := daemon.childprocess.NewChildProcess(process,true)
 		if err != nil {
 			log.PushLog("fail to start hid process: %s", err.Error())
 			continue
@@ -508,7 +508,7 @@ func (daemon *Daemon) handleHub() {
 			"--grpc", signaling,
 			"--webrtc", webrtc)
 
-		id, err := daemon.childprocess.NewChildProcess(process)
+		id, err := daemon.childprocess.NewChildProcess(process,true)
 		if err != nil {
 			log.PushLog("fail to start hub process: %s", err.Error())
 			continue
@@ -578,7 +578,7 @@ func (daemon *Daemon) handleApp() {
 
 		process := exec.Command(path,args...)
 		process.Env = envs
-		id, err := daemon.childprocess.NewChildProcess(process)
+		id, err := daemon.childprocess.NewChildProcess(process,false)
 		if err != nil {
 			log.PushLog("fail to start app process: %s", err.Error())
 			continue

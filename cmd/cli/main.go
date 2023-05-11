@@ -109,7 +109,7 @@ func ShortTask() (RunType,error) {
 
 func printHelp() {
 	fmt.Println("required environment (always): 		")
-	fmt.Println(" - PROJECT: project id (ex: \"avmvymkexjarplbxwlnj\")		")
+	fmt.Println(" - PROJECT: project id ")
 	fmt.Println("")
 	fmt.Println("A. CLI to do simple tasks, format: ./daemon.exe proxy current")
 	fmt.Println(" -proxy			")

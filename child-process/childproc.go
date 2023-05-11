@@ -53,7 +53,7 @@ func NewChildProcessSystem() *ChildProcesses {
 
 
 
-func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
+func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (ProcessID,error) {
 	procs.mutex.Lock()
 	defer procs.mutex.Unlock()
 
@@ -67,7 +67,7 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd) (ProcessID,error) {
 	}
 
 	log.PushLog("process %s, process id %d booting up\n", cmd.Args[0], int(id))
-	procs.handleProcess(id)
+	procs.handleProcess(id,hidewnd)
 	go func ()  {
 		procs.WaitID(id);
 		fmt.Printf("process id %d closed\n",id)
@@ -132,7 +132,7 @@ func (procs *ChildProcesses) WaitID(ID ProcessID) error {
 
 
 
-func (procs *ChildProcesses) handleProcess(id ProcessID) {
+func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) {
 	proc := procs.procs[id]
 	if proc == nil {
 		return
@@ -144,7 +144,7 @@ func (procs *ChildProcesses) handleProcess(id ProcessID) {
 	stderrIn, _ := proc.cmd.StderrPipe()
 	
 	log.PushLog("starting %s : %s\n", processname, strings.Join(proc.cmd.Args, " "))
-	proc.cmd.SysProcAttr = &syscall.SysProcAttr{ HideWindow: true, }
+	proc.cmd.SysProcAttr = &syscall.SysProcAttr{ HideWindow: hidewnd, }
 	err := proc.cmd.Start()
 	if err != nil {
 		log.PushLog("error init process %s\n", err.Error())
