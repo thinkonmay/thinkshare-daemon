@@ -88,7 +88,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 				continue
 			}
 			daemon.persist.Infor(infor)
-			time.Sleep(10 * time.Second)
+			time.Sleep(10 * time.Minute)
 		}
 	}()
 
@@ -100,7 +100,6 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 			}
 			result := daemon.sync(ss)
 			daemon.persist.SyncSession(result)
-			time.Sleep(1 * time.Second)
 		}
 	}()
 
