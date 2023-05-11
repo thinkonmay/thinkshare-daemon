@@ -242,36 +242,33 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 
 	func ()  {
 		reset := func() {
-			current := &daemon.sessions[0]
-			session := &SessionManifest{}
-			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-				session = SessionManifest{}.Default()
+			current := &daemon.apps[0]
+			app := &AppManifest{}
+			if err := json.Unmarshal([]byte(current.Manifest), app); err != nil {
+				app = AppManifest{}.Default()
 			}
 			defer func() {
-				bytes, _ := json.Marshal(session)
+				bytes, _ := json.Marshal(app)
 				current.Manifest = string(bytes)
 			}()
 
-			if session.HubProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			if app.ProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(app.ProcessID))
 			}
 		}
 		kill := func() {
-			current := &daemon.sessions[0]
-			session := &SessionManifest{}
+			current := &daemon.apps[0]
+			session := &AppManifest{}
 			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-				session = SessionManifest{}.Default()
+				session = AppManifest{}.Default()
 			}
 			defer func() {
 				bytes, _ := json.Marshal(session)
 				current.Manifest = string(bytes)
 			}()
 
-			if session.HidProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
-			}
-			if session.HubProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
+			if session.ProcessID.Valid() {
+				daemon.childprocess.CloseID(childprocess.ProcessID(session.ProcessID))
 			}
 		}
 
@@ -280,7 +277,7 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 			ret.Apps = []*packet.AppSession{ss.Apps[0]}
 			return 
 		} else if len(ss.Apps) == 0 && len(daemon.apps) > 0 {
-			daemon.sessions = []packet.WorkerSession{}
+			ret.Apps = []*packet.AppSession{}
 			kill()
 			return
 		} else if len(ss.Apps) == 0 && len(daemon.apps) == 0 {
