@@ -48,21 +48,13 @@ message WorkerSession{
 }
 
 
-// create table public.worker_session (
-//     id               bigint generated always as identity   primary key, // not mapped
-//     session_id       bigint references public.account_session not null, // not mapped
+message Partition{
+	string device = 1;
+	string mountpoint = 2;
+	string fstype = 3;
+	string opts = 4;
+}
 
-// 	   webrtc_config    jsonb default '{}', // map to webRTCConfig 
-// 	   signaling_config jsonb default '{}', // map to signaling config
-//     media_config     jsonb default '{}', // map to monitor and soundcard
-// 	   auth_config      jsonb default '{}', // map to token 
-
-//     session_log      jsonb default '{}', // map to sessionLog, daemon decide
-//	   manifest     	jsonb default '{}', // map to manifest, daemon decide
-
-
-//     metadata         jsonb default '{}'  // not mapped
-// );
 message WorkerInfor{ 
 	string timestamp = 1;
 
@@ -75,9 +67,11 @@ message WorkerInfor{
 	string   PrivateIP  = 7;
 
 	repeated string GPUs        = 8;
-	repeated string Disks       = 9;
-	repeated string NICs    = 10;
+	repeated string disks       = 9;
+	repeated Partition partitions  = 10;
+	repeated string NICs    = 11;
 }
+
 
 message WorkerLog{ 
 	string timestamp = 1;
