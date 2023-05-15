@@ -34,7 +34,8 @@ type Daemon struct {
 	apps     []packet.AppSession
 }
 
-func NewDaemon(persistent persistent.Persistent) *Daemon {
+func NewDaemon(persistent persistent.Persistent,
+				handlePartition func(*packet.Partition)) *Daemon {
 	daemon := &Daemon{
 		persist:      persistent,
 		Shutdown:     make(chan bool),
@@ -87,6 +88,12 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 				log.PushLog("error get sysinfor : %s", err.Error())
 				continue
 			}
+
+
+			for _,partition := range infor.Partitions {
+				handlePartition(partition)
+			}
+
 			daemon.persist.Infor(infor)
 			time.Sleep(10 * time.Minute)
 		}

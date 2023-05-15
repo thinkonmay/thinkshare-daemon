@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -23,7 +24,7 @@ const (
 	StorageCred     = "/.thinkmay/credential.json"
 )
 
-func GetStorageCredential(mountpoint string) string {
+func GetStorageCredentialFile(mountpoint string) string {
 	return fmt.Sprintf("%s%s",mountpoint,StorageCred)
 }
 
@@ -43,6 +44,7 @@ var Secrets = &struct{
 		TurnRegister            string `json:"turn_register"`
 		WorkerProfileFetch      string `json:"worker_profile_fetch"`
 		WorkerRegister          string `json:"worker_register"`
+		StorageRegister         string `json:"storage_register"`
 		WorkerSessionCreate     string `json:"worker_session_create"`
 		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
 	} `json:"edge_functions"`
@@ -232,6 +234,60 @@ func SetupWorkerAccount(proxy Account) (
 	if err := json.Unmarshal(body, &cred); err != nil {
 		return Account{}, err
 	}
+
+	return
+}
+
+
+func ReadOrRegisterStorageAccount(worker Account,
+								  partition *packet.Partition,
+								  ) (account Account, 
+									 err error) {
+	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return Account{}, err
+	}
+
+	data, _ := io.ReadAll(secret_f)
+	err = json.Unmarshal(data, &account)
+	register := !(err == nil) ; err = nil
+
+	defer func() {
+		defer secret_f.Close()
+		if err != nil {
+			return 
+		}
+
+		bytes, _ := json.MarshalIndent(account, "", "	")
+		secret_f.Truncate(0)
+		secret_f.WriteAt(bytes, 0)
+	}()
+
+
+	if register {
+		data,_ = json.Marshal(partition)
+	}
+
+	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.StorageRegister, bytes.NewBuffer(data))
+	if err != nil {
+		return Account{}, err
+	}
+
+	req.Header.Set("username", worker.Username)
+	req.Header.Set("password", worker.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return Account{}, err
+	}
+
+	data, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+	}
+	json.Unmarshal(data, &account)
+
 
 	return
 }

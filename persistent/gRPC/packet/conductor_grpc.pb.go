@@ -27,6 +27,8 @@ type ConductorClient interface {
 	Mediadevice(ctx context.Context, opts ...grpc.CallOption) (Conductor_MediadeviceClient, error)
 	Logger(ctx context.Context, opts ...grpc.CallOption) (Conductor_LoggerClient, error)
 	Monitor(ctx context.Context, opts ...grpc.CallOption) (Conductor_MonitorClient, error)
+	Storagetranfer(ctx context.Context, opts ...grpc.CallOption) (Conductor_StoragetranferClient, error)
+	Storagesync(ctx context.Context, opts ...grpc.CallOption) (Conductor_StoragesyncClient, error)
 }
 
 type conductorClient struct {
@@ -204,6 +206,71 @@ func (x *conductorMonitorClient) CloseAndRecv() (*Closer, error) {
 	return m, nil
 }
 
+func (c *conductorClient) Storagetranfer(ctx context.Context, opts ...grpc.CallOption) (Conductor_StoragetranferClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Conductor_ServiceDesc.Streams[5], "/protobuf.Conductor/storagetranfer", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &conductorStoragetranferClient{stream}
+	return x, nil
+}
+
+type Conductor_StoragetranferClient interface {
+	Send(*StorageChunk) error
+	Recv() (*StorageChunk, error)
+	grpc.ClientStream
+}
+
+type conductorStoragetranferClient struct {
+	grpc.ClientStream
+}
+
+func (x *conductorStoragetranferClient) Send(m *StorageChunk) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *conductorStoragetranferClient) Recv() (*StorageChunk, error) {
+	m := new(StorageChunk)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *conductorClient) Storagesync(ctx context.Context, opts ...grpc.CallOption) (Conductor_StoragesyncClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Conductor_ServiceDesc.Streams[6], "/protobuf.Conductor/storagesync", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &conductorStoragesyncClient{stream}
+	return x, nil
+}
+
+type Conductor_StoragesyncClient interface {
+	Send(*StorageStatus) error
+	CloseAndRecv() (*Closer, error)
+	grpc.ClientStream
+}
+
+type conductorStoragesyncClient struct {
+	grpc.ClientStream
+}
+
+func (x *conductorStoragesyncClient) Send(m *StorageStatus) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *conductorStoragesyncClient) CloseAndRecv() (*Closer, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Closer)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // ConductorServer is the server API for Conductor service.
 // All implementations must embed UnimplementedConductorServer
 // for forward compatibility
@@ -213,6 +280,8 @@ type ConductorServer interface {
 	Mediadevice(Conductor_MediadeviceServer) error
 	Logger(Conductor_LoggerServer) error
 	Monitor(Conductor_MonitorServer) error
+	Storagetranfer(Conductor_StoragetranferServer) error
+	Storagesync(Conductor_StoragesyncServer) error
 	mustEmbedUnimplementedConductorServer()
 }
 
@@ -234,6 +303,12 @@ func (UnimplementedConductorServer) Logger(Conductor_LoggerServer) error {
 }
 func (UnimplementedConductorServer) Monitor(Conductor_MonitorServer) error {
 	return status.Errorf(codes.Unimplemented, "method Monitor not implemented")
+}
+func (UnimplementedConductorServer) Storagetranfer(Conductor_StoragetranferServer) error {
+	return status.Errorf(codes.Unimplemented, "method Storagetranfer not implemented")
+}
+func (UnimplementedConductorServer) Storagesync(Conductor_StoragesyncServer) error {
+	return status.Errorf(codes.Unimplemented, "method Storagesync not implemented")
 }
 func (UnimplementedConductorServer) mustEmbedUnimplementedConductorServer() {}
 
@@ -378,6 +453,58 @@ func (x *conductorMonitorServer) Recv() (*WorkerMetric, error) {
 	return m, nil
 }
 
+func _Conductor_Storagetranfer_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ConductorServer).Storagetranfer(&conductorStoragetranferServer{stream})
+}
+
+type Conductor_StoragetranferServer interface {
+	Send(*StorageChunk) error
+	Recv() (*StorageChunk, error)
+	grpc.ServerStream
+}
+
+type conductorStoragetranferServer struct {
+	grpc.ServerStream
+}
+
+func (x *conductorStoragetranferServer) Send(m *StorageChunk) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *conductorStoragetranferServer) Recv() (*StorageChunk, error) {
+	m := new(StorageChunk)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _Conductor_Storagesync_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ConductorServer).Storagesync(&conductorStoragesyncServer{stream})
+}
+
+type Conductor_StoragesyncServer interface {
+	SendAndClose(*Closer) error
+	Recv() (*StorageStatus, error)
+	grpc.ServerStream
+}
+
+type conductorStoragesyncServer struct {
+	grpc.ServerStream
+}
+
+func (x *conductorStoragesyncServer) SendAndClose(m *Closer) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *conductorStoragesyncServer) Recv() (*StorageStatus, error) {
+	m := new(StorageStatus)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // Conductor_ServiceDesc is the grpc.ServiceDesc for Conductor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -410,6 +537,17 @@ var Conductor_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "monitor",
 			Handler:       _Conductor_Monitor_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "storagetranfer",
+			Handler:       _Conductor_Storagetranfer_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "storagesync",
+			Handler:       _Conductor_Storagesync_Handler,
 			ClientStreams: true,
 		},
 	},

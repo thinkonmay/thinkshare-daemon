@@ -6,6 +6,8 @@ import (
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 func main() {
@@ -31,7 +33,13 @@ func main() {
 		return
 	}
 
-	dm := daemon.NewDaemon(grpc)
+	dm := daemon.NewDaemon(grpc,func(p *packet.Partition) {
+		_,err := credential.ReadOrRegisterStorageAccount(worker_cred,p)
+		if err != nil {
+			log.PushLog("unable to register storage device %s",err.Error())
+			return
+		}
+	})
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown
 }

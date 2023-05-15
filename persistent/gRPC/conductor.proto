@@ -4,12 +4,15 @@ option go_package = "./packet";
 
 
 service Conductor {
-	rpc sync(stream WorkerSessions) returns (stream WorkerSessions);
+	rpc sync			(stream WorkerSessions) returns (stream WorkerSessions);
 
 	rpc infor			(stream WorkerInfor) 	  returns (Closer);
 	rpc mediadevice		(stream MediaDevice)      returns (Closer);
 	rpc logger			(stream WorkerLog) 	   	  returns (Closer);
 	rpc monitor			(stream WorkerMetric) 	  returns (Closer);
+
+	rpc storagetranfer	(stream StorageChunk)     returns (stream StorageChunk);
+	rpc storagesync		(stream StorageStatus)    returns (Closer);
 }
 
 message Closer{ 
@@ -17,7 +20,16 @@ message Closer{
 	string reason    = 2;
 }
 
+message StorageStatus { 
+	// TODO
+}
 
+message StorageChunk { 
+    string path = 1;
+
+    bytes chunk = 2;
+	bool EOF = 3;
+}
 
 message WorkerSessions {
 	repeated WorkerSession sessions = 1;
