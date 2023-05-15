@@ -12,7 +12,6 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 	"github.com/shirou/gopsutil/winservices"
-	"github.com/shirou/gopsutil/load"
 	netinf "github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"

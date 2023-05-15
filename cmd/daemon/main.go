@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
+
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 )
 
 func main() {
-	proxy_cred, err := credential.UseProxyAccount()
+	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {
 		fmt.Printf("failed to find proxy account: %s", err.Error())
 		return
 	}
-
 
 	fmt.Println("proxy account found, continue")
 	worker_cred, err := credential.SetupWorkerAccount(proxy_cred)
@@ -22,8 +22,7 @@ func main() {
 		return
 	}
 
-
-	grpc,err := grpc.InitGRPCClient(
+	grpc, err := grpc.InitGRPCClient(
 		credential.Secrets.Conductor.Hostname,
 		credential.Secrets.Conductor.GrpcPort,
 		worker_cred)
@@ -36,6 +35,3 @@ func main() {
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown
 }
-
-
-
