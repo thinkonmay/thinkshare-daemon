@@ -180,13 +180,38 @@ func GetInfor() (*packet.WorkerInfor, error) {
 
 func GetStatus() (map[string]interface{},error) {
 	ret := map[string]interface{}{}
+
+	procs := []map[string]interface{}{}
 	processes,_ := process.Processes()
-	ret["process"] = processes
+	for _,proc := range processes {
+		cmd,_ 		:= proc.Cmdline()
+		cwd,_ 		:= proc.Cwd()
+		parent,_ 	:= proc.Parent()
+		env,_ 		:= proc.Environ()
+		mem,_ 		:= proc.MemoryPercent()
+		cpu,_ 		:= proc.CPUPercent()
+		files,_ 	:= proc.Exe()
+		user,_ 		:= proc.Username()
+
+		procs = append(procs, map[string]interface{}{
+			"cpu": cpu,
+			"mem": mem,
+			"user": user,
+
+			"exe": files,
+			"cwd": cwd,
+			"cmd": cmd,
+
+			"env": env,
+			"pid": proc.Pid,
+			"parent": parent,
+		})
+	}
+
+	ret["process"] = procs 
 	svc,_ := winservices.ListServices()
 	ret["svc"] = svc
 	net,_ := netinf.Connections("inet4")
 	ret["net"] = net
-	ld,_ := load.Misc()
-	ret["avg"] = ld 
 	return ret,nil
 }
