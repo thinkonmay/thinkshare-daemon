@@ -60,7 +60,7 @@ type Secret struct {
 
 	Conductor struct {
 		Hostname string `json:"host"`
-		GrpcPort int    `json:"grpc_port"`
+		GrpcPort int    `json:"port"`
 	} `json:"conductor"`
 }
 
@@ -98,7 +98,9 @@ func init() {
 	err = json.Unmarshal(data, Secrets)
 
 	if err == nil { return } // avoid fetch if there is already secrets
-	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer([]byte("{}")))
+
+	body,_ := json.Marshal(Addresses)
+	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		fmt.Printf("unable to fetch constant from server %s\n",err.Error())
 		return
@@ -107,7 +109,7 @@ func init() {
 		return
 	}
 
-	body,_ := io.ReadAll(resp.Body)
+	body,_ = io.ReadAll(resp.Body)
 	json.Unmarshal(body, Secrets)
 }
 
