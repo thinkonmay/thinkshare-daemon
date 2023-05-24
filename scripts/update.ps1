@@ -1,3 +1,4 @@
+Remove-Item ./secret/config.json
 git pull
 git checkout master
 git submodule update --init --recursive
