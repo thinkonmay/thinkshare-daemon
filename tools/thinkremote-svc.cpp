@@ -271,10 +271,12 @@ ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv) {
       NULL,
       NULL);
 
+    WCHAR szComd[200];
+    swprintf(szComd,L"go.exe run ./cmd/daemon/ ");
     PROCESS_INFORMATION process_info;
     if (!CreateProcessAsUserW(console_token,
-          L"daemon.exe",
           NULL,
+          szComd,
           NULL,
           NULL,
           TRUE,
