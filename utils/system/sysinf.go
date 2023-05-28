@@ -10,6 +10,10 @@ import (
 	"github.com/pion/stun"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
+	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/winservices"
+	netinf "github.com/shirou/gopsutil/net"
+	"github.com/shirou/gopsutil/disk"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -47,7 +51,7 @@ func GetPublicIP() string {
 	// we only try the first address, so restrict ourselves to IPv4
 	c, err := stun.Dial("udp4", addr)
 	if err != nil {
-		log.PushLog("dial:", err)
+		log.PushLog("error dial %s", err)
 	}
 	if err = c.Do(stun.MustBuild(stun.TransactionID, stun.BindingRequest), func(res stun.Event) {
 		if res.Error != nil {
@@ -59,7 +63,7 @@ func GetPublicIP() string {
 		}
 		result = xorAddr.IP.String()
 	}); err != nil {
-		log.PushLog("do:", err)
+		log.PushLog("failed do %s", err)
 	}
 	if err := c.Close(); err != nil {
 		log.PushLog(err.Error())
@@ -123,10 +127,12 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		return nil, err
 	}
 
+	partitions,_ := disk.Partitions(true)
+
 	ret := &packet.WorkerInfor{
 		CPU:  cpus.Processors[0].Model,
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
-		BIOS: fmt.Sprintf("%s version %s", bios.Vendor, bios.Version),
+		BIOS: fmt.Sprintf("%v", bios),
 
 		NICs:  make([]string, 0),
 		Disks: make([]string, 0),
@@ -139,26 +145,72 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	if hostStat.VirtualizationSystem == "" {
-		ret.Hostname = fmt.Sprintf("Baremetal %s ( OS %s %s) (arch %s)", hostStat.Hostname, hostStat.Platform, hostStat.PlatformVersion, hostStat.KernelArch)
-	} else {
-		ret.Hostname = fmt.Sprintf("VM %s ( OS %s %s) (arch %s)", hostStat.Hostname, hostStat.Platform, hostStat.PlatformVersion, hostStat.KernelArch)
-
-	}
+	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)", 
+		hostStat.Hostname, 
+		hostStat.Platform, 
+		hostStat.KernelArch, 
+		hostStat.KernelVersion, 
+		hostStat.PlatformVersion)
 
 	for _, i := range gpu.GraphicsCards {
 		ret.GPUs = append(ret.GPUs, i.DeviceInfo.Product.Name)
 	}
 	for _, i := range pcies.Disks {
-		ret.Disks = append(ret.Disks, fmt.Sprintf("%s (Size %dGb)", i.Model, i.SizeBytes/1024/1024/1024))
+		ret.Disks = append(ret.Disks, fmt.Sprintf("%v", i))
 	}
 	for _, i := range networks.NICs {
-		if i.MacAddress != "" {
-			ret.NICs = append(ret.NICs, fmt.Sprintf("%s (MAC Address %s)", i.Name, i.MacAddress))
-		} else {
-			ret.NICs = append(ret.NICs, i.Name)
-		}
+		ret.NICs = append(ret.NICs, fmt.Sprintf("%v",i))
 	}
+    for _, partition := range partitions {
+		ret.Partitions = append(ret.Partitions, &packet.Partition{
+			Device: partition.Device,
+			Opts: partition.Opts,
+			Mountpoint: partition.Mountpoint,
+			Fstype: partition.Fstype,
+		})
+    }
 
 	return ret, nil
+}
+
+
+
+
+
+func GetStatus() (map[string]interface{},error) {
+	ret := map[string]interface{}{}
+
+	procs := []map[string]interface{}{}
+	processes,_ := process.Processes()
+	for _,proc := range processes {
+		cmd,_ 		:= proc.Cmdline()
+		cwd,_ 		:= proc.Cwd()
+		parent,_ 	:= proc.Parent()
+		env,_ 		:= proc.Environ()
+		mem,_ 		:= proc.MemoryPercent()
+		cpu,_ 		:= proc.CPUPercent()
+		files,_ 	:= proc.Exe()
+		user,_ 		:= proc.Username()
+
+		procs = append(procs, map[string]interface{}{
+			"cpu": cpu,
+			"mem": mem,
+			"user": user,
+
+			"exe": files,
+			"cwd": cwd,
+			"cmd": cmd,
+
+			"env": env,
+			"pid": proc.Pid,
+			"parent": parent,
+		})
+	}
+
+	ret["process"] = procs 
+	svc,_ := winservices.ListServices()
+	ret["svc"] = svc
+	net,_ := netinf.Connections("inet4")
+	ret["net"] = net
+	return ret,nil
 }

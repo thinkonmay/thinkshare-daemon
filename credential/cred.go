@@ -11,32 +11,31 @@ import (
 	"strings"
 
 	oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
-	"gopkg.in/yaml.v3"
 )
 
 const (
-	SecretDir		= "./secret"
+	SecretDir       = "./secret"
+
 	ProxySecretFile = "./secret/proxy.json"
-	UserSecretFile  = "./secret/user.json"
-	ConfigFile 		= "./secret/config.json"
+	ConfigFile      = "./secret/config.json"
+
+	StorageCred     = "/.thinkmay/credential.json"
 )
 
-type ApiKey struct {
-	Key     string `json:"key"`
-	Project string `json:"project"`
-}
-type Account struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Project  string `json:"project"`
-}
-type Address struct {
-	PublicIP   string `json:"public_ip"`
-	PrivateIP  string `json:"private_ip"`
+func GetStorageCredentialFile(mountpoint string) string {
+	return fmt.Sprintf("%s%s",mountpoint,StorageCred)
 }
 
-type Secret struct {
+
+
+type Account struct{
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+var Secrets = &struct{
 	EdgeFunctions struct {
 		UserKeygen              string `json:"user_keygen"`
 		ProxyRegister           string `json:"proxy_register"`
@@ -45,6 +44,7 @@ type Secret struct {
 		TurnRegister            string `json:"turn_register"`
 		WorkerProfileFetch      string `json:"worker_profile_fetch"`
 		WorkerRegister          string `json:"worker_register"`
+		StorageRegister         string `json:"storage_register"`
 		WorkerSessionCreate     string `json:"worker_session_create"`
 		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
 	} `json:"edge_functions"`
@@ -62,39 +62,47 @@ type Secret struct {
 		Hostname string `json:"host"`
 		GrpcPort int    `json:"port"`
 	} `json:"conductor"`
-}
+}{}
 
-var Secrets *Secret = &Secret{}
-var proj string = os.Getenv("PROJECT")
-var Addresses *Address = &Address{
+var Addresses = &struct{
+	PublicIP  string `json:"public_ip"`
+	PrivateIP string `json:"private_ip"`
+}{
 	PublicIP:  system.GetPublicIPCurl(),
 	PrivateIP: system.GetPrivateIP(),
 }
 
+
+
+// TODO update version
 func init() {
-	if proj == "" { proj = "avmvymkexjarplbxwlnj" }
-	commitHash,err := exec.Command("git","rev-parse","HEAD").Output()
+	proj := os.Getenv("PROJECT")
+	if proj == "" {
+		proj = "avmvymkexjarplbxwlnj"
+	}
+	commitHash, err := exec.Command("git", "rev-parse", "HEAD").Output()
 	if err == nil {
-		fmt.Printf("current commit hash: %s \n",commitHash)
+		fmt.Printf("current commit hash: %s \n", commitHash)
 	} else if commitHash == nil {
 		fmt.Println("you are not using git, please download git to have auto update")
-	} else if strings.Contains(string(commitHash),"fatal") {
+	} else if strings.Contains(string(commitHash), "fatal") {
 		fmt.Println("you did not clone this repo, please use clone")
 	}
 
-	os.Mkdir(SecretDir,os.ModeDir)
+	os.Mkdir(SecretDir, os.ModeDir)
 	secretFile, err := os.OpenFile(ConfigFile, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err)
 	}
-	defer  func ()  {
+	defer func() {
 		defer secretFile.Close()
-		bytes,_ := json.MarshalIndent(Secrets, "", "	")
+		bytes, _ := json.MarshalIndent(Secrets, "", "	")
+
 		secretFile.Truncate(0)
 		secretFile.WriteAt(bytes, 0)
 	}()
 
-	data,_ := io.ReadAll(secretFile)
+	data, _ := io.ReadAll(secretFile)
 	err = json.Unmarshal(data, Secrets)
 
 	if err == nil { return } // avoid fetch if there is already secrets
@@ -102,55 +110,40 @@ func init() {
 	body,_ := json.Marshal(Addresses)
 	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer(body))
 	if err != nil {
-		fmt.Printf("unable to fetch constant from server %s\n",err.Error())
-		return
+		panic(err)
 	} else if resp.StatusCode != 200 {
-		fmt.Println("unable to fetch constant from server")
-		return
+		panic("unable to fetch constant from server")
 	}
 
 	body,_ = io.ReadAll(resp.Body)
 	json.Unmarshal(body, Secrets)
 }
 
-func UseProxyAccount() (account Account, err error) {
+
+
+
+func InputProxyAccount() (account Account, err error) {
 	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return Account{}, err
 	}
 
-	bytes,_ := io.ReadAll(secret_f)
+	bytes, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(bytes, &account)
-	if err != nil {
-		fmt.Println("none proxy account provided, please provide (look into ./secret folder on the machine you setup proxy account)")
-		fmt.Printf("username : ")
-		fmt.Scanln(&account.Username)
-		fmt.Printf("password : ")
-		fmt.Scanln(&account.Password)
-		account.Project = proj
-
-		defer func() {
-			bytes, _ := json.MarshalIndent(account, "", "	")
-			secret_f.Truncate(0)
-			secret_f.WriteAt(bytes, 0)
-			secret_f.Close()
-		}()
-
-		return account,nil
+	if err == nil {
+		secret_f.Close()
+		return account, nil
 	}
 
-	secret_f.Close()
-	return account, nil
-}
+	fmt.Println("paste your proxy credential here (which have been copied to your clipboard)")
+	fmt.Println("- to register proxy account, go to https://thinkmay.net/ , open terminal application and run proxy register")
+	fmt.Printf ("credential : ")
 
-func SetupProxyAccount() (account Account, err error) {
-	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return Account{}, err
-	}
+	text := "{}"
+	fmt.Scanln(&text)
+	json.Unmarshal([]byte(text), &account)
 
 	defer func() {
-		account.Project = proj
 		defer secret_f.Close()
 		bytes, _ := json.MarshalIndent(account, "", "	")
 
@@ -158,7 +151,24 @@ func SetupProxyAccount() (account Account, err error) {
 		secret_f.WriteAt(bytes, 0)
 	}()
 
-	content,_ := io.ReadAll(secret_f)
+	return account, nil
+}
+
+func RegisterProxyAccount() (account Account, err error) {
+	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return Account{}, err
+	}
+
+	defer func() {
+		defer secret_f.Close()
+		bytes, _ := json.MarshalIndent(account, "", "	")
+
+		secret_f.Truncate(0)
+		secret_f.WriteAt(bytes, 0)
+	}()
+
+	content, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(content, &account)
 	if err == nil && account.Username != "" {
 		return account, nil
@@ -192,7 +202,7 @@ func SetupProxyAccount() (account Account, err error) {
 		return Account{}, err
 	}
 
-	return account, nil
+	return 
 }
 
 func SetupWorkerAccount(proxy Account) (
@@ -220,182 +230,63 @@ func SetupWorkerAccount(proxy Account) (
 		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
 	}
 
-	if err := json.Unmarshal(body, &proxy); err != nil {
+	if err := json.Unmarshal(body, &cred); err != nil {
 		return Account{}, err
 	}
 
-	return proxy, nil
+	return
 }
 
-func SetupApiKey() (cred ApiKey,
-	err error) {
-	secret_f, err := os.OpenFile(UserSecretFile, os.O_RDWR|os.O_CREATE, 0755)
+
+func ReadOrRegisterStorageAccount(worker Account,
+								  partition *packet.Partition,
+								  ) (account Account, 
+									 err error) {
+	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return ApiKey{}, err
+		return Account{}, err
 	}
 
-	defer func() {
-		cred.Project = proj
-		defer secret_f.Close()
-		bytes, _ := json.MarshalIndent(cred, "", "	")
+	data, _ := io.ReadAll(secret_f)
+	err = json.Unmarshal(data, &account)
+	register := !(err == nil) ; err = nil
 
+	defer func() {
+		defer secret_f.Close()
+		if err != nil {
+			return 
+		}
+
+		bytes, _ := json.MarshalIndent(account, "", "	")
 		secret_f.Truncate(0)
 		secret_f.WriteAt(bytes, 0)
 	}()
 
-	content, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(content, &cred)
-	if err == nil && cred.Key != "" {
-		return cred, nil
+
+	if register {
+		data,_ = json.Marshal(partition)
 	}
 
-	oauth2_code, err := oauth2l.StartAuth(Secrets.Google.ClientId, 3000)
+	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.StorageRegister, bytes.NewBuffer(data))
 	if err != nil {
-		return ApiKey{}, err
+		return Account{}, err
 	}
 
-	b, _ := json.Marshal(Addresses)
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.UserKeygen, bytes.NewBuffer(b))
-	if err != nil {
-		return ApiKey{}, err
-	}
-
-	req.Header.Set("oauth2", oauth2_code)
+	req.Header.Set("username", worker.Username)
+	req.Header.Set("password", worker.Password)
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ApiKey{}, err
+		return Account{}, err
 	}
 
-	content, _ = io.ReadAll(resp.Body)
+	data, _ = io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		body_str := string(content)
-		return ApiKey{}, fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
+		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
 	}
-
-	if err := json.Unmarshal(content, &cred); err != nil {
-		return ApiKey{}, err
-	}
-
-	return cred, nil
-}
+	json.Unmarshal(data, &account)
 
 
-
-
-func FetchWorker(cred ApiKey, wait *Address) (result string, err error) {
-	data := struct{
-		UseCase string `json:"use_case"`
-		WaitFor *struct{
-			Worker Address `json:"worker"`
-		}`json:"wait_for"`
-	}{
-		UseCase: "cli",
-	}
-
-	if wait != nil {
-		data.WaitFor = &struct{Worker Address "json:\"worker\""}{
-			Worker: *wait,
-		}
-	}
-
-
-	body,_ := json.Marshal(data)
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerProfileFetch, bytes.NewBuffer(body))
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("api_key", cred.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	content,_ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		body_str := string(content)
-		return "", fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-	}
-
-	var stuff interface{}
-	if err := json.Unmarshal(content, &stuff); err != nil {
-		return "", err
-	}
-
-	val,_ := yaml.Marshal(stuff)
-	return string(val), nil
-}
-
-
-
-type Filter struct {
-  	WorkerId 	 int	`json:"worker_id"`
-	MonitorName  string `json:"monitor_name"`
-	SoudcardName string `json:"soudcard_name"`
-}
-
-
-func CreateSession(filter Filter,cred ApiKey) (out string, err error) {
-	body,_ := json.Marshal(filter)
-
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerSessionCreate, bytes.NewBuffer(body))
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("api_key", cred.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	content,_ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		body_str := string(content)
-		return "", fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-	}
-
-	var stuff interface{}
-	if err := json.Unmarshal(content, &stuff); err != nil {
-		return "", err
-	}
-
-	val,err := yaml.Marshal(stuff)
-	return string(val),err 
-}
-
-func DeactivateSession(SessionID int,cred ApiKey) (URL string, err error) {
-	body,_ := json.Marshal(struct{
-		WorkerSessionId int `json:"worker_session_id"`
-	}{
-		WorkerSessionId: SessionID,
-	})
-
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerSessionDeactivate, bytes.NewBuffer(body))
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("api_key", cred.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	content,_ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("response code %d: %s", resp.StatusCode, string(content))
-	}
-
-	var stuff interface{}
-	if err := json.Unmarshal(content, &stuff); err != nil {
-		return "", err
-	}
-
-	val,err := yaml.Marshal(stuff)
-	return string(val), err
+	return
 }

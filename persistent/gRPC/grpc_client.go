@@ -27,6 +27,9 @@ type GRPCclient struct {
 	state_out chan *packet.WorkerSessions
 	state_in  chan *packet.WorkerSessions
 
+	chunk_in  chan *packet.StorageChunk
+	chunk_out chan *packet.StorageChunk
+
 	done      bool
 	connected bool
 }
@@ -50,6 +53,9 @@ func InitGRPCClient(host string,
 
 		state_out : make(chan *packet.WorkerSessions,100),
 		state_in  : make(chan *packet.WorkerSessions,100),
+
+		chunk_in  : make(chan *packet.StorageChunk,100),
+		chunk_out : make(chan *packet.StorageChunk,100),
 	}
 
 
@@ -258,4 +264,11 @@ func (grpc *GRPCclient) RecvSession() *packet.WorkerSessions {
 }
 func (grpc *GRPCclient) SyncSession(log *packet.WorkerSessions) {
 	grpc.state_in <- log
+}
+
+func (grpc *GRPCclient) StorageUpload() *packet.StorageChunk{
+	return <-grpc.chunk_out
+}
+func (grpc *GRPCclient) StorageReceive(chunk *packet.StorageChunk) {
+	grpc.chunk_in <- chunk
 }

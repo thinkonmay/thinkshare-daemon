@@ -1,0 +1,149 @@
+syntax = "proto3";
+package protobuf;
+option go_package = "./packet";
+
+
+service Conductor {
+	rpc sync			(stream WorkerSessions) returns (stream WorkerSessions);
+
+	rpc infor			(stream WorkerInfor) 	  returns (Closer);
+	rpc mediadevice		(stream MediaDevice)      returns (Closer);
+	rpc logger			(stream WorkerLog) 	   	  returns (Closer);
+	rpc monitor			(stream WorkerMetric) 	  returns (Closer);
+
+	rpc storagetranfer	(stream StorageChunk)     returns (stream StorageChunk);
+	rpc storagesync		(stream StorageStatus)    returns (Closer);
+}
+
+message Closer{ 
+	string timestamp = 1;
+	string reason    = 2;
+}
+
+message StorageStatus { 
+	// TODO
+}
+
+message StorageChunk { 
+    string path = 1;
+
+    bytes chunk = 2;
+	bool EOF = 3;
+}
+
+message WorkerSessions {
+	repeated WorkerSession sessions = 1;
+	repeated AppSession apps = 2;
+}
+
+message AppSession { 
+	int32  id = 1;
+	string timestamp = 2;
+
+	string exe			 = 3;
+	string folder        = 4;
+	repeated string args = 5;
+	repeated string envs = 6;
+
+	string manifest      = 7; // not sync
+}
+message WorkerSession{ 
+	int32  id = 1;
+	string timestamp = 2;
+
+	string authConfig 		   	= 3; // do sync
+	string signalingConfig 		= 4; // do sync
+	string webrtcConfig    		= 5; // do sync
+	MediaConfig mediaConfig    	= 6; // do sync
+
+	string manifest        		= 8; // not sync
+}
+
+
+message Partition{
+	string device = 1;
+	string mountpoint = 2;
+	string fstype = 3;
+	string opts = 4;
+}
+
+message WorkerInfor{ 
+	string timestamp = 1;
+
+	string   Hostname   = 2;
+	string   CPU        = 3;
+	string   RAM        = 4;
+	string   BIOS       = 5;
+
+	string   PublicIP   = 6;
+	string   PrivateIP  = 7;
+
+	repeated string GPUs        = 8;
+	repeated string disks       = 9;
+	repeated Partition partitions  = 10;
+	repeated string NICs    = 11;
+}
+
+
+message WorkerLog{ 
+	string timestamp = 1;
+
+	string log       = 2;
+	string level     = 3;
+	string source    = 4;
+}
+message WorkerMetric{ 
+	string timestamp = 1;
+
+	string name      = 2;
+	double raw_value = 3;
+}
+
+
+
+
+
+
+
+
+message Monitor {
+	int32  MonitorHandle = 1;
+	string MonitorName   = 2;
+	string DeviceName    = 3;
+	string Adapter       = 4;
+	int32  Width         = 5;
+	int32  Height        = 6;
+	int32  Framerate     = 7;
+	bool   IsPrimary     = 8;
+
+	Pipeline pipeline    = 9;
+}
+
+message Soundcard {
+	string 	DeviceID 	= 1;
+	string 	Name     	= 2;
+	string 	Api      	= 3;
+
+	bool 	IsDefault  	= 4;
+	bool 	IsLoopback 	= 5;
+
+	Pipeline pipeline = 6;
+}
+
+message MediaDevice { 
+	string timestamp = 1;
+
+	repeated Monitor monitors = 2;
+	repeated Soundcard soundcards = 3;
+}
+
+message MediaConfig { 
+	Monitor monitor = 1;
+	Soundcard soundcard = 2;
+}
+
+message Pipeline {
+	string PipelineHash   	= 1;
+	string PipelineString   = 2;
+	string Plugin   		= 3;
+}
