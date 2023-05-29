@@ -20,8 +20,13 @@ message Closer{
 	string reason    = 2;
 }
 
+message Account { 
+	string username = 1;
+	string password = 2;
+}
 message StorageStatus { 
-	// TODO
+	Partition info = 1;
+	Account	  account = 2;
 }
 
 message StorageChunk { 

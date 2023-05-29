@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -33,12 +34,37 @@ func main() {
 		return
 	}
 
+	storages := []*packet.StorageStatus{}
+	go func ()  {
+		for {
+			time.Sleep(time.Second * 15)
+			for _,s := range storages {
+				grpc.StorageReport(s)
+			}
+		}
+	}()
+
 	dm := daemon.NewDaemon(grpc,func(p *packet.Partition) {
-		_,err := credential.ReadOrRegisterStorageAccount(worker_cred,p)
+		account,err := credential.ReadOrRegisterStorageAccount(worker_cred,p)
 		if err != nil {
 			log.PushLog("unable to register storage device %s",err.Error())
 			return
 		}
+				
+		for _,s := range storages {
+			if s.Account.Password == account.Password && s.Account.Username == account.Username {
+				s.Info = p
+				return
+			}
+		}
+
+		storages = append(storages, &packet.StorageStatus{
+			Account: &packet.Account{
+				Password: account.Password,
+				Username: account.Username,
+			},
+			Info: p,
+		})
 	})
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown

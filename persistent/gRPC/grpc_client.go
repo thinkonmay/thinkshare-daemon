@@ -23,6 +23,7 @@ type GRPCclient struct {
 	monitoring chan *packet.WorkerMetric
 	infor      chan *packet.WorkerInfor
 	devices    chan *packet.MediaDevice
+	storage    chan *packet.StorageStatus
 
 	state_out chan *packet.WorkerSessions
 	state_in  chan *packet.WorkerSessions
@@ -50,6 +51,7 @@ func InitGRPCClient(host string,
 		monitoring : make(chan *packet.WorkerMetric,100),
 		infor      : make(chan *packet.WorkerInfor,100),
 		devices    : make(chan *packet.MediaDevice,100),
+		storage    : make(chan *packet.StorageStatus,100),
 
 		state_out : make(chan *packet.WorkerSessions,100),
 		state_in  : make(chan *packet.WorkerSessions,100),
@@ -85,6 +87,31 @@ func InitGRPCClient(host string,
 	}()
 
 
+	go func() {
+		for {
+			if ret.done {
+				return
+			} else if !ret.connected {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			} 
+
+			client, err := ret.stream.Storagesync(ret.genContext())
+			if err != nil {
+				fmt.Printf("fail to request stream: %s\n", err.Error())
+				ret.connected = false
+				continue
+			}
+
+			for {
+				if err := client.Send(<-ret.storage); err != nil {
+					log.PushLog("error sending log to conductor %s", err.Error())
+					ret.connected = false
+					break
+				}
+			}
+		}
+	}()
 	go func() {
 		for {
 			if ret.done {
@@ -266,6 +293,9 @@ func (grpc *GRPCclient) SyncSession(log *packet.WorkerSessions) {
 	grpc.state_in <- log
 }
 
+func (grpc *GRPCclient) StorageReport(status *packet.StorageStatus) {
+	grpc.storage <- status
+}
 func (grpc *GRPCclient) StorageUpload() *packet.StorageChunk{
 	return <-grpc.chunk_out
 }

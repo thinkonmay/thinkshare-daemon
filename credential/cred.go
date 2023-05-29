@@ -249,7 +249,10 @@ func ReadOrRegisterStorageAccount(worker Account,
 
 	data, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(data, &account)
-	register := !(err == nil) ; err = nil
+	if err != nil && account.Username != "" && account.Password != "" {
+		return account, err
+	}
+
 
 	defer func() {
 		defer secret_f.Close()
@@ -263,10 +266,7 @@ func ReadOrRegisterStorageAccount(worker Account,
 	}()
 
 
-	if register {
-		data,_ = json.Marshal(partition)
-	}
-
+	data,_ = json.Marshal(partition)
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.StorageRegister, bytes.NewBuffer(data))
 	if err != nil {
 		return Account{}, err
@@ -281,11 +281,18 @@ func ReadOrRegisterStorageAccount(worker Account,
 		return Account{}, err
 	}
 
-	data, _ = io.ReadAll(resp.Body)
+	data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return Account{}, err
+	}
+
 	if resp.StatusCode != 200 {
 		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
 	}
-	json.Unmarshal(data, &account)
+	err = json.Unmarshal(data, &account)
+	if err != nil {
+		return Account{}, err
+	}
 
 
 	return
