@@ -16,26 +16,24 @@ import (
 )
 
 const (
-	SecretDir       = "./secret"
+	SecretDir = "./secret"
 
 	ProxySecretFile = "./secret/proxy.json"
 	ConfigFile      = "./secret/config.json"
 
-	StorageCred     = "/.thinkmay/credential.json"
+	StorageCred = "/.thinkmay/credential.json"
 )
 
 func GetStorageCredentialFile(mountpoint string) string {
-	return fmt.Sprintf("%s%s",mountpoint,StorageCred)
+	return fmt.Sprintf("%s%s", mountpoint, StorageCred)
 }
 
-
-
-type Account struct{
+type Account struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-var Secrets = &struct{
+var Secrets = &struct {
 	EdgeFunctions struct {
 		UserKeygen              string `json:"user_keygen"`
 		ProxyRegister           string `json:"proxy_register"`
@@ -64,15 +62,13 @@ var Secrets = &struct{
 	} `json:"conductor"`
 }{}
 
-var Addresses = &struct{
+var Addresses = &struct {
 	PublicIP  string `json:"public_ip"`
 	PrivateIP string `json:"private_ip"`
 }{
 	PublicIP:  system.GetPublicIPCurl(),
 	PrivateIP: system.GetPrivateIP(),
 }
-
-
 
 // TODO update version
 func init() {
@@ -105,9 +101,11 @@ func init() {
 	data, _ := io.ReadAll(secretFile)
 	err = json.Unmarshal(data, Secrets)
 
-	if err == nil { return } // avoid fetch if there is already secrets
+	if err == nil {
+		return
+	} // avoid fetch if there is already secrets
 
-	body,_ := json.Marshal(Addresses)
+	body, _ := json.Marshal(Addresses)
 	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		panic(err)
@@ -115,12 +113,9 @@ func init() {
 		panic("unable to fetch constant from server")
 	}
 
-	body,_ = io.ReadAll(resp.Body)
+	body, _ = io.ReadAll(resp.Body)
 	json.Unmarshal(body, Secrets)
 }
-
-
-
 
 func InputProxyAccount() (account Account, err error) {
 	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
@@ -137,7 +132,7 @@ func InputProxyAccount() (account Account, err error) {
 
 	fmt.Println("paste your proxy credential here (which have been copied to your clipboard)")
 	fmt.Println("- to register proxy account, go to https://thinkmay.net/ , open terminal application and run proxy register")
-	fmt.Printf ("credential : ")
+	fmt.Printf("credential : ")
 
 	text := "{}"
 	fmt.Scanln(&text)
@@ -202,7 +197,7 @@ func RegisterProxyAccount() (account Account, err error) {
 		return Account{}, err
 	}
 
-	return 
+	return
 }
 
 func SetupWorkerAccount(proxy Account) (
@@ -237,11 +232,10 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-
-func ReadOrRegisterStorageAccount(worker Account,
-								  partition *packet.Partition,
-								  ) (account Account, 
-									 err error) {
+func ReadOrRegisterStorageAccount(proxy Account,
+	partition *packet.Partition,
+) (account Account,
+	err error) {
 	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return Account{}, err
@@ -249,15 +243,14 @@ func ReadOrRegisterStorageAccount(worker Account,
 
 	data, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(data, &account)
-	if err != nil && account.Username != "" && account.Password != "" {
+	if err == nil && account.Username != "" && account.Password != "" {
 		return account, err
 	}
-
 
 	defer func() {
 		defer secret_f.Close()
 		if err != nil {
-			return 
+			return
 		}
 
 		bytes, _ := json.MarshalIndent(account, "", "	")
@@ -265,17 +258,19 @@ func ReadOrRegisterStorageAccount(worker Account,
 		secret_f.WriteAt(bytes, 0)
 	}()
 
-
-	data,_ = json.Marshal(partition)
+	data, _ = json.Marshal(struct {
+		Hardware *packet.Partition `json:"hardware"`
+	}{
+		Hardware: partition,
+	})
 	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.StorageRegister, bytes.NewBuffer(data))
 	if err != nil {
 		return Account{}, err
 	}
 
-	req.Header.Set("username", worker.Username)
-	req.Header.Set("password", worker.Password)
+	req.Header.Set("username", proxy.Username)
+	req.Header.Set("password", proxy.Password)
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return Account{}, err
@@ -294,6 +289,56 @@ func ReadOrRegisterStorageAccount(worker Account,
 		return Account{}, err
 	}
 
-
 	return
+}
+
+func StorageAccountMatchWorker(storage Account,
+	worker Account,
+	partition *packet.Partition,
+) (err error) {
+	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		return err
+	}
+
+	account := Account{}
+	data, _ := io.ReadAll(secret_f)
+	err = json.Unmarshal(data, &account)
+	if err != nil && account.Username != "" && account.Password != "" {
+		return err
+	}
+	secret_f.Close()
+
+	data, _ = json.Marshal(struct {
+		Cred     Account           `json:"cred"`
+		Hardware *packet.Partition `json:"hardware"`
+	}{
+		Cred:     storage,
+		Hardware: partition,
+	})
+
+	req, err := http.NewRequest("POST",
+		Secrets.EdgeFunctions.StorageRegister,
+		bytes.NewBuffer(data))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("username", worker.Username)
+	req.Header.Set("password", worker.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != 200 {
+		data, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+	}
+
+	return nil
 }

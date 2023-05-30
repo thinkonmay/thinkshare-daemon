@@ -35,27 +35,33 @@ func main() {
 	}
 
 	storages := []*packet.StorageStatus{}
-	go func ()  {
+	go func() {
 		for {
 			time.Sleep(time.Second * 15)
-			for _,s := range storages {
+			for _, s := range storages {
 				grpc.StorageReport(s)
 			}
 		}
 	}()
 
-	dm := daemon.NewDaemon(grpc,func(p *packet.Partition) {
-		account,err := credential.ReadOrRegisterStorageAccount(worker_cred,p)
+	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
+		account, err := credential.ReadOrRegisterStorageAccount(proxy_cred, p)
 		if err != nil {
-			log.PushLog("unable to register storage device %s",err.Error())
+			log.PushLog("unable to register storage device %s", err.Error())
 			return
 		}
-				
-		for _,s := range storages {
+
+		for _, s := range storages {
 			if s.Account.Password == account.Password && s.Account.Username == account.Username {
 				s.Info = p
 				return
 			}
+		}
+
+		err = credential.StorageAccountMatchWorker(account, worker_cred, p)
+		if err != nil {
+			log.PushLog("unable to register storage device %s", err.Error())
+			return
 		}
 
 		storages = append(storages, &packet.StorageStatus{
