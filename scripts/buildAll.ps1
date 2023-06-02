@@ -14,5 +14,6 @@ Set-Location ../
 
 # build .NET
 Set-Location .\hid
+dotnet nuget add source --name nuget.org https://api.nuget.org/v3/index.json
 dotnet build . --output "bin" --self-contained true --runtime win-x64
 Set-Location ..
