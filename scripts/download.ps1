@@ -11,10 +11,13 @@ $gstreamer = New-Object net.webclient
 $gstreamer.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22.1/msvc/gstreamer-1.0-msvc-x86_64-1.22.1.msi"                                                        ,"msi/gstreamer.msi")
 $git = New-Object net.webclient
 $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.40.0.windows.1/Git-2.40.0-64-bit.exe"                                                                 ,"msi/git.exe")
+$cruntime = New-Object net.webclient
+$cruntime.Downloadfile("https://aka.ms/vs/17/release/vc_redist.x64.exe"                                                                                                                    ,"msi/cruntime.exe")
 
 ./msi/dotnet.exe  /passive
 ./msi/gcc.exe
 ./msi/git.exe /SILENT
+./msi/cruntime.exe /passive
 
 Start-Process ./msi/go.msi  -ArgumentList "/qb" -Wait                      
 Start-Process ./msi/gstreamer-dev.msi  -ArgumentList "/qb" -Wait           
