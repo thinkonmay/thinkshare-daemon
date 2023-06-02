@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
-	"strings"
 
 	oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
@@ -75,14 +73,6 @@ func init() {
 	proj := os.Getenv("PROJECT")
 	if proj == "" {
 		proj = "avmvymkexjarplbxwlnj"
-	}
-	commitHash, err := exec.Command("git", "rev-parse", "HEAD").Output()
-	if err == nil {
-		fmt.Printf("current commit hash: %s \n", commitHash)
-	} else if commitHash == nil {
-		fmt.Println("you are not using git, please download git to have auto update")
-	} else if strings.Contains(string(commitHash), "fatal") {
-		fmt.Println("you did not clone this repo, please use clone")
 	}
 
 	os.Mkdir(SecretDir, os.ModeDir)
