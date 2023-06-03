@@ -45,6 +45,7 @@ func main() {
 	}()
 
 	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
+		log.PushLog("registering storage account for drive %s",p.Mountpoint)
 		account, err := credential.ReadOrRegisterStorageAccount(proxy_cred, p)
 		if err != nil {
 			log.PushLog("unable to register storage device %s", err.Error())
@@ -58,6 +59,7 @@ func main() {
 			}
 		}
 
+		log.PushLog("matching storage account %s",p.Mountpoint)
 		err = credential.StorageAccountMatchWorker(account, worker_cred, p)
 		if err != nil {
 			log.PushLog("unable to register storage device %s", err.Error())

@@ -19,7 +19,7 @@ const (
 	ProxySecretFile = "./secret/proxy.json"
 	ConfigFile      = "./secret/config.json"
 
-	StorageCred = "/.thinkmay/credential.json"
+	StorageCred = "/.credential.thinkmay.json"
 )
 
 func GetStorageCredentialFile(mountpoint string) string {
@@ -253,7 +253,7 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	}{
 		Hardware: partition,
 	})
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.StorageRegister, bytes.NewBuffer(data))
+	req, err := http.NewRequest("POST", "https://avmvymkexjarplbxwlnj.functions.supabase.co/storage_register" , bytes.NewBuffer(data))
 	if err != nil {
 		return Account{}, err
 	}
@@ -308,7 +308,7 @@ func StorageAccountMatchWorker(storage Account,
 	})
 
 	req, err := http.NewRequest("POST",
-		Secrets.EdgeFunctions.StorageRegister,
+		"https://avmvymkexjarplbxwlnj.functions.supabase.co/storage_register",
 		bytes.NewBuffer(data))
 	if err != nil {
 		return err
