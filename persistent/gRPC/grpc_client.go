@@ -13,6 +13,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	largerWindowSize = 65535 + 100 // https://github.com/grpc/grpc-go/issues/5358
+)
 type GRPCclient struct {
 	stream packet.ConductorClient
 
@@ -65,7 +68,10 @@ func InitGRPCClient(host string,
 
 			conn, err = grpc.Dial(
 				fmt.Sprintf("%s:%d", host, port),
-				grpc.WithTransportCredentials(insecure.NewCredentials()))
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+				grpc.WithInitialWindowSize(largerWindowSize),
+				grpc.WithInitialConnWindowSize(largerWindowSize),
+			)
 
 			if err != nil {
 				fmt.Printf("failed to dial : %s",err.Error())
