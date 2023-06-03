@@ -14,14 +14,15 @@ $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.4
 $cruntime = New-Object net.webclient
 $cruntime.Downloadfile("https://aka.ms/vs/17/release/vc_redist.x64.exe"                                                                                                                    ,"msi/cruntime.exe")
 
-./msi/dotnet.exe  /passive
 ./msi/gcc.exe
 ./msi/git.exe /SILENT
 ./msi/cruntime.exe /passive
 
 Start-Process ./msi/go.msi  -ArgumentList "/qb" -Wait                      
 Start-Process ./msi/gstreamer-dev.msi  -ArgumentList "/qb" -Wait           
-Start-Process ./msi/gstreamer.msi  -ArgumentList "/qb" -Wait            
+Start-Process ./msi/gstreamer.msi  -ArgumentList "/qb" -Wait     
+
+./msi/dotnet.exe  /passive       
 
 setx /M PATH "$($env:path);C:\gstreamer\1.0\msvc_x86_64\bin;C:\Program Files\Go\bin;C:\TDM-GCC-64\bin;C:\Program Files\dotnet;C:\gstreamer\1.0\msvc_x86_64\bin;C:\Program Files\Git\bin"
 
