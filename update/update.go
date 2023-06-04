@@ -37,21 +37,29 @@ func Update() {
 	fmt.Printf("gstreamer version %s",string(out))
 
 	currentCommitHash, err := exec.Command("git", "rev-parse", "HEAD").Output()
-	if err == nil {
-		fmt.Printf("current commit hash: %s \n", currentCommitHash)
-	} else if currentCommitHash == nil {
-		fmt.Println("you are not using git, please download git to have auto update")
+	if err != nil {
+		panic(err)
 	} else if strings.Contains(string(currentCommitHash), "fatal") {
 		fmt.Println("you did not clone this repo, please use clone")
+		os.Exit(0)
 	}
 
-
-
 	desiredCommitHash := credential.Secrets.Daemon.Commit
-	if desiredCommitHash != string(currentCommitHash) {
+	fmt.Printf("desired commit hash: %s\n",desiredCommitHash)
+	fmt.Printf("current commit hash: %s\n",currentCommitHash)
+	if !strings.Contains(string(currentCommitHash),desiredCommitHash) {
 		fmt.Println("daemon is not in sync, restarting")
 		exec.Command("git", "pull").Output()
 		exec.Command("git", "checkout" , desiredCommitHash).Output()
 		os.Exit(0)
 	}
+
+
+	go func ()  {
+		out,err := exec.Command("powershell",".\\scripts\\update.ps1").Output()
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("rebuilt submodules:\n %s\n",string(out))
+	}()
 }
