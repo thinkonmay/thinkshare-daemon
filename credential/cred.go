@@ -15,10 +15,7 @@ import (
 
 const (
 	SecretDir = "./secret"
-
 	ProxySecretFile = "./secret/proxy.json"
-	ConfigFile      = "./secret/config.json"
-
 	StorageCred = "/.credential.thinkmay.json"
 )
 
@@ -75,38 +72,35 @@ var Addresses = &struct {
 	PrivateIP: system.GetPrivateIP(),
 }
 
-func SetupEnv(proj string) {
-
+func SetupEnv(proj string,anon_key string) {
 	os.Mkdir(SecretDir, os.ModeDir)
-	secretFile, err := os.OpenFile(ConfigFile, os.O_RDWR|os.O_CREATE, 0755)
+	req,err := http.NewRequest("GET",
+		fmt.Sprintf("https://%s.supabase.co/rest/v1/constant?select=value", proj),
+		bytes.NewBuffer([]byte("")))
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		defer secretFile.Close()
-		bytes, _ := json.MarshalIndent(Secrets, "", "	")
 
-		secretFile.Truncate(0)
-		secretFile.WriteAt(bytes, 0)
-	}()
+	req.Header.Set("apikey", anon_key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",anon_key))
 
-	data, _ := io.ReadAll(secretFile)
-	err = json.Unmarshal(data, Secrets)
-
-	if err == nil {
-		return
-	} // avoid fetch if there is already secrets
-
-	body, _ := json.Marshal(Addresses)
-	resp, err := http.DefaultClient.Post(fmt.Sprintf("https://%s.functions.supabase.co/constant", proj), "application/json", bytes.NewBuffer(body))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		panic(err)
 	} else if resp.StatusCode != 200 {
 		panic("unable to fetch constant from server")
 	}
 
-	body, _ = io.ReadAll(resp.Body)
-	json.Unmarshal(body, Secrets)
+	body, _ := io.ReadAll(resp.Body)
+
+	var data [](interface{})
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		panic(err)
+	}
+
+	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
+	json.Unmarshal(val, &Secrets)
 }
 
 func InputProxyAccount() (account Account, err error) {

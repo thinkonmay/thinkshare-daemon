@@ -1,4 +1,3 @@
-Remove-Item ./secret/config.json
 git submodule update --init --recursive
 
 echo "building hub.exe with go"

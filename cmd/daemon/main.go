@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
@@ -13,14 +12,12 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
+const (
+	proj 	 = "avmvymkexjarplbxwlnj"
+	anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2bXZ5bWtleGphcnBsYnh3bG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAzMjM0NjgsImV4cCI6MTk5NTg5OTQ2OH0.y2W9svI_4O4_xd5AQk4S4MLJAvQJIp0QrO4cljLB9Ik"
+)
 func main() {
-	proj := os.Getenv("PROJECT")
-	if proj == "" {
-		proj = "avmvymkexjarplbxwlnj"
-	}
-
-
-	credential.SetupEnv(proj)
+	credential.SetupEnv(proj,anon_key)
 	update.Update()
 
 
