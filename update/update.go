@@ -49,10 +49,10 @@ func Update() {
 	fmt.Printf("current commit hash: %s\n",currentCommitHash)
 	if !strings.Contains(string(currentCommitHash),desiredCommitHash) {
 		fmt.Println("daemon is not in sync, restarting")
-		exec.Command("git", "reset").Output()
+		exec.Command("git", "reset","--hard").Output()
 		exec.Command("git", "pull").Output()
 		out,_ := exec.Command("git", "checkout" , desiredCommitHash).Output()
-		fmt.Println(out)
+		fmt.Println(string(out))
 		os.Exit(0)
 	}
 
