@@ -40,9 +40,12 @@ var Secrets = &struct {
 		TurnRegister            string `json:"turn_register"`
 		WorkerProfileFetch      string `json:"worker_profile_fetch"`
 		WorkerRegister          string `json:"worker_register"`
-		StorageRegister         string `json:"storage_register"`
 		WorkerSessionCreate     string `json:"worker_session_create"`
 		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
+		StorageRegister        	string `json:"storage_register"`
+		UserApplicationFetch  	string `json:"user_application_fetch"`
+		RequestApplication     	string `json:"request_application"`
+		FetchWorkerStatus     	string `json:"fetch_worker_status"`
 	} `json:"edge_functions"`
 
 	Secret struct {
@@ -58,6 +61,10 @@ var Secrets = &struct {
 		Hostname string `json:"host"`
 		GrpcPort int    `json:"port"`
 	} `json:"conductor"`
+
+	Daemon struct {
+		Commit string `json:"commit"`
+	} `json:"daemon"`
 }{}
 
 var Addresses = &struct {
@@ -68,12 +75,7 @@ var Addresses = &struct {
 	PrivateIP: system.GetPrivateIP(),
 }
 
-// TODO update version
-func init() {
-	proj := os.Getenv("PROJECT")
-	if proj == "" {
-		proj = "avmvymkexjarplbxwlnj"
-	}
+func SetupEnv(proj string) {
 
 	os.Mkdir(SecretDir, os.ModeDir)
 	secretFile, err := os.OpenFile(ConfigFile, os.O_RDWR|os.O_CREATE, 0755)

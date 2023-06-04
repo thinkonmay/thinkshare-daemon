@@ -2,16 +2,28 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/update"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 func main() {
+	proj := os.Getenv("PROJECT")
+	if proj == "" {
+		proj = "avmvymkexjarplbxwlnj"
+	}
+
+
+	credential.SetupEnv(proj)
+	update.Update()
+
+
 	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {
 		fmt.Printf("failed to find proxy account: %s", err.Error())
