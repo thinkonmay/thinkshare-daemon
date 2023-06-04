@@ -57,10 +57,7 @@ func Update() {
 	}
 
 	go func ()  {
-		out,err := exec.Command("powershell",".\\scripts\\update.ps1").Output()
-		if err != nil {
-			panic(err)
-		}
+		out,_ := exec.Command("powershell",".\\scripts\\update.ps1").Output()
 		fmt.Printf("rebuilt submodules:\n %s\n",string(out))
 	}()
 }
