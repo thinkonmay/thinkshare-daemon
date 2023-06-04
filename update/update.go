@@ -56,7 +56,6 @@ func Update() {
 		os.Exit(0)
 	}
 
-
 	go func ()  {
 		out,err := exec.Command("powershell",".\\scripts\\update.ps1").Output()
 		if err != nil {
