@@ -36,10 +36,8 @@ func Update() {
 	}
 	fmt.Printf("gstreamer version %s",string(out))
 
-	currentCommitHash, err := exec.Command("git", "rev-parse", "HEAD").Output()
-	if err != nil {
-		panic(err)
-	} else if strings.Contains(string(currentCommitHash), "fatal") {
+	currentCommitHash,_ := exec.Command("git", "rev-parse", "HEAD").Output()
+	if strings.Contains(string(currentCommitHash), "fatal") {
 		fmt.Println("you did not clone this repo, please use clone")
 		os.Exit(0)
 	}
