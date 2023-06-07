@@ -185,7 +185,7 @@ func InitGRPCClient(host string,
 
 			for {
 				dv := <-ret.devices
-				if err := client.Send(dv); err != nil {
+				if err := client.Send(dv); err != nil && err != io.EOF{
 					log.PushLog("error sync media device : %s", err.Error())
 					ret.connected = false
 					break
