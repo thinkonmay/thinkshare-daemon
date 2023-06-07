@@ -3,10 +3,11 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
-	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -110,7 +111,7 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.storage); err != nil {
+				if err := client.Send(<-ret.storage); err != nil && err != io.EOF{
 					log.PushLog("error sending log to conductor %s", err.Error())
 					ret.connected = false
 					break
@@ -135,7 +136,7 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.logger); err != nil {
+				if err := client.Send(<-ret.logger); err != nil && err != io.EOF{
 					log.PushLog("error sending log to conductor %s", err.Error())
 					ret.connected = false
 					break
@@ -159,7 +160,7 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.monitoring); err != nil {
+				if err := client.Send(<-ret.monitoring); err != nil && err != io.EOF{
 					log.PushLog("error sending metric to conductor %s", err.Error())
 					ret.connected = false
 					break
@@ -208,7 +209,7 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.infor); err != nil {
+				if err := client.Send(<-ret.infor); err != nil && err != io.EOF{
 					log.PushLog("error sending hwinfor to conductor %s", err.Error())
 					ret.connected = false
 					break
@@ -235,7 +236,7 @@ func InitGRPCClient(host string,
 			done := make(chan bool, 2)
 			go func() {
 				for {
-					if err := client.Send(<-ret.state_in); err != nil {
+					if err := client.Send(<-ret.state_in); err != nil && err != io.EOF{
 						log.PushLog("error sending session state to conductor %s", err.Error())
 						done <- true
 						break
@@ -245,7 +246,7 @@ func InitGRPCClient(host string,
 			go func() {
 				for {
 					msg := &packet.WorkerSessions{}
-					if msg, err = client.Recv(); err != nil {
+					if msg, err = client.Recv(); err != nil && err != io.EOF{
 						log.PushLog("error receive session state from conductor %s", err.Error())
 						done <- true
 						break
