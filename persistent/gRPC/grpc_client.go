@@ -111,8 +111,10 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.storage); err != nil && err != io.EOF{
+				msg := <-ret.storage
+				if err := client.Send(msg); err != nil && err != io.EOF{
 					log.PushLog("error sending log to conductor %s", err.Error())
+					ret.storage <- msg
 					ret.connected = false
 					break
 				}
@@ -136,8 +138,10 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.logger); err != nil && err != io.EOF{
+				msg := <-ret.logger
+				if err := client.Send(msg); err != nil && err != io.EOF{
 					log.PushLog("error sending log to conductor %s", err.Error())
+					ret.logger <- msg
 					ret.connected = false
 					break
 				}
@@ -160,8 +164,10 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.monitoring); err != nil && err != io.EOF{
+				msg := <-ret.monitoring
+				if err := client.Send(msg); err != nil && err != io.EOF{
 					log.PushLog("error sending metric to conductor %s", err.Error())
+					ret.monitoring<-msg
 					ret.connected = false
 					break
 				}
@@ -209,8 +215,10 @@ func InitGRPCClient(host string,
 			}
 
 			for {
-				if err := client.Send(<-ret.infor); err != nil && err != io.EOF{
+				msg := <-ret.infor
+				if err := client.Send(msg); err != nil && err != io.EOF{
 					log.PushLog("error sending hwinfor to conductor %s", err.Error())
+					ret.infor <- msg
 					ret.connected = false
 					break
 				}
@@ -236,8 +244,10 @@ func InitGRPCClient(host string,
 			done := make(chan bool, 2)
 			go func() {
 				for {
-					if err := client.Send(<-ret.state_in); err != nil && err != io.EOF{
+					msg :=<- ret.state_in
+					if err := client.Send(msg); err != nil && err != io.EOF{
 						log.PushLog("error sending session state to conductor %s", err.Error())
+						ret.state_in <- msg
 						done <- true
 						break
 					}
