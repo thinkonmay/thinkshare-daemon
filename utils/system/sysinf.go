@@ -11,7 +11,7 @@ import (
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
-	"github.com/shirou/gopsutil/winservices"
+	// "github.com/shirou/gopsutil/winservices"
 	netinf "github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
@@ -208,8 +208,8 @@ func GetStatus() (map[string]interface{},error) {
 	}
 
 	ret["process"] = procs 
-	svc,_ := winservices.ListServices()
-	ret["svc"] = svc
+	// svc,_ := winservices.ListServices()
+	// ret["svc"] = svc
 	net,_ := netinf.Connections("inet4")
 	ret["net"] = net
 	return ret,nil
