@@ -62,6 +62,44 @@ var Secrets = &struct {
 	Daemon struct {
 		Commit string `json:"commit"`
 	} `json:"daemon"`
+
+
+
+	Supabase *struct {
+		Url              		string `json:"url"`
+		AnonKey         		string `json:"anon_key"`
+		ServiceRoleKey 			string `json:"admin_key"`
+		DbConn					string `json:"db_conn"`
+	} `json:"supabase"`
+
+	Elasticsearch *struct {
+		Url      			string `json:"url"`
+		Namespace			string `json:"namespace"`
+	} `json:"elasticSearch"`
+
+	Signaling *struct {
+		HostName					string 	`json:"HostName"`
+		ValidateUrl 				string 	`json:"ValidationUrl"`
+
+		Data struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Data"`
+		Video struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Video"`
+		Audio struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Audio"`
+	}`json:"signalingSetting"`
+
+	ConductorSetting *struct {
+		GrpcPort 	int    `json:"Port"`
+		HostName    string `json:"HostName"`
+		Commit   	string `json:"commit"`
+	}`json:"conductorSetting"`
 }{}
 
 var Addresses = &struct {
