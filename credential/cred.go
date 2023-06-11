@@ -271,7 +271,9 @@ func ReadOrRegisterStorageAccount(proxy Account,
 
 	storage = &Account{}
 	err = json.Unmarshal(data, storage)
-	if err == nil && storage.Username != nil && storage.Password != nil {
+	if  err              != nil || 
+		storage.Username == nil || 
+		storage.Password == nil {
 		storage = nil
 	}
 
