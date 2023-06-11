@@ -24,8 +24,8 @@ func GetStorageCredentialFile(mountpoint string) string {
 }
 
 type Account struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username *string `json:"username"`
+	Password *string `json:"password"`
 }
 
 var Secrets = &struct {
@@ -189,7 +189,7 @@ func RegisterProxyAccount() (account Account, err error) {
 
 	content, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(content, &account)
-	if err == nil && account.Username != "" {
+	if err == nil && account.Username != nil {
 		return account, nil
 	}
 
@@ -234,8 +234,8 @@ func SetupWorkerAccount(proxy Account) (
 		return Account{}, err
 	}
 
-	req.Header.Set("username", proxy.Username)
-	req.Header.Set("password", proxy.Password)
+	req.Header.Set("username", *proxy.Username)
+	req.Header.Set("password", *proxy.Password)
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 
 	resp, err := http.DefaultClient.Do(req)
@@ -256,113 +256,78 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-func ReadOrRegisterStorageAccount(proxy Account,
-	partition *packet.Partition,
-) (account Account,
-	err error) {
+func ReadOrRegisterStorageAccount(worker Account,
+								  proxy Account,
+								  partition *packet.Partition,
+								) (storage *Account,
+								   err error) {
 	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return Account{}, err
+		return nil, err
 	}
 
 	data, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(data, &account)
-	if err == nil && account.Username != "" && account.Password != "" {
-		return account, err
+
+	storage = &Account{}
+	err = json.Unmarshal(data, storage)
+	if err == nil && storage.Username != nil && storage.Password != nil {
+		storage = nil
 	}
 
 	defer func() {
 		defer secret_f.Close()
-		if err != nil {
+		if err != nil || storage == nil {
+			return
+		} else if storage.Username == nil || storage.Password == nil {
 			return
 		}
 
-		bytes, _ := json.MarshalIndent(account, "", "	")
+		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
 		secret_f.WriteAt(bytes, 0)
 	}()
 
+
+
 	data, _ = json.Marshal(struct {
+		Proxy Account `json:"proxy"`
+		Worker Account `json:"worker"`
+		Storage *Account `json:"storage"`
 		Hardware *packet.Partition `json:"hardware"`
 	}{
+		Proxy: proxy,
+		Worker: worker,
+		Storage: storage,
 		Hardware: partition,
 	})
-	req, err := http.NewRequest("POST", "https://avmvymkexjarplbxwlnj.functions.supabase.co/storage_register" , bytes.NewBuffer(data))
-	if err != nil {
-		return Account{}, err
-	}
 
-	req.Header.Set("username", proxy.Username)
-	req.Header.Set("password", proxy.Password)
+	req, err := http.NewRequest("POST", 
+		Secrets.EdgeFunctions.StorageRegister, 
+		bytes.NewBuffer(data))
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return Account{}, err
+		return nil, err
 	}
 
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return Account{}, err
+		return nil, err
 	}
 
 	if resp.StatusCode != 200 {
-		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+		return nil, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
 	}
-	err = json.Unmarshal(data, &account)
+
+	storage = &Account{}
+	err = json.Unmarshal(data, storage)
 	if err != nil {
-		return Account{}, err
+		return nil, err
 	}
 
 	return
-}
-
-func StorageAccountMatchWorker(storage Account,
-	worker Account,
-	partition *packet.Partition,
-) (err error) {
-	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return err
-	}
-
-	account := Account{}
-	data, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(data, &account)
-	if err != nil && account.Username != "" && account.Password != "" {
-		return err
-	}
-	secret_f.Close()
-
-	data, _ = json.Marshal(struct {
-		Cred     Account           `json:"cred"`
-		Hardware *packet.Partition `json:"hardware"`
-	}{
-		Cred:     storage,
-		Hardware: partition,
-	})
-
-	req, err := http.NewRequest("POST",
-		"https://avmvymkexjarplbxwlnj.functions.supabase.co/storage_register",
-		bytes.NewBuffer(data))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("username", worker.Username)
-	req.Header.Set("password", worker.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 {
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
-	}
-
-	return nil
 }

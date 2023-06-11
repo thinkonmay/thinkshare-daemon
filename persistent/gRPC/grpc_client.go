@@ -48,8 +48,8 @@ func InitGRPCClient(host string,
 		connected: false,
 		done:      false,
 
-		username : account.Username,
-		password : account.Password,
+		username : *account.Username,
+		password : *account.Password,
 
 		logger     : make(chan *packet.WorkerLog,100),
 		monitoring : make(chan *packet.WorkerMetric,100),

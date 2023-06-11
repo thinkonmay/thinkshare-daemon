@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -43,44 +42,28 @@ func main() {
 		return
 	}
 
-	storages := []*packet.StorageStatus{}
-	go func() {
-		for {
-			time.Sleep(time.Second * 15)
-			for _, s := range storages {
-				grpc.StorageReport(s)
-			}
-		}
-	}()
+	storages := []struct{
+		Info    packet.Partition  
+		Account credential.Account   
+	}{}
 
 	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
-		log.PushLog("registering storage account for drive %s",p.Mountpoint)
-		account, err := credential.ReadOrRegisterStorageAccount(proxy_cred, p)
-		if err != nil {
-			log.PushLog("unable to register storage device %s", err.Error())
-			return
-		}
-
-		for _, s := range storages {
-			if s.Account.Password == account.Password && s.Account.Username == account.Username {
-				s.Info = p
+		for _,s := range storages {
+			if s.Info.Mountpoint == p.Mountpoint {
 				return
 			}
 		}
 
-		log.PushLog("matching storage account %s",p.Mountpoint)
-		err = credential.StorageAccountMatchWorker(account, worker_cred, p)
+		log.PushLog("registering storage account for drive %s",p.Mountpoint)
+		account, err := credential.ReadOrRegisterStorageAccount(proxy_cred,worker_cred, p)
 		if err != nil {
 			log.PushLog("unable to register storage device %s", err.Error())
 			return
 		}
 
-		storages = append(storages, &packet.StorageStatus{
-			Account: &packet.Account{
-				Password: account.Password,
-				Username: account.Username,
-			},
-			Info: p,
+		storages = append(storages, struct{Info packet.Partition; Account credential.Account}{
+			Info: *p,
+			Account: *account,
 		})
 	})
 	dm.TerminateAtTheEnd()
