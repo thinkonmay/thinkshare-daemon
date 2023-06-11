@@ -299,7 +299,7 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	data, _ = json.Marshal(struct {
 		Proxy Account `json:"proxy"`
 		Worker Account `json:"worker"`
-		Storage *Account `json:"storage"`
+		Storage *Account `json:"storage,omitempty"`
 		Hardware *packet.Partition `json:"hardware"`
 		AccessPoint *struct {
 			PublicIP  string `json:"public_ip"`
