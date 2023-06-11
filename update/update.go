@@ -45,7 +45,7 @@ func Update() {
 	desiredCommitHash := credential.Secrets.Daemon.Commit
 	fmt.Printf("desired commit hash: %s\n",desiredCommitHash)
 	fmt.Printf("current commit hash: %s\n",currentCommitHash)
-	if !strings.Contains(string(currentCommitHash),desiredCommitHash) && false {
+	if !strings.Contains(string(currentCommitHash),desiredCommitHash) {
 		fmt.Println("daemon is not in sync, restarting")
 		exec.Command("git", "reset","--hard").Output()
 		exec.Command("git", "pull").Output()
