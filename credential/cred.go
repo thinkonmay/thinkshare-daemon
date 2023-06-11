@@ -256,12 +256,13 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-func ReadOrRegisterStorageAccount(worker Account,
-								  proxy Account,
+func ReadOrRegisterStorageAccount(proxy Account,
+								  worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
 								   err error) {
-	secret_f, err := os.OpenFile(GetStorageCredentialFile(partition.Mountpoint), os.O_RDWR|os.O_CREATE, 0755)
+	path := GetStorageCredentialFile(partition.Mountpoint)
+	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -274,9 +275,15 @@ func ReadOrRegisterStorageAccount(worker Account,
 		storage = nil
 	}
 
+	do_save := true
 	defer func() {
-		defer secret_f.Close()
-		if err != nil || storage == nil {
+		defer func ()  {
+			secret_f.Close()
+			if !do_save {
+				os.Remove(path)
+			}
+		}() 
+		if err != nil || storage == nil || !do_save {
 			return
 		} else if storage.Username == nil || storage.Password == nil {
 			return
@@ -294,11 +301,16 @@ func ReadOrRegisterStorageAccount(worker Account,
 		Worker Account `json:"worker"`
 		Storage *Account `json:"storage"`
 		Hardware *packet.Partition `json:"hardware"`
+		AccessPoint *struct {
+			PublicIP  string `json:"public_ip"`
+			PrivateIP string `json:"private_ip"`
+		} `json:"access_point"`
 	}{
 		Proxy: proxy,
 		Worker: worker,
 		Storage: storage,
 		Hardware: partition,
+		AccessPoint: Addresses,
 	})
 
 	req, err := http.NewRequest("POST", 
@@ -321,6 +333,12 @@ func ReadOrRegisterStorageAccount(worker Account,
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+	} 
+
+	if string(data) == "\"NOT_REGISTER\"" {
+		fmt.Println("aborted storage credential save")
+		do_save = false
+		return &Account{},nil
 	}
 
 	storage = &Account{}
