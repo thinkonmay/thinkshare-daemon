@@ -20,8 +20,7 @@ const (
 func main() {
 	credential.SetupEnv(proj,anon_key)
 	update.Update()
-	stop := make(chan bool,2)
-	display.StartDisplay(stop)
+	display.StartDisplay()
 
 
 	proxy_cred, err := credential.InputProxyAccount()
