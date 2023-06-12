@@ -1,9 +1,9 @@
 git submodule update --init --recursive
 
-echo "building hub.exe with go"
-Set-Location .\hub
-go build -o hub.exe  ./cmd/server/
-Set-Location ../
+# echo "building hub.exe with go"
+# Set-Location .\hub
+# go build -o hub.exe  ./cmd/server/
+# Set-Location ../
 
 # build .NET
 echo "building hid server with dotnet"
