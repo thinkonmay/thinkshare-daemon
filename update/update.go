@@ -51,9 +51,6 @@ func Update() {
 		exec.Command("git", "pull").Output()
 		exec.Command("git", "checkout" , desiredCommitHash).Output()
 		exec.Command("git", "submodule" , "update","--init").Output()
-		out,_ = exec.Command("powershell",".\\scripts\\update.ps1").Output()
-		fmt.Printf("rebuilt submodules:\n %s\n",string(out))
-		fmt.Println(string(out))
 		os.Exit(0)
 	}
 

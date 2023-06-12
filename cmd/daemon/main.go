@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
