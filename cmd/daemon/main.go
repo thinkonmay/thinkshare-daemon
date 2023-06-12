@@ -5,6 +5,7 @@ import (
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
+	"github.com/thinkonmay/thinkshare-daemon/display"
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/update"
@@ -18,6 +19,7 @@ const (
 func main() {
 	credential.SetupEnv(proj,anon_key)
 	update.Update()
+	display.StartDisplay()
 
 
 	proxy_cred, err := credential.InputProxyAccount()

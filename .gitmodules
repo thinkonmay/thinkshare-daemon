@@ -4,3 +4,6 @@
 [submodule "hub"]
 	path = hub
 	url = https://github.com/thinkonmay/thinkremote-rtchub
+[submodule "display"]
+	path = display
+	url = https://github.com/pigeatgarlic/virtual-display

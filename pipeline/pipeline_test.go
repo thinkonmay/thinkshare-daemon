@@ -10,7 +10,7 @@ import (
 
 func TestTest(t *testing.T) {
 	dev := device.GetDevice()
-	result, _, err := GstTestVideo(int(dev.Monitors[0].MonitorHandle))
+	result, _, err := GstTestVideo(int(dev.Monitors[0].MonitorHandle),"")
 	if err != nil {
 		panic(err)
 	}
