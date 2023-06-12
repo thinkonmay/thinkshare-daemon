@@ -123,7 +123,6 @@ func (daemon *Daemon) TerminateAtTheEnd() {
 		<-chann
 
 		daemon.childprocess.CloseAll()
-		time.Sleep(100 * time.Millisecond)
 		daemon.Shutdown <- true
 	}()
 }

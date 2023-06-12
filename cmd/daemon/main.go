@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
+	"github.com/thinkonmay/thinkshare-daemon/display"
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/update"
@@ -18,6 +20,8 @@ const (
 func main() {
 	credential.SetupEnv(proj,anon_key)
 	update.Update()
+	stop := make(chan bool,2)
+	display.StartDisplay(stop)
 
 
 	proxy_cred, err := credential.InputProxyAccount()
@@ -67,5 +71,6 @@ func main() {
 		})
 	})
 	dm.TerminateAtTheEnd()
-	<-dm.Shutdown
+	stop<-<-dm.Shutdown
+	time.Sleep(500 * time.Millisecond)
 }
