@@ -23,7 +23,11 @@ const (
 )
 
 func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
-	result, err := GstTestAudio(card.Api, card.DeviceID)
+	if !card.IsLoopback || !card.IsDefault{
+		return nil, fmt.Errorf("test program failed")
+	}
+
+	result, err := GstTestAudio(card.Api, card.Name ,card.DeviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +42,7 @@ func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
 }
 
 func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline, error) {
-	result, plugin, err := GstTestVideo(int(monitor.MonitorHandle))
+	result, plugin, err := GstTestVideo(int(monitor.MonitorHandle),monitor.Adapter)
 	if err != nil {
 		return nil, err
 	}
@@ -166,9 +170,9 @@ func formatAudioDeviceID(in string) string {
 	return string(ret)
 }
 
-func GstTestAudio(API string, DeviceID string) (string, error) {
+func GstTestAudio(API string, adapter string, DeviceID string) (string, error) {
 	testcase := findTestCmd(API, 0, DeviceID)
-	pipeline, err := gstTestGeneric(API, testcase)
+	pipeline, err := gstTestGeneric(API,adapter, testcase)
 	if err != nil {
 		return "", err
 	}
@@ -177,13 +181,17 @@ func GstTestAudio(API string, DeviceID string) (string, error) {
 	return pipeline, nil
 }
 
-func GstTestVideo(MonitorHandle int) (pipeline string, plugin string, err error) {
+func GstTestVideo(MonitorHandle int,
+				  adapter string,
+				  ) (pipeline string, 
+					plugin string, 
+					err error) {
 	video_plugins := []string{"nvcodec", "amf", "quicksync", "media foundation", "opencodec"}
 
 	for _, _plugin := range video_plugins {
 		log.PushLog("testing pipeline plugin %s, monitor handle %d\n", _plugin, MonitorHandle)
 		testcase := findTestCmd(_plugin, MonitorHandle, "")
-		pipeline, err := gstTestGeneric(_plugin, testcase)
+		pipeline, err := gstTestGeneric(_plugin,adapter, testcase)
 		if err != nil {
 			log.PushLog("test failted %s\n", err.Error())
 			continue
@@ -196,9 +204,22 @@ func GstTestVideo(MonitorHandle int) (pipeline string, plugin string, err error)
 	return "", "", fmt.Errorf("no suitable pipeline found")
 }
 
-func gstTestGeneric(plugin string, testcase *exec.Cmd) (string, error) {
+func gstTestGeneric(plugin string,
+					adapter string, 
+					testcase *exec.Cmd) (string, error) {
 	if testcase == nil {
 		return "", fmt.Errorf("nil test case")
+	}
+
+	// quick table
+	if plugin == "nvcodec" &&  strings.Contains(strings.ToLower(adapter),"geforce rtx"){
+		return strings.Join(testcase.Args[1:], " "), nil
+	} else if plugin == "nvcodec" &&  strings.Contains(strings.ToLower(adapter),"radeon pro"){
+		return "", fmt.Errorf("test program failed")
+	} else if plugin == "amf" &&  strings.Contains(strings.ToLower(adapter),"radeon pro"){
+		return strings.Join(testcase.Args[1:], " "), nil
+	} else if plugin == "wasapi2" && adapter == "Default Audio Capture Device" {
+		return strings.Join(testcase.Args[1:], " "), nil
 	}
 
 	done := make(chan bool, 2)
