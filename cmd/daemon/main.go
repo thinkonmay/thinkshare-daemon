@@ -70,6 +70,5 @@ func main() {
 		})
 	})
 	dm.TerminateAtTheEnd()
-	stop<-<-dm.Shutdown
-	time.Sleep(500 * time.Millisecond)
+	<-dm.Shutdown
 }
