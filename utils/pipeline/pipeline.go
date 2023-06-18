@@ -220,6 +220,8 @@ func gstTestGeneric(plugin string,
 		return strings.Join(testcase.Args[1:], " "), nil
 	} else if plugin == "wasapi2" && adapter == "Default Audio Capture Device" {
 		return strings.Join(testcase.Args[1:], " "), nil
+	} else if plugin == "quicksync" && strings.Contains(strings.ToLower(adapter),"intel") {
+		return strings.Join(testcase.Args[1:], " "), nil
 	}
 
 	done := make(chan bool, 2)

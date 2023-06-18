@@ -15,7 +15,7 @@ import (
 	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/pipeline"
+	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"

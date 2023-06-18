@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/pipeline/device"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 )
 
 func TestTest(t *testing.T) {
-	dev := device.GetDevice()
+	dev := media.GetDevice()
 	result, _, err := GstTestVideo(int(dev.Monitors[0].MonitorHandle),"")
 	if err != nil {
 		panic(err)
@@ -24,7 +24,7 @@ func TestTest(t *testing.T) {
 		}
 	}
 
-	result, err = GstTestAudio(souncard.Api, souncard.DeviceID)
+	result, err = GstTestAudio(souncard.Api,souncard.Name, souncard.DeviceID)
 	if err != nil {
 		panic(err)
 	}

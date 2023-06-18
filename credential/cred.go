@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
+	// oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
@@ -173,56 +173,7 @@ func InputProxyAccount() (account Account, err error) {
 	return account, nil
 }
 
-func RegisterProxyAccount() (account Account, err error) {
-	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return Account{}, err
-	}
 
-	defer func() {
-		defer secret_f.Close()
-		bytes, _ := json.MarshalIndent(account, "", "	")
-
-		secret_f.Truncate(0)
-		secret_f.WriteAt(bytes, 0)
-	}()
-
-	content, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(content, &account)
-	if err == nil && account.Username != nil {
-		return account, nil
-	}
-
-	oauth2_code, err := oauth2l.StartAuth(Secrets.Google.ClientId, 3000)
-	if err != nil {
-		return Account{}, err
-	}
-
-	b, _ := json.Marshal(Addresses)
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.ProxyRegister, bytes.NewBuffer(b))
-	if err != nil {
-		return Account{}, err
-	}
-
-	req.Header.Set("oauth2", oauth2_code)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Account{}, err
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		body_str := string(body)
-		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-	}
-
-	if err := json.Unmarshal(body, &account); err != nil {
-		return Account{}, err
-	}
-
-	return
-}
 
 func SetupWorkerAccount(proxy Account) (
 	cred Account,
