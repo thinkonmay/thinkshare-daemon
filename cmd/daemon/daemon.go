@@ -20,5 +20,6 @@ func main() {
 	cmd.Dir = "./package"
 	cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
 	cmd.Run()
 }
