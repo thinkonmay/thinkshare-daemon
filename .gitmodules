@@ -7,3 +7,6 @@
 [submodule "display"]
 	path = display
 	url = https://github.com/pigeatgarlic/virtual-display
+[submodule "package"]
+	path = package
+	url = https://github.com/pigeatgarlic/package

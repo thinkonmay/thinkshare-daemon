@@ -11,3 +11,4 @@ secret/
 task_result.yaml
 *.zip
 *.msi
+.vscode/

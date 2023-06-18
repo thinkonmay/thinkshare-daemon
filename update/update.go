@@ -10,32 +10,11 @@ import (
 )
 
 func Update() {
-	out, err := exec.Command("go", "version").Output()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("go version %s",string(out))
-	out, err  = exec.Command("dotnet",  "--list-sdks").Output()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("dotnet version %s",string(out))
-	out, err  = exec.Command("git", "--version").Output()
+	out, err  := exec.Command("git", "--version").Output()
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("git version %s",string(out))
-	out, err  = exec.Command("gcc", "--version" ).Output()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("gcc version %s",string(out))
-	out, err  = exec.Command("gst-inspect-1.0", "--version").Output()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("gstreamer version %s",string(out))
-
 	currentCommitHash,_ := exec.Command("git", "rev-parse", "HEAD").Output()
 	if strings.Contains(string(currentCommitHash), "fatal") {
 		fmt.Println("you did not clone this repo, please use clone")
@@ -51,7 +30,5 @@ func Update() {
 		exec.Command("git", "pull").Output()
 		exec.Command("git", "checkout" , desiredCommitHash).Output()
 		exec.Command("git", "submodule" , "update","--init").Output()
-		os.Exit(0)
 	}
-
 }
