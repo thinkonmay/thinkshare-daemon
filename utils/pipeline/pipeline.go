@@ -23,10 +23,6 @@ const (
 )
 
 func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
-	if !card.IsLoopback || !card.IsDefault{
-		return nil, fmt.Errorf("test program failed")
-	}
-
 	result, err := GstTestAudio(card.Api, card.Name ,card.DeviceID)
 	if err != nil {
 		return nil, err
@@ -145,7 +141,6 @@ func GstTestAudio(API string, adapter string, DeviceID string) (string, error) {
 		return "", err
 	}
 
-	log.PushLog("pipeline %s test success", pipeline)
 	return pipeline, nil
 }
 
@@ -157,7 +152,6 @@ func GstTestVideo(MonitorHandle int,
 	video_plugins := []string{"nvcodec", "amf", "quicksync" }
 
 	for _, _plugin := range video_plugins {
-		log.PushLog("testing pipeline plugin %s, monitor handle %d", _plugin, MonitorHandle)
 		testcase := findTestCmd(_plugin, MonitorHandle, "")
 		pipeline, err := gstTestGeneric(_plugin,adapter, testcase)
 		if err != nil {
@@ -165,7 +159,6 @@ func GstTestVideo(MonitorHandle int,
 			continue
 		}
 
-		log.PushLog("pipeline %s test success", pipeline)
 		return pipeline, _plugin, nil
 	}
 
@@ -174,7 +167,15 @@ func GstTestVideo(MonitorHandle int,
 
 func gstTestGeneric(plugin string,
 					adapter string, 
-					testcase *exec.Cmd) (string, error) {
+					testcase *exec.Cmd,
+					) (pipeline string,err error) {
+	defer func() {
+		if err != nil {
+			log.PushLog("pipeline %s test failed", plugin)
+		} else {
+			log.PushLog("pipeline %s test success", plugin)
+		}
+	}()
 	if testcase == nil {
 		return "", fmt.Errorf("nil test case")
 	}
@@ -184,6 +185,7 @@ func gstTestGeneric(plugin string,
 	amd 		:= strings.Contains(strings.ToLower(adapter),"radeon pro")
 	microphone 	:= strings.Contains(strings.ToLower(adapter),"microphone")
 	headset 	:= strings.Contains(strings.ToLower(adapter),"headset")
+	vbcable     := strings.Contains(strings.ToLower(adapter),"cable output") 
 
 	// quick table
 	if plugin == "nvcodec" && nvidia {
@@ -198,7 +200,7 @@ func gstTestGeneric(plugin string,
 		return strings.Join(testcase.Args[1:], " "), nil
 	} else if plugin == "quicksync" && (amd || nvidia) {
 		return "", fmt.Errorf("test program failed")
-	} else if plugin == "wasapi" && adapter == "CABLE Output (VB-Audio Virtual Cable)" {
+	} else if plugin == "wasapi" && vbcable {
 		return strings.Join(testcase.Args[1:], " "), nil
 	} else if plugin == "wasapi" && (microphone || headset) {
 		return "", fmt.Errorf("test program failed")
@@ -206,7 +208,6 @@ func gstTestGeneric(plugin string,
 
 	done := make(chan bool, 2)
 
-	var err error
 	go func() {
 		testcase.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		err = testcase.Run()
