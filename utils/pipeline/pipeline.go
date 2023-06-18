@@ -63,87 +63,55 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 		panic(err)
 	}
 	switch plugin {
-	case "media foundation":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
-			fmt.Sprintf("monitor-handle=%d", handle),
-			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11convert",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"mfh264enc", fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "gop-size=-1", "rc-mode=0", "low-latency=true", "ref=1", "quality-vs-speed=0", "name=encoder",
-			"!", "video/x-h264,stream-format=(string)byte-stream,profile=(string)main",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"appsink", "name=appsink")
 	case "nvcodec":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
-			fmt.Sprintf("monitor-handle=%d", handle),
-			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11convert",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"nvd3d11h264enc", fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "gop-size=-1", "preset=5", "rate-control=2", "strict-gop=true", "name=encoder", "repeat-sequence-header=true", "zero-reorder-delay=true",
-			"!", "video/x-h264,stream-format=(string)byte-stream,profile=(string)main",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+		return exec.Command(path, 
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
+			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmd3d11convert", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmnvd3d11h264enc", 
+			fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "name=encoder", "!", 
+			"video/x-h264,stream-format=(string)byte-stream,profile=(string)main", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "quicksync":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
-			fmt.Sprintf("monitor-handle=%d", handle),
-			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11convert",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"qsvh264enc", fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "rate-control=1", "gop-size=-1", "ref-frames=1", "low-latency=true", "target-usage=7", "name=encoder",
-			"!", "video/x-h264,stream-format=(string)byte-stream,profile=(string)main",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+		return exec.Command(path, 
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
+			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmd3d11convert", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmqsvh264enc", 
+			fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "name=encoder", "!", 
+			"video/x-h264,stream-format=(string)byte-stream,profile=(string)main", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
 	case "amf":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
-			fmt.Sprintf("monitor-handle=%d", handle),
-			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11convert",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"amfh264enc", fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "rate-control=1", "gop-size=1000","ref-frames=0", "usage=1", "name=encoder",
-			"!", "video/x-h264,stream-format=(string)byte-stream,profile=(string)main",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"h264parse", "config-interval=-1",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+		return exec.Command(path, 
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
+			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmd3d11convert", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"tmamfh264enc", 
+			fmt.Sprintf("bitrate=%d", defaultVideoBitrate),  "name=encoder", "!", 
+			"video/x-h264,stream-format=(string)byte-stream,profile=(string)main", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+			"h264parse", "config-interval=-1", "!", 
+			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
-	case "opencodec":
-		return exec.Command(path, "d3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
-			fmt.Sprintf("monitor-handle=%d", handle),
-			"!", "capsfilter", "name=framerateFilter",
-			"!", fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11convert",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"d3d11download",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"openh264enc", fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "usage-type=1", "rate-control=1", "multi-thread=8", "name=encoder",
-			"!", "video/x-h264,stream-format=(string)byte-stream,profile=(string)main",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"appsink", "name=appsink")
-	case "wasapi2":
-		return exec.Command(path, "wasapi2src", "name=source", "loopback=true", "low-latency=true",
-			"do-timestamp=true", "slave-method=2", "provide-clock=false",
-			"latency-time=80000", "buffer-time=80000", "blocksize=8192",
-			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioresample", "quality=10", "qos=true",
-			"!", fmt.Sprintf("audio/x-raw,rate=%d", AudioClockRate),
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"audioconvert", "noise-shaping=4", "qos=true",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"opusenc", "name=encoder",
-			"perfect-timestamp=true", "hard-resync=true",
-			// "bitrate-type=0", fmt.Sprintf("bitrate=%d", defaultAudioBitrate), "name=encoder",
-			"audio-type=2049", "bitrate-type=1", "bandwidth=1104",
-			"inband-fec=true", "packet-loss-percentage=50", "dtx=true",
-			"!", "queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
+	case "wasapi":
+		return exec.Command(path, 
+			"wasapisrc", "name=source", 
+			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)), "!", 
+			"audioresample", "!", 
+			fmt.Sprintf("audio/x-raw,rate=%d", AudioClockRate), "!", 
+			"audioconvert", "!", 
+			"opusenc", "name=encoder", "!", 
 			"appsink", "name=appsink")
 	default:
 		return nil
@@ -186,14 +154,14 @@ func GstTestVideo(MonitorHandle int,
 				  ) (pipeline string, 
 					plugin string, 
 					err error) {
-	video_plugins := []string{"nvcodec", "amf", "quicksync", "media foundation", "opencodec"}
+	video_plugins := []string{"nvcodec", "amf", "quicksync" }
 
 	for _, _plugin := range video_plugins {
-		log.PushLog("testing pipeline plugin %s, monitor handle %d\n", _plugin, MonitorHandle)
+		log.PushLog("testing pipeline plugin %s, monitor handle %d", _plugin, MonitorHandle)
 		testcase := findTestCmd(_plugin, MonitorHandle, "")
 		pipeline, err := gstTestGeneric(_plugin,adapter, testcase)
 		if err != nil {
-			log.PushLog("test failted %s\n", err.Error())
+			log.PushLog("test failted %s", err.Error())
 			continue
 		}
 
@@ -211,17 +179,29 @@ func gstTestGeneric(plugin string,
 		return "", fmt.Errorf("nil test case")
 	}
 
+	intel 		:= strings.Contains(strings.ToLower(adapter),"intel")
+	nvidia 		:= strings.Contains(strings.ToLower(adapter),"geforce rtx")
+	amd 		:= strings.Contains(strings.ToLower(adapter),"radeon pro")
+	microphone 	:= strings.Contains(strings.ToLower(adapter),"microphone")
+	headset 	:= strings.Contains(strings.ToLower(adapter),"headset")
+
 	// quick table
-	if plugin == "nvcodec" &&  strings.Contains(strings.ToLower(adapter),"geforce rtx"){
+	if plugin == "nvcodec" && nvidia {
 		return strings.Join(testcase.Args[1:], " "), nil
-	} else if plugin == "nvcodec" &&  strings.Contains(strings.ToLower(adapter),"radeon pro"){
+	} else if plugin == "nvcodec" && (intel || amd) {
 		return "", fmt.Errorf("test program failed")
-	} else if plugin == "amf" &&  strings.Contains(strings.ToLower(adapter),"radeon pro"){
+	} else if plugin == "amf" &&  amd {
 		return strings.Join(testcase.Args[1:], " "), nil
-	} else if plugin == "wasapi2" && adapter == "Default Audio Capture Device" {
+	} else if plugin == "amf" && (intel || nvidia) {
+		return "", fmt.Errorf("test program failed")
+	} else if plugin == "quicksync" && intel {
 		return strings.Join(testcase.Args[1:], " "), nil
-	} else if plugin == "quicksync" && strings.Contains(strings.ToLower(adapter),"intel") {
+	} else if plugin == "quicksync" && (amd || nvidia) {
+		return "", fmt.Errorf("test program failed")
+	} else if plugin == "wasapi" && adapter == "CABLE Output (VB-Audio Virtual Cable)" {
 		return strings.Join(testcase.Args[1:], " "), nil
+	} else if plugin == "wasapi" && (microphone || headset) {
+		return "", fmt.Errorf("test program failed")
 	}
 
 	done := make(chan bool, 2)

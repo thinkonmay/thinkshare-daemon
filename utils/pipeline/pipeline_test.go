@@ -4,31 +4,27 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 )
 
 func TestTest(t *testing.T) {
 	dev := media.GetDevice()
-	result, _, err := GstTestVideo(int(dev.Monitors[0].MonitorHandle),"")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("test %s\n", result)
-
-	souncard := packet.Soundcard{}
-	for _, card := range dev.Soundcards {
-		if card.Name == "Default Audio Render Device" {
-			souncard = *card
+	for _, m := range dev.Monitors {
+		result, _, err := GstTestVideo(int(m.MonitorHandle),m.Adapter)
+		if err != nil {
+			panic(err)
 		}
+		fmt.Printf("%s\n%s\n%s\n",m.DeviceName,m.Adapter, result)
 	}
 
-	result, err = GstTestAudio(souncard.Api,souncard.Name, souncard.DeviceID)
-	if err != nil {
-		panic(err)
+	for _, card := range dev.Soundcards {
+		souncard := *card
+		result, err := GstTestAudio(souncard.Api, souncard.Name, souncard.DeviceID)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("%s\n%s\n", card.Name, result)
 	}
-	fmt.Printf("%s\n", result)
 }
 
 func TestSync(t *testing.T) {

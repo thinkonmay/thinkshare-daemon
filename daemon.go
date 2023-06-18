@@ -54,8 +54,8 @@ func NewDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			out := log.TakeLog()
-			fmt.Println(out)
 			daemon.persist.Log("daemon.exe", "infor", out)
+			fmt.Println(out)
 		}
 	}()
 	go func() {
@@ -78,7 +78,7 @@ func NewDaemon(persistent persistent.Persistent,
 				monitor.Pipeline = video
 			}
 			daemon.persist.Media(media)
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Minute)
 		}
 	}()
 	go func() {
@@ -342,7 +342,7 @@ func (daemon *Daemon) handleHID() {
 			return "", 0, err
 		}
 
-		path, err := utils.FindProcessPath("hid/bin", "hid.exe")
+		path, err := utils.FindProcessPath("hid", "hid.exe")
 		if err != nil {
 			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find hid port: %s",err.Error()))
 			session.FailCount++
@@ -427,7 +427,7 @@ func (daemon *Daemon) handleHub() {
 			current.Manifest = string(bytes)
 		}()
 
-		path, err = utils.FindProcessPath("hub", "hub.exe")
+		path, err = utils.FindProcessPath("", "hub.exe")
 		if err != nil {
 			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find hid.exe: %s",err.Error()))
 			session.FailCount++

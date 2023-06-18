@@ -287,7 +287,6 @@ func (client *GRPCclient) Stop() {
 }
 
 func (grpc *GRPCclient) Log(source string, level string, log string) {
-	fmt.Println(log)
 	grpc.logger <- &packet.WorkerLog{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Log:       log,
