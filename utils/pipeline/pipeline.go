@@ -67,7 +67,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"tmd3d11convert", "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
-			"tmnvd3d11h264enc", 
+			"tmnvd3d11h264enc", "preset=5","rate-control=2","strict-gop=true","repeat-sequence-header=true","zero-reorder-delay=true",
 			fmt.Sprintf("bitrate=%d", defaultVideoBitrate), "name=encoder", "!", 
 			"video/x-h264,stream-format=(string)byte-stream,profile=(string)main", "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
