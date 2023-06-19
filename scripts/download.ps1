@@ -6,9 +6,9 @@ $go.Downloadfile("https://go.dev/dl/go1.20.3.windows-amd64.msi"                 
 $gcc = New-Object net.webclient
 $gcc.Downloadfile("https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe"                                                                     ,"msi/gcc.exe")
 $gstreamerdev = New-Object net.webclient
-$gstreamerdev.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22.1/mingw/gstreamer-1.0-devel-mingw-x86_64-1.22.1.msi"                                               ,"msi/gstreamer-dev.msi")
+$gstreamerdev.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22.1/mingw/gstreamer-1.0-devel-mingw-x86_64-1.22.3.msi"                                               ,"msi/gstreamer-dev.msi")
 $gstreamer = New-Object net.webclient
-$gstreamer.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22.1/mingw/gstreamer-1.0-mingw-x86_64-1.22.1.msi"                                                        ,"msi/gstreamer.msi")
+$gstreamer.Downloadfile("https://gstreamer.freedesktop.org/data/pkg/windows/1.22.1/mingw/gstreamer-1.0-mingw-x86_64-1.22.3.msi"                                                        ,"msi/gstreamer.msi")
 $git = New-Object net.webclient
 $git.Downloadfile("https://github.com/git-for-windows/git/releases/download/v2.40.0.windows.1/Git-2.40.0-64-bit.exe"                                                                 ,"msi/git.exe")
 $cruntime = New-Object net.webclient
