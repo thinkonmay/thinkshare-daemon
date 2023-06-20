@@ -393,7 +393,7 @@ func (daemon *Daemon) handleHID() {
 			continue
 		}
 		process := exec.Command(path, 
-			"run",
+			"run", "--project",
 			"..\\hid\\",
 			fmt.Sprintf("--urls=http://localhost:%d", free_port))
 		id, err := daemon.childprocess.NewChildProcess(process,true)
