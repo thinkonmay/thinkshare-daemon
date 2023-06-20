@@ -342,7 +342,7 @@ func (daemon *Daemon) handleHID() {
 			return "", 0, err
 		}
 
-		path, err := utils.FindProcessPath("hid", "hid.exe")
+		path, err := utils.FindProcessPath("", "dotnet")
 		if err != nil {
 			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find hid port: %s",err.Error()))
 			session.FailCount++
@@ -392,7 +392,10 @@ func (daemon *Daemon) handleHID() {
 		if err != nil || path == "" {
 			continue
 		}
-		process := exec.Command(path, fmt.Sprintf("--urls=http://localhost:%d", free_port))
+		process := exec.Command(path, 
+			"run",
+			"..\\hid\\",
+			fmt.Sprintf("--urls=http://localhost:%d", free_port))
 		id, err := daemon.childprocess.NewChildProcess(process,true)
 		if err != nil {
 			log.PushLog("fail to start hid process: %s", err.Error())
