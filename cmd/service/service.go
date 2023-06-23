@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -10,10 +11,22 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-const (
+var (
 	proj 	 = "avmvymkexjarplbxwlnj"
 	anon_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2bXZ5bWtleGphcnBsYnh3bG5qIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODAzMjM0NjgsImV4cCI6MTk5NTg5OTQ2OH0.y2W9svI_4O4_xd5AQk4S4MLJAvQJIp0QrO4cljLB9Ik"
 )
+func init() {
+	project := os.Getenv("TM_PROJECT")
+	key     := os.Getenv("TM_ANONKEY")
+	if project != "" {
+		proj = project
+	}
+	if key != "" {
+		anon_key = key
+	}
+}
+
+
 func main() {
 	credential.SetupEnv(proj,anon_key)
 	proxy_cred, err := credential.InputProxyAccount()
