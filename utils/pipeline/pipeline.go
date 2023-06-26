@@ -181,8 +181,8 @@ func gstTestGeneric(plugin string,
 	}
 
 	intel 		:= strings.Contains(strings.ToLower(adapter),"intel")
-	nvidia 		:= strings.Contains(strings.ToLower(adapter),"geforce rtx")
-	amd 		:= strings.Contains(strings.ToLower(adapter),"radeon pro")
+	nvidia 		:= strings.Contains(strings.ToLower(adapter),"geforce")  || strings.Contains(strings.ToLower(adapter),"nvidia")
+	amd 		:= strings.Contains(strings.ToLower(adapter),"radeon")   || strings.Contains(strings.ToLower(adapter),"amd")
 	microphone 	:= strings.Contains(strings.ToLower(adapter),"microphone")
 	headset 	:= strings.Contains(strings.ToLower(adapter),"headset")
 	vbcable     := strings.Contains(strings.ToLower(adapter),"cable output") 
