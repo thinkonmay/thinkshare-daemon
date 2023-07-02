@@ -29,11 +29,9 @@ func main() {
 	update.Update()
 	cmd := exec.Command("./daemon.exe")
 	cmd.Dir = "./package"
-	cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	cmd.Env = append(cmd.Env, fmt.Sprintf("TM_PROJECT=%s",proj))
-	cmd.Env = append(cmd.Env, fmt.Sprintf("TM_ANONKEY=%s",anon_key))
+	cmd.Stdout 	= os.Stdout
+    cmd.Stderr 	= os.Stderr
+	cmd.Stdin 	= os.Stdin
 	if os.Getenv("VIRTUAL_DISPLAY") == "TRUE" {
 		go func() {
 			out,err := exec.Command("./display/IndirectDisplay/x64/Release/IddSampleApp.exe").Output()
