@@ -150,6 +150,7 @@ message MediaDevice {
 message MediaConfig { 
 	Monitor monitor = 1;
 	Soundcard soundcard = 2;
+	Microphone microphone = 3;
 }
 
 message Pipeline {
