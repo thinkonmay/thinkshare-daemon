@@ -204,7 +204,7 @@ func GetDevice() *packet.MediaDevice {
         result.Microphones = append(result.Microphones, &packet.Microphone{
 			Name:       C.GoString(&mic.name[0]),
 			DeviceID:   C.GoString(&mic.device_id[0]),
-			Api:        C.GoString(&mic.api[0]),
+			Api:        C.GoString(&mic.api[0]) + "-in",
         })
     }
 
@@ -215,7 +215,7 @@ func GetDevice() *packet.MediaDevice {
         result.Soundcards = append(result.Soundcards, &packet.Soundcard{
 			Name:       C.GoString(&sound.name[0]),
 			DeviceID:   C.GoString(&sound.device_id[0]),
-			Api:        C.GoString(&sound.api[0]),
+			Api:        C.GoString(&sound.api[0]) + "-out",
         })
     }
 
