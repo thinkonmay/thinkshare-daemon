@@ -53,6 +53,21 @@ func VideoPipeline(monitor *packet.Monitor) (*packet.Pipeline, error) {
 	return pipeline, nil
 }
 
+func MicPipeline(card *packet.Microphone) (*packet.Pipeline, error) {
+	result, err := GstTestAudioIn(card.Api, card.Name ,card.DeviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	pipeline := &packet.Pipeline{}
+	pipeline.PipelineString = result
+	pipeline.Plugin = card.Api
+
+	bytes, _ := json.Marshal(pipeline.PipelineString)
+	pipeline.PipelineHash = base64.StdEncoding.EncodeToString(bytes)
+	return pipeline, nil
+}
+
 func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 	path, err := path.FindProcessPath("", "gst-launch-1.0.exe")
 	if err != nil {
@@ -100,7 +115,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"h264parse", "config-interval=-1", "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
 			"appsink", "name=appsink")
-	case "wasapi":
+	case "wasapi-out":
 		return exec.Command(path, 
 			"wasapisrc", "name=source", 
 			fmt.Sprintf("device=%s", formatAudioDeviceID(DeviceID)), "!", 
@@ -109,6 +124,16 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"audioconvert", "!", 
 			"opusenc", "name=encoder", "!", 
 			"appsink", "name=appsink")
+	case "wasapi-in":
+		return exec.Command(path, 
+			"appsrc","format=time","is-live=true","do-timestamp=true","name=appsrc","!",
+			"application/x-rtp,payload=96,encoding-name=OPUS,clock-rate=48000","!",
+			"rtpopusdepay","!",
+			"opusdec","!",
+			"audioconvert","!",
+			"audioresample","!",
+			"wasapisink",
+			fmt.Sprintf("device=%s",formatAudioDeviceID(DeviceID)))
 	default:
 		return nil
 	}
@@ -135,6 +160,15 @@ func formatAudioDeviceID(in string) string {
 }
 
 func GstTestAudio(API string, adapter string, DeviceID string) (string, error) {
+	testcase := findTestCmd(API, 0, DeviceID)
+	pipeline, err := gstTestGeneric(API,adapter, testcase)
+	if err != nil {
+		return "", err
+	}
+
+	return pipeline, nil
+}
+func GstTestAudioIn(API string, adapter string, DeviceID string) (string, error) {
 	testcase := findTestCmd(API, 0, DeviceID)
 	pipeline, err := gstTestGeneric(API,adapter, testcase)
 	if err != nil {
@@ -185,7 +219,9 @@ func gstTestGeneric(plugin string,
 	amd 		:= strings.Contains(strings.ToLower(adapter),"radeon")   || strings.Contains(strings.ToLower(adapter),"amd")
 	microphone 	:= strings.Contains(strings.ToLower(adapter),"microphone")
 	headset 	:= strings.Contains(strings.ToLower(adapter),"headset")
-	vbcable     := strings.Contains(strings.ToLower(adapter),"cable output") 
+	vbcableout  := strings.Contains(strings.ToLower(adapter),"cable output") 
+	vbcablein   := strings.Contains(strings.ToLower(adapter),"cable-a input") 
+	wasapi      := strings.Contains(strings.ToLower(plugin),"wasapi") 
 
 	// quick table
 	if plugin == "nvcodec" && nvidia {
@@ -200,9 +236,15 @@ func gstTestGeneric(plugin string,
 		return strings.Join(testcase.Args[1:], " "), nil
 	} else if plugin == "quicksync" && (amd || nvidia) {
 		return "", fmt.Errorf("test program failed")
-	} else if plugin == "wasapi" && vbcable {
+	} else if plugin == "wasapi-out" && vbcableout {
 		return strings.Join(testcase.Args[1:], " "), nil
-	} else if plugin == "wasapi" && (microphone || headset) {
+	} else if plugin == "wasapi-out" && !vbcableout {
+		return "", fmt.Errorf("test program failed")
+	} else if plugin == "wasapi-in" && vbcablein {
+		return strings.Join(testcase.Args[1:], " "), nil
+	} else if plugin == "wasapi-in" && !vbcablein {
+		return "", fmt.Errorf("test program failed")
+	} else if wasapi && (microphone || headset) {
 		return "", fmt.Errorf("test program failed")
 	}
 

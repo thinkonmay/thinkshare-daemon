@@ -10,20 +10,27 @@ import (
 func TestTest(t *testing.T) {
 	dev := media.GetDevice()
 	for _, m := range dev.Monitors {
-		result, _, err := GstTestVideo(int(m.MonitorHandle),m.Adapter)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("%s\n%s\n%s\n",m.DeviceName,m.Adapter, result)
-	}
-
-	for _, card := range dev.Soundcards {
-		souncard := *card
-		result, err := GstTestAudio(souncard.Api, souncard.Name, souncard.DeviceID)
+		result, err := VideoPipeline(m)
 		if err != nil {
 			continue
 		}
-		fmt.Printf("%s\n%s\n", card.Name, result)
+		fmt.Printf("%s\n%s\n", m.DeviceName, result.PipelineString)
+	}
+
+	for _, card := range dev.Soundcards {
+		result, err := AudioPipeline(card)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("%s\n%s\n", card.Name, result.PipelineString)
+	}
+
+	for _, card := range dev.Microphones {
+		result, err := MicPipeline(card)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("%s\n%s\n", card.Name, result.PipelineString)
 	}
 }
 

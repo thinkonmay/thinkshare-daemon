@@ -110,6 +110,35 @@ var Addresses = &struct {
 	PrivateIP: system.GetPrivateIP(),
 }
 
+func SetupEnvAdmin(proj string,admin_key string) {
+	req,err := http.NewRequest("GET",
+		fmt.Sprintf("https://%s.supabase.co/rest/v1/constant?select=value&type=eq.ADMIN", proj),
+		bytes.NewBuffer([]byte("")))
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("apikey", admin_key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",admin_key))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		panic(err)
+	} else if resp.StatusCode != 200 {
+		panic("unable to fetch constant from server")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var data [](interface{})
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		panic(err)
+	}
+
+	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
+	json.Unmarshal(val, &Secrets)
+}
 func SetupEnv(proj string,anon_key string) {
 	os.Mkdir(SecretDir, os.ModeDir)
 	req,err := http.NewRequest("GET",

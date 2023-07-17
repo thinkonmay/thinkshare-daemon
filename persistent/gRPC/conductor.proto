@@ -129,8 +129,12 @@ message Soundcard {
 	string 	Name     	= 2;
 	string 	Api      	= 3;
 
-	bool 	IsDefault  	= 4;
-	bool 	IsLoopback 	= 5;
+	Pipeline pipeline = 6;
+}
+message Microphone {
+	string 	DeviceID 	= 1;
+	string 	Name     	= 2;
+	string 	Api      	= 3;
 
 	Pipeline pipeline = 6;
 }
@@ -140,11 +144,13 @@ message MediaDevice {
 
 	repeated Monitor monitors = 2;
 	repeated Soundcard soundcards = 3;
+	repeated Microphone microphones = 4;
 }
 
 message MediaConfig { 
 	Monitor monitor = 1;
 	Soundcard soundcard = 2;
+	Microphone microphone = 3;
 }
 
 message Pipeline {
