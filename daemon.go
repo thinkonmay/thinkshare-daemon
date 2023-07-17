@@ -77,6 +77,14 @@ func NewDaemon(persistent persistent.Persistent,
 
 				monitor.Pipeline = video
 			}
+			for _, mic := range media.Microphones {
+				video, err := pipeline.MicPipeline(mic)
+				if err != nil {
+					continue
+				}
+
+				mic.Pipeline = video
+			}
 			daemon.persist.Media(media)
 			time.Sleep(10 * time.Minute)
 		}
