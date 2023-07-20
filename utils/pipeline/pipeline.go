@@ -132,6 +132,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"opusdec","!",
 			"audioconvert","!",
 			"audioresample","!",
+			"queue","!",
 			"wasapisink",
 			fmt.Sprintf("device=%s",formatAudioDeviceID(DeviceID)))
 	default:
