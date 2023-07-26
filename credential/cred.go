@@ -58,6 +58,24 @@ var Secrets = &struct {
 		Commit   *string `json:"commit"`
 	} `json:"conductor"`
 
+	Signaling *struct {
+		HostName					string 	`json:"HostName"`
+		ValidateUrl 				string 	`json:"ValidationUrl"`
+
+		Data struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Data"`
+		Video struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Video"`
+		Audio struct {
+			GrpcPort      			int 	`json:"GrpcPort"`
+			Path					string  `json:"Path"`
+		} `json:"Audio"`
+	}`json:"signaling"`
+
 	Daemon struct {
 		Commit string `json:"commit"`
 	} `json:"daemon"`
