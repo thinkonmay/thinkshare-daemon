@@ -77,6 +77,14 @@ func NewDaemon(persistent persistent.Persistent,
 
 				monitor.Pipeline = video
 			}
+			for _, mic := range media.Microphones {
+				video, err := pipeline.MicPipeline(mic)
+				if err != nil {
+					continue
+				}
+
+				mic.Pipeline = video
+			}
 			daemon.persist.Media(media)
 			time.Sleep(10 * time.Minute)
 		}
@@ -412,12 +420,21 @@ func (daemon *Daemon) handleHID() {
 }
 
 func (daemon *Daemon) handleHub() {
-	presync := func() (path string, authHash string, signalingHash string, webrtcHash string, audioHash string, videoHash string, hidport int, err error) {
+	presync :=  func() (path string, 
+						authHash string, 
+						signalingHash string, 
+						webrtcHash string, 
+						audioHash string, 
+						videoHash string, 
+						micHash string, 
+						hidport int, 
+						err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
 		if len(daemon.sessions) == 0 {
-			return "", "", "", "", "", "", 0, fmt.Errorf("no current session")
+			err = fmt.Errorf("no current session")
+			return
 		}
 
 		current := &daemon.sessions[0]
@@ -432,15 +449,14 @@ func (daemon *Daemon) handleHub() {
 
 		path, err = utils.FindProcessPath("", "hub.exe")
 		if err != nil {
-			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find hid.exe: %s",err.Error()))
 			session.FailCount++
-			return "", "", "", "", "", "", 0, err
+			return
 		}
 
 		if session.HidPort == 0 {
-			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("invalid hid port: %d",session.HidPort))
 			session.FailCount++
-			return "", "", "", "", "", "", 0, err
+			err = fmt.Errorf("hid port not available")
+			return
 		}
 
 		hidport = session.HidPort
@@ -453,20 +469,25 @@ func (daemon *Daemon) handleHub() {
 		// current.SessionLog = append(current.SessionLog, "tested video and audio pipeline")
 		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hub.exe at path : %s",path))
 		if current.MediaConfig == nil {
-			return "", "", "", "", "", "", 0, fmt.Errorf("invalid pipeline")
+			err = fmt.Errorf("invalid pipeline")
+			return
 		} else if current.MediaConfig.Soundcard == nil ||
 			current.MediaConfig.Monitor == nil {
-			return "", "", "", "", "", "", 0, fmt.Errorf("invalid pipeline")
+			err = fmt.Errorf("invalid pipeline")
+			return
 		} else if current.MediaConfig.Soundcard.Pipeline == nil ||
 			current.MediaConfig.Monitor.Pipeline == nil {
-			return "", "", "", "", "", "", 0, fmt.Errorf("invalid pipeline")
+			err = fmt.Errorf("invalid pipeline")
+			return
 		} else if current.MediaConfig.Soundcard.Pipeline.PipelineHash == "" ||
 			current.MediaConfig.Monitor.Pipeline.PipelineHash == "" {
-			return "", "", "", "", "", "", 0, fmt.Errorf("invalid pipeline")
+			err = fmt.Errorf("invalid pipeline")
+			return
 		}
 
 		audioHash = current.MediaConfig.Soundcard.Pipeline.PipelineHash
 		videoHash = current.MediaConfig.Monitor.Pipeline.PipelineHash
+		micHash   = current.MediaConfig.Microphone.Pipeline.PipelineHash
 
 		return
 	}
@@ -490,18 +511,16 @@ func (daemon *Daemon) handleHub() {
 		}()
 
 		if !session.HubProcessID.Valid() {
-			// current.SessionLog = append(current.SessionLog, "fail to start hub.exe")
 			session.FailCount++
 		}
 
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("started hub.exe with processID %d",id))
 		session.HubProcessID = id
 		return nil
 	}
 	for {
 		time.Sleep(time.Millisecond * 500)
-		path, authHash, signaling, webrtc, audioHash, videoHash, hidport, err := presync()
-		if err != nil || path == "" {
+		path, authHash, signaling, webrtc, audioHash, videoHash,micHash, hidport, err := presync()
+		if err != nil {
 			continue
 		}
 
@@ -510,6 +529,7 @@ func (daemon *Daemon) handleHub() {
 			"--auth", authHash,
 			"--audio", audioHash,
 			"--video", videoHash,
+			"--mic", micHash,
 			"--grpc", signaling,
 			"--webrtc", webrtc)
 

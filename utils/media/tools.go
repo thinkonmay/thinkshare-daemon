@@ -7,19 +7,11 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
-
 /*
 #include <gst/gst.h>
 #include <stdio.h>
 
 
-
-
-int           
-string_get_length(void* string)
-{
-    return strlen((char*)string);
-}
 
 typedef struct _Soundcard {
     char device_id[500];
@@ -31,6 +23,17 @@ typedef struct _Soundcard {
 
     int active;
 }Soundcard;
+
+typedef struct _Mic {
+    char device_id[500];
+    char name[500];
+    char api[50];
+
+    gboolean isdefault;
+    gboolean loopback;
+
+    int active;
+}Mic;
 
 typedef struct _Monitor {
     guint64 monitor_handle;
@@ -49,11 +52,11 @@ typedef struct _MediaDevice
 {
     Monitor monitors[10];
     Soundcard soundcards[10];
-    Soundcard micro[10];
+    Mic microphones[10];
 }MediaDevice;
 
 static void
-device_foreach(GstDevice* device, 
+device_foreach(GstDevice* device,
                gpointer data)
 {
     MediaDevice* source = (MediaDevice*) data;
@@ -90,12 +93,12 @@ device_foreach(GstDevice* device,
 
         monitor->width =  right - left;
         monitor->height = bottom - top;
-        
-         
+
+
         gst_structure_get_uint64(device_structure,"device.hmonitor",&monitor->monitor_handle);
         gst_structure_get_boolean(device_structure,"device.primary",&monitor->primary);
     }
-    
+
     // handle audio
     if(!g_strcmp0(klass,"Audio/Source")) {
         GstStructure* device_structure = gst_device_get_properties(device);
@@ -142,7 +145,19 @@ device_foreach(GstDevice* device,
     if(!g_strcmp0(klass,"Audio/Sink")) {
         GstStructure* device_structure = gst_device_get_properties(device);
         gchar* api = (gchar*)gst_structure_get_string(device_structure,"device.api");
-        if(g_strcmp0(api,"wasapi2") && g_strcmp0(api,"wasapi")) {
+        if(!g_strcmp0(api,"wasapi")) {
+            int i = 0;
+            while (source->microphones[i].active) { i++; }
+            Mic* mic = &source->microphones[i];
+
+            gchar* strid = (gchar*)gst_structure_get_string(device_structure,"device.strid");
+            memcpy(mic->device_id,strid,strlen(strid));
+            memcpy(mic->api,api,strlen(api));
+            gchar* name = gst_device_get_display_name(device);
+            memcpy(mic->name,name,strlen(name));
+
+            mic->active = TRUE;
+        } else {
             g_object_unref(device);
             return;
         }
@@ -152,7 +167,7 @@ device_foreach(GstDevice* device,
 
 
 
-void*
+MediaDevice*
 query_media_device()
 {
     static MediaDevice dev;
@@ -167,118 +182,10 @@ query_media_device()
     GList* device_list = gst_device_monitor_get_devices(monitor);
     g_list_foreach(device_list,(GFunc)device_foreach,&dev);
 
-    return (void*)&dev;
+    return &dev;
 }
 
-void*
-get_monitor_device_name(void* data,
-                 int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->monitors[pos].device_name;
-}
-
-void*
-get_monitor_name(void* data,
-                    int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->monitors[pos].monitor_name;
-}
-
-int
-get_monitor_width(void* data,
-                   int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return (int)source->monitors[pos].width;
-}
-int
-get_monitor_height(void* data,
-                   int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return (int)source->monitors[pos].height;
-}
-int
-get_monitor_handle(void* data,
-                   int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return (int)source->monitors[pos].monitor_handle;
-}
-
-void*
-get_monitor_adapter(void* data,
-                    int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->monitors[pos].adapter;
-}
-int   
-monitor_is_primary(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->monitors[pos].primary;
-}
-
-
-int   
-monitor_is_active(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->monitors[pos].active;
-}
-
-int   
-soundcard_is_active(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].active;
-}
-int   
-soundcard_is_default(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].isdefault;
-}
-int   
-soundcard_is_loopback(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].loopback;
-}
-
-void*
-get_soundcard_api(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].api;
-}
-void*
-get_soundcard_name(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].name;
-}
-
-void*
-get_soundcard_device_id(void* data, 
-                  int pos)
-{
-    MediaDevice* source = (MediaDevice*) data;
-    return source->soundcards[pos].device_id;
-}
-
-
-#cgo pkg-config: gstreamer-1.0 
+#cgo pkg-config: gstreamer-1.0
 */
 import "C"
 
@@ -290,70 +197,45 @@ func GetDevice() *packet.MediaDevice {
 	}
 	query := C.query_media_device()
 
-	count_soundcard := C.int(0)
-	count_monitor := C.int(0)
-	for {
-		active := C.monitor_is_active(query, count_monitor)
-		if active == 0 {
-			break
-		}
-		mhandle := C.get_monitor_handle(query, count_monitor)
-		monitor_name := C.get_monitor_name(query, count_monitor)
-		adapter := C.get_monitor_adapter(query, count_monitor)
-		device_name := C.get_monitor_device_name(query, count_monitor)
-		width := C.get_monitor_width(query, count_monitor)
-		height := C.get_monitor_height(query, count_monitor)
-		prim := C.monitor_is_primary(query, count_monitor)
+    for _,mic := range query.microphones {
+        if mic.active == 0 {
+            continue
+        }
+        result.Microphones = append(result.Microphones, &packet.Microphone{
+			Name:       C.GoString(&mic.name[0]),
+			DeviceID:   C.GoString(&mic.device_id[0]),
+			Api:        C.GoString(&mic.api[0]) + "-in",
+        })
+    }
 
-		result.Monitors = append(result.Monitors, &packet.Monitor{
+    for _,sound := range query.soundcards {
+        if sound.active == 0 {
+            continue
+        }
+        result.Soundcards = append(result.Soundcards, &packet.Soundcard{
+			Name:       C.GoString(&sound.name[0]),
+			DeviceID:   C.GoString(&sound.device_id[0]),
+			Api:        C.GoString(&sound.api[0]) + "-out",
+        })
+    }
+
+    for _,monitor := range query.monitors {
+        if monitor.active == 0 {
+            continue
+        }
+        result.Monitors = append(result.Monitors, &packet.Monitor{
 			Framerate:     60,
-			MonitorHandle: int32(mhandle),
-			MonitorName:   string(C.GoBytes(monitor_name, C.string_get_length(monitor_name))),
-			Adapter:       string(C.GoBytes(adapter, C.string_get_length(adapter))),
-			DeviceName:    string(C.GoBytes(device_name, C.string_get_length(device_name))),
-			Width:         int32(width),
-			Height:        int32(height),
-			IsPrimary:     (prim == 1),
-		})
-		count_monitor++
-	}
+			MonitorHandle: int32(monitor.monitor_handle),
+			Width:         int32(monitor.width),
+			Height:        int32(monitor.height),
+			MonitorName:   C.GoString(&monitor.monitor_name[0]),
+			Adapter:       C.GoString(&monitor.adapter[0]),
+			DeviceName:    C.GoString(&monitor.device_name[0]),
+			IsPrimary:     monitor.primary == 1,
+        })
+    }
 
-	for {
-		active := C.soundcard_is_active(query, count_soundcard)
-		if active == 0 {
-			break
-		}
-		name := C.get_soundcard_name(query, count_soundcard)
-		device_id := C.get_soundcard_device_id(query, count_soundcard)
-		api := C.get_soundcard_api(query, count_soundcard)
-		loopback := C.soundcard_is_loopback(query, count_soundcard)
-		defaul := C.soundcard_is_default(query, count_soundcard)
-
-		result.Soundcards = append(result.Soundcards, &packet.Soundcard{
-			Name:       string(C.GoBytes(name, C.string_get_length(name))),
-			DeviceID:   string(C.GoBytes(device_id, C.string_get_length(device_id))),
-			Api:        string(C.GoBytes(api, C.string_get_length(api))),
-			IsDefault:  (defaul == 1),
-			IsLoopback: (loopback == 1),
-		})
-		count_soundcard++
-	}
-
-	result.Soundcards = append(result.Soundcards, &packet.Soundcard{
-		DeviceID: "none",
-		Name:     "Mute audio",
-		Api:      "None",
-
-		IsDefault:  false,
-		IsLoopback: false,
-	})
 
 	return result
 }
 
-func ToGoString(str unsafe.Pointer) string {
-	if str == nil {
-		return ""
-	}
-	return string(C.GoBytes(str, C.int(C.string_get_length(str))))
-}

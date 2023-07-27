@@ -46,36 +46,17 @@ var Secrets = &struct {
 	} `json:"edge_functions"`
 
 	Secret struct {
-		Anon string `json:"anon"`
-		Url  string `json:"url"`
+		Url   string `json:"url"`
+		Anon  string `json:"anon_key"`
+		DbCon *string `json:"db_conn"`
+		Admin *string `json:"admin_key"`
 	} `json:"secret"`
 
-	Google struct {
-		ClientId string `json:"client_id"`
-	} `json:"google"`
-
 	Conductor struct {
-		Hostname string `json:"host"`
-		GrpcPort int    `json:"port"`
+		Hostname string  `json:"host"`
+		GrpcPort int     `json:"port"`
+		Commit   *string `json:"commit"`
 	} `json:"conductor"`
-
-	Daemon struct {
-		Commit string `json:"commit"`
-	} `json:"daemon"`
-
-
-
-	Supabase *struct {
-		Url              		string `json:"url"`
-		AnonKey         		string `json:"anon_key"`
-		ServiceRoleKey 			string `json:"admin_key"`
-		DbConn					string `json:"db_conn"`
-	} `json:"supabase"`
-
-	Elasticsearch *struct {
-		Url      			string `json:"url"`
-		Namespace			string `json:"namespace"`
-	} `json:"elasticSearch"`
 
 	Signaling *struct {
 		HostName					string 	`json:"HostName"`
@@ -93,13 +74,11 @@ var Secrets = &struct {
 			GrpcPort      			int 	`json:"GrpcPort"`
 			Path					string  `json:"Path"`
 		} `json:"Audio"`
-	}`json:"signalingSetting"`
+	}`json:"signaling"`
 
-	ConductorSetting *struct {
-		GrpcPort 	int    `json:"Port"`
-		HostName    string `json:"HostName"`
-		Commit   	string `json:"commit"`
-	}`json:"conductorSetting"`
+	Daemon struct {
+		Commit string `json:"commit"`
+	} `json:"daemon"`
 }{}
 
 var Addresses = &struct {
