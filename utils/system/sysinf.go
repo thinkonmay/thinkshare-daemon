@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jaypipes/ghw"
@@ -11,9 +12,10 @@ import (
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
+
 	// "github.com/shirou/gopsutil/winservices"
-	netinf "github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/disk"
+	netinf "github.com/shirou/gopsutil/net"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -48,8 +50,8 @@ func GetPrivateIP() string {
 
 
 func GetPublicIPCurl() (result string) {
-	result = getPublicIPCurl("https://icanhazip.com/")
-	if result == "" { result = getPublicIPCurl("https://icanhazip.com/") }
+	result = strings.Split(getPublicIPCurl("https://icanhazip.com/"), "\n")[0];
+	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
 	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
 	if result == "" { result = getPublicIPSTUN() }
 	return result
