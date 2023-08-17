@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 	"os/exec"
 
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -33,12 +34,14 @@ func main() {
     cmd.Stderr 	= os.Stderr
 	cmd.Stdin 	= os.Stdin
 	if os.Getenv("VIRTUAL_DISPLAY") == "TRUE" {
-		go func() {
-			out,err := exec.Command("./display/IndirectDisplay/x64/Release/IddSampleApp.exe").Output()
-			if err != nil {
-				fmt.Printf("failed to start virtual display %s %s\n", err.Error(),out)
-			}
-		}()
+		time.Sleep(5 * time.Second) // waiting for GPU driver to bind, otherwise , it will use microsoft adapter
+		out,err := exec.Command("./virtual_display.exe").Output()
+		if err != nil {
+			fmt.Printf("failed to start virtual display %s %s\n", err.Error(),out)
+			fmt.Printf("maybe you haven't install the driver yet?", err.Error(),out)
+		} else {
+			fmt.Printf("successfully to start virtual display %s %s\n", err.Error(),out)
+		}
 	}
 	cmd.Run()
 }
