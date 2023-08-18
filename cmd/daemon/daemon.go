@@ -32,9 +32,5 @@ func main() {
 	cmd.Stdout 	= os.Stdout
     cmd.Stderr 	= os.Stderr
 	cmd.Stdin 	= os.Stdin
-	if os.Getenv("VIRTUAL_DISPLAY") == "TRUE" {
-		time.Sleep(5 * time.Second) // waiting for GPU driver to bind, otherwise , it will use microsoft adapter
-		go exec.Command("./virtual_display.exe").Output()
-	}
 	cmd.Run()
 }
