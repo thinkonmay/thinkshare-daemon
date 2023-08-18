@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"time"
 	"os/exec"
 
 	"github.com/thinkonmay/thinkshare-daemon/credential"
