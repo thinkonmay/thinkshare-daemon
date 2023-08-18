@@ -1,7 +1,6 @@
 package media
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"time"
