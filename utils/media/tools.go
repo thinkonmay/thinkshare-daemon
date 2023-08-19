@@ -238,7 +238,8 @@ func ResetVirtualDisplay() {
         return
     }
 
-    <-kill_display
+    kill_display<-true
+    time.Sleep(1 * time.Second)
 }
 
 func GetDevice() *packet.MediaDevice {
