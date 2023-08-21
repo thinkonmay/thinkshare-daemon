@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jaypipes/ghw"
@@ -11,9 +12,10 @@ import (
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
+
 	// "github.com/shirou/gopsutil/winservices"
-	netinf "github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/disk"
+	netinf "github.com/shirou/gopsutil/net"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -45,8 +47,33 @@ func GetPrivateIP() string {
 	return localAddr.IP.String()
 }
 
-func GetPublicIP() string {
-	result := ""
+
+
+func GetPublicIPCurl() (result string) {
+	result = strings.Split(getPublicIPCurl("https://icanhazip.com/"), "\n")[0];
+	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
+	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
+	if result == "" { result = getPublicIPSTUN() }
+	return result
+}
+func getPublicIPCurl(url string) (string) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.PushLog(err.Error())
+		return ""
+	}
+
+	ip := make([]byte, 1000)
+	size, err := resp.Body.Read(ip)
+	if err != nil {
+		log.PushLog(err.Error())
+		return ""
+	}
+
+	return string(ip[:size])
+}
+
+func getPublicIPSTUN() (result string) {
 	addr := "stun.l.google.com:19302"
 
 	// we only try the first address, so restrict ourselves to IPv4
@@ -73,23 +100,9 @@ func GetPublicIP() string {
 	return result
 }
 
-func GetPublicIPCurl() string {
 
-	resp, err := http.Get("https://ifconfig.me/ip")
-	if err != nil {
-		log.PushLog(err.Error())
-		return ""
-	}
 
-	ip := make([]byte, 1000)
-	size, err := resp.Body.Read(ip)
-	if err != nil {
-		log.PushLog(err.Error())
-		return ""
-	}
 
-	return string(ip[:size])
-}
 
 func GetInfor() (*packet.WorkerInfor, error) {
 	hostStat, err := host.Info()

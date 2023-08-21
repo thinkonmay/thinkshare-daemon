@@ -1,10 +1,13 @@
 package media
 
 import (
+	"os"
+	"os/exec"
 	"time"
 	"unsafe"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 /*
@@ -190,6 +193,54 @@ query_media_device()
 import "C"
 
 type DeviceQuery unsafe.Pointer
+
+
+var kill_display = make(chan bool)
+func init() {
+	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
+        return
+    }
+
+    var proc *os.Process = nil
+    go func() {
+        for {
+            cmd := exec.Command("./virtual_display.exe")
+            err := cmd.Start()
+            if err != nil {
+                log.PushLog("failed to start virtual display %s",err.Error())
+                continue
+            }
+
+
+            proc = cmd.Process
+            cmd.Process.Wait()
+            proc = nil
+
+            time.Sleep(1 * time.Second)
+        }
+    }()
+
+    go func() {
+        for {
+            <-kill_display
+            if proc == nil {
+                continue
+            }
+
+            proc.Kill()
+        }
+    }()
+}
+
+
+func ResetVirtualDisplay() {
+	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
+        return
+    }
+
+    kill_display<-true
+    time.Sleep(1 * time.Second)
+}
 
 func GetDevice() *packet.MediaDevice {
 	result := &packet.MediaDevice{

@@ -60,8 +60,8 @@ func NewDaemon(persistent persistent.Persistent,
 	}()
 	go func() {
 		for {
-			media := media.GetDevice()
-			for _, soundcard := range media.Soundcards {
+			devices := media.GetDevice()
+			for _, soundcard := range devices.Soundcards {
 				audio, err := pipeline.AudioPipeline(soundcard)
 				if err != nil {
 					continue
@@ -69,7 +69,7 @@ func NewDaemon(persistent persistent.Persistent,
 
 				soundcard.Pipeline = audio
 			}
-			for _, monitor := range media.Monitors {
+			for _, monitor := range devices.Monitors {
 				video, err := pipeline.VideoPipeline(monitor)
 				if err != nil {
 					continue
@@ -77,7 +77,7 @@ func NewDaemon(persistent persistent.Persistent,
 
 				monitor.Pipeline = video
 			}
-			for _, mic := range media.Microphones {
+			for _, mic := range devices.Microphones {
 				video, err := pipeline.MicPipeline(mic)
 				if err != nil {
 					continue
@@ -85,7 +85,20 @@ func NewDaemon(persistent persistent.Persistent,
 
 				mic.Pipeline = video
 			}
-			daemon.persist.Media(media)
+
+			reset := true
+			for _, m := range devices.Monitors {
+				if m.Pipeline != nil {
+					reset = false
+				}
+			}
+
+			if reset {
+				media.ResetVirtualDisplay()
+				continue
+			}
+
+			daemon.persist.Media(devices)
 			time.Sleep(10 * time.Minute)
 		}
 	}()

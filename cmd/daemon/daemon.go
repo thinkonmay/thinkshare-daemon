@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 
@@ -32,13 +31,5 @@ func main() {
 	cmd.Stdout 	= os.Stdout
     cmd.Stderr 	= os.Stderr
 	cmd.Stdin 	= os.Stdin
-	if os.Getenv("VIRTUAL_DISPLAY") == "TRUE" {
-		go func() {
-			out,err := exec.Command("./display/IndirectDisplay/x64/Release/IddSampleApp.exe").Output()
-			if err != nil {
-				fmt.Printf("failed to start virtual display %s %s\n", err.Error(),out)
-			}
-		}()
-	}
 	cmd.Run()
 }
