@@ -17,3 +17,4 @@ Start-Process ./msi/go.msi  -ArgumentList "/qb" -Wait
 go version
 dotnet --list-sdks
 git --version
+dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org
