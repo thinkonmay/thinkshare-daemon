@@ -83,7 +83,7 @@ func InitGRPCClient(host string,
 			)
 
 			if err != nil {
-				fmt.Printf("failed to dial : %s",err.Error())
+				log.PushLog("failed to dial : %s",err.Error())
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -105,7 +105,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Storagesync(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -132,7 +132,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Logger(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -158,7 +158,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Monitor(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -184,7 +184,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Mediadevice(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -209,7 +209,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Infor(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -236,7 +236,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Sync(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}

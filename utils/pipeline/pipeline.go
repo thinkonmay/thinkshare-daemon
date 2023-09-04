@@ -76,7 +76,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 	switch plugin {
 	case "nvcodec":
 		return exec.Command(path, 
-			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=false","name=capturer",
 			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
 			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -89,7 +89,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"appsink", "name=appsink")
 	case "quicksync":
 		return exec.Command(path, 
-			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=false","name=capturer",
 			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
 			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",
@@ -102,7 +102,7 @@ func findTestCmd(plugin string, handle int, DeviceID string) *exec.Cmd {
 			"appsink", "name=appsink")
 	case "amf":
 		return exec.Command(path, 
-			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=true",
+			"tmd3d11screencapturesrc", "blocksize=8192", "do-timestamp=true", "show-cursor=false","name=capturer",
 			fmt.Sprintf("monitor-handle=%d", handle), "!", "capsfilter", "name=framerateFilter", "!", 
 			fmt.Sprintf("video/x-raw(memory:D3D11Memory),framerate=55/1,clock-rate=%d", VideoClockRate), "!", 
 			"queue", "max-size-time=0", "max-size-bytes=0", "max-size-buffers=3", "!",

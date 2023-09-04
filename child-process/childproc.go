@@ -70,7 +70,7 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 	procs.handleProcess(id,hidewnd)
 	go func ()  {
 		procs.WaitID(id);
-		fmt.Printf("process id %d closed\n",id)
+		log.PushLog("process id %d closed\n",id)
 		procs.CloseID(id)
 	}()
 	return id,nil
@@ -173,10 +173,17 @@ func (procs *ChildProcesses) copyAndCapture(id ProcessID, logtype string, r io.R
 		}
 		lines := strings.Split(string(buf[:n]),"\n")
 		for _,line := range lines {
-			procs.LogChan <- ProcessLog{
-				Log: line,
-				LogType: logtype,
-				ID: id,
+			sublines := strings.Split(line,"\r")
+			for _,subline := range sublines {
+				if len(subline) == 0 {
+					continue
+				}
+
+				procs.LogChan <- ProcessLog{
+					Log: subline,
+					LogType: logtype,
+					ID: id,
+				}
 			}
 		}
 	}
