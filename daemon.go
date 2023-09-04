@@ -48,14 +48,16 @@ func NewDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			child_log := <-daemon.childprocess.LogChan
-			daemon.persist.Log(fmt.Sprintf("childprocess %d", child_log.ID), child_log.LogType, child_log.Log)
+			name := fmt.Sprintf("childprocess %d", child_log.ID)
+			daemon.persist.Log(name, child_log.LogType, child_log.Log)
+			fmt.Printf("%s : %s\n",name,child_log.Log)
 		}
 	}()
 	go func() {
 		for {
 			out := log.TakeLog()
 			daemon.persist.Log("daemon.exe", "infor", out)
-			fmt.Println(out)
+			fmt.Printf("daemon.exe : %s\n",out)
 		}
 	}()
 	go func() {
