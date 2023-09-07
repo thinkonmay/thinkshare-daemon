@@ -91,7 +91,7 @@ var Addresses = &struct {
 
 func SetupEnvAdmin(proj string,admin_key string) {
 	req,err := http.NewRequest("GET",
-		fmt.Sprintf("https://%s/rest/v1/constant?select=value&type=eq.ADMIN", proj),
+		fmt.Sprintf("%s/rest/v1/constant?select=value&type=eq.ADMIN", proj),
 		bytes.NewBuffer([]byte("")))
 	if err != nil {
 		panic(err)
@@ -121,7 +121,7 @@ func SetupEnvAdmin(proj string,admin_key string) {
 func SetupEnv(proj string,anon_key string) {
 	os.Mkdir(SecretDir, os.ModeDir)
 	req,err := http.NewRequest("GET",
-		fmt.Sprintf("https://%s/rest/v1/constant?select=value", proj),
+		fmt.Sprintf("%s/rest/v1/constant?select=value", proj),
 		bytes.NewBuffer([]byte("")))
 	if err != nil {
 		panic(err)
