@@ -30,19 +30,20 @@ type Account struct {
 
 var Secrets = &struct {
 	EdgeFunctions struct {
-		UserKeygen              string `json:"user_keygen"`
 		ProxyRegister           string `json:"proxy_register"`
+		TurnRegister            string `json:"turn_register"`
+		WorkerRegister          string `json:"worker_register"`
+		StorageRegister        	string `json:"storage_register"`
+
 		SessionAuthenticate     string `json:"session_authenticate"`
 		SignalingAuthenticate   string `json:"signaling_authenticate"`
-		TurnRegister            string `json:"turn_register"`
+
 		WorkerProfileFetch      string `json:"worker_profile_fetch"`
-		WorkerRegister          string `json:"worker_register"`
 		WorkerSessionCreate     string `json:"worker_session_create"`
 		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
-		StorageRegister        	string `json:"storage_register"`
+
 		UserApplicationFetch  	string `json:"user_application_fetch"`
 		RequestApplication     	string `json:"request_application"`
-		FetchWorkerStatus     	string `json:"fetch_worker_status"`
 	} `json:"edge_functions"`
 
 	Secret struct {
@@ -55,23 +56,15 @@ var Secrets = &struct {
 	Conductor struct {
 		Hostname string  `json:"host"`
 		GrpcPort int     `json:"port"`
-		Commit   *string `json:"commit"`
 	} `json:"conductor"`
 
 	Signaling *struct {
-		HostName					string 	`json:"HostName"`
 		ValidateUrl 				string 	`json:"ValidationUrl"`
 
-		Data struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
-			Path					string  `json:"Path"`
-		} `json:"Data"`
 		Video struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
 			Path					string  `json:"Path"`
 		} `json:"Video"`
 		Audio struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
 			Path					string  `json:"Path"`
 		} `json:"Audio"`
 	}`json:"signaling"`
