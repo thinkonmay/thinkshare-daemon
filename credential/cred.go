@@ -59,8 +59,7 @@ var Secrets = &struct {
 	} `json:"conductor"`
 
 	Signaling *struct {
-		ValidateUrl 				string 	`json:"ValidationUrl"`
-
+		Validate 					string 	`json:"Validation"`
 		Video struct {
 			Path					string  `json:"Path"`
 		} `json:"Video"`
