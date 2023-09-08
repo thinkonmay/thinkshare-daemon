@@ -204,6 +204,7 @@ func init() {
     var proc *os.Process = nil
     go func() {
         for {
+            time.Sleep(10 * time.Second)
             cmd := exec.Command("./virtual_display.exe")
             err := cmd.Start()
             if err != nil {
@@ -215,8 +216,6 @@ func init() {
             proc = cmd.Process
             cmd.Process.Wait()
             proc = nil
-
-            time.Sleep(1 * time.Second)
         }
     }()
 
