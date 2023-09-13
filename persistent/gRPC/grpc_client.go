@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -139,7 +140,7 @@ func InitGRPCClient(host string,
 
 			for {
 				msg := <-ret.logger
-				if err := client.Send(msg); err != nil && err != io.EOF{
+				if err := client.Send(msg); err != nil && err != io.EOF && !strings.Contains(err.Error(), "error while marshaling"){
 					log.PushLog("error sending log to conductor %s", err.Error())
 					ret.logger <- msg
 					ret.connected = false
