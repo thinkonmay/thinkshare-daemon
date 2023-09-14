@@ -9,6 +9,7 @@ import (
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
 var (
@@ -34,6 +35,11 @@ func main() {
 		fmt.Printf("failed to find proxy account: %s", err.Error())
 		return
 	}
+
+	if os.Getenv("BUILTIN_TURN") == "TRUE" {
+		turn_server := turn.SetupTurn()
+		defer turn_server.CloseTurn()
+    }
 
 	fmt.Println("proxy account found, continue")
 	worker_cred, err := credential.SetupWorkerAccount(proxy_cred)
