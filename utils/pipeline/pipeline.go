@@ -19,7 +19,7 @@ const (
 	AudioClockRate = 48000
 
 	defaultAudioBitrate = 256000
-	defaultVideoBitrate = 6000
+	defaultVideoBitrate = 2000
 )
 
 func AudioPipeline(card *packet.Soundcard) (*packet.Pipeline, error) {
