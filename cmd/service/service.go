@@ -57,29 +57,20 @@ func main() {
 		return
 	}
 
-	storages := []struct{
-		Info    packet.Partition  
-		Account credential.Account   
-	}{}
-
+	blacklists := []*packet.Partition{}
 	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
-		for _,s := range storages {
-			if s.Info.Mountpoint == p.Mountpoint {
+		for _,s := range blacklists {
+			if s.Mountpoint == p.Mountpoint {
 				return
 			}
 		}
 
 		log.PushLog("registering storage account for drive %s",p.Mountpoint)
-		account, err := credential.ReadOrRegisterStorageAccount(proxy_cred,worker_cred, p)
+		blacklists = append(blacklists, p)
+		_,err := credential.ReadOrRegisterStorageAccount(proxy_cred,worker_cred, p)
 		if err != nil {
 			log.PushLog("unable to register storage device %s", err.Error())
-			return
 		}
-
-		storages = append(storages, struct{Info packet.Partition; Account credential.Account}{
-			Info: *p,
-			Account: *account,
-		})
 	})
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown

@@ -100,7 +100,7 @@ func NewDaemon(persistent persistent.Persistent,
 			}
 
 			daemon.persist.Media(devices)
-			time.Sleep(10 * time.Minute)
+			time.Sleep(30 * time.Second)
 		}
 	}()
 	go func() {
@@ -117,7 +117,7 @@ func NewDaemon(persistent persistent.Persistent,
 			}
 
 			daemon.persist.Infor(infor)
-			time.Sleep(10 * time.Minute)
+			time.Sleep(30 * time.Second)
 		}
 	}()
 

@@ -218,29 +218,17 @@ func ReadOrRegisterStorageAccount(proxy Account,
 		return nil, err
 	}
 
-	data, _ := io.ReadAll(secret_f)
-
 	storage = &Account{}
+	data, _ := io.ReadAll(secret_f)
 	err = json.Unmarshal(data, storage)
-	if  err              != nil || 
-		storage.Username == nil || 
-		storage.Password == nil {
+	if err != nil {
 		storage = nil
 	}
 
-	do_save := true
 	defer func() {
-		defer func ()  {
-			secret_f.Close()
-			if !do_save {
-				os.Remove(path)
-			}
-		}() 
-		if err != nil || storage == nil || !do_save {
-			return
-		} else if storage.Username == nil || storage.Password == nil {
-			return
-		}
+		if err != nil { defer os.Remove(path) } 
+		defer secret_f.Close()
+		if err != nil { return } 
 
 		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
@@ -249,7 +237,7 @@ func ReadOrRegisterStorageAccount(proxy Account,
 
 
 
-	data, _ = json.Marshal(struct {
+	data,err = json.Marshal(struct {
 		Proxy Account `json:"proxy"`
 		Worker Account `json:"worker"`
 		Storage *Account `json:"storage,omitempty"`
@@ -265,6 +253,9 @@ func ReadOrRegisterStorageAccount(proxy Account,
 		Hardware: partition,
 		AccessPoint: Addresses,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	req, err := http.NewRequest("POST", 
 		Secrets.EdgeFunctions.StorageRegister, 
@@ -272,8 +263,8 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -282,16 +273,10 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
+	} else if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
-	} 
-
-	if string(data) == "\"NOT_REGISTER\"" {
-		fmt.Println("aborted storage credential save")
-		do_save = false
-		return &Account{},nil
+	} else if string(data) == "\"NOT_REGISTER\"" {
+		return nil,fmt.Errorf("aborted storage credential save")
 	}
 
 	storage = &Account{}
@@ -300,5 +285,5 @@ func ReadOrRegisterStorageAccount(proxy Account,
 		return nil, err
 	}
 
-	return
+	return storage,nil
 }
