@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	// oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
@@ -211,24 +210,54 @@ func ReadOrRegisterStorageAccount(proxy Account,
 								  worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
-								   err error) {
+								   readerr error,
+								   registerr error,
+								   ) {
 	path := GetStorageCredentialFile(partition.Mountpoint)
 	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to readfie %s",err.Error()),nil
 	}
 
+	body := []byte{}
 	storage = &Account{}
 	data, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(data, storage)
-	if err != nil {
-		storage = nil
+	if len(data) == 0 {
+		body,_ = json.Marshal(struct {
+			Proxy Account `json:"proxy"`
+			Worker Account `json:"worker"`
+			Hardware *packet.Partition `json:"hardware"`
+			AccessPoint *struct {
+				PublicIP  string `json:"public_ip"`
+				PrivateIP string `json:"private_ip"`
+			} `json:"access_point"`
+		}{
+			Proxy: proxy,
+			Worker: worker,
+			Hardware: partition,
+			AccessPoint: Addresses,
+		})
+	} else {
+		err = json.Unmarshal(data, storage)
+		if err != nil {
+			return nil, err,nil
+		}
+
+		body,_ = json.Marshal(struct {
+			Proxy Account `json:"proxy"`
+			Worker Account `json:"worker"`
+			Storage *Account `json:"storage"`
+		}{
+			Proxy: proxy,
+			Worker: worker,
+			Storage: storage,
+		})
 	}
 
 	defer func() {
-		if err != nil { defer os.Remove(path) } 
+		if registerr != nil { defer os.Remove(path) } 
 		defer secret_f.Close()
-		if err != nil { return } 
+		if err != nil || registerr != nil { return } 
 
 		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
@@ -236,54 +265,33 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	}()
 
 
-
-	data,err = json.Marshal(struct {
-		Proxy Account `json:"proxy"`
-		Worker Account `json:"worker"`
-		Storage *Account `json:"storage,omitempty"`
-		Hardware *packet.Partition `json:"hardware"`
-		AccessPoint *struct {
-			PublicIP  string `json:"public_ip"`
-			PrivateIP string `json:"private_ip"`
-		} `json:"access_point"`
-	}{
-		Proxy: proxy,
-		Worker: worker,
-		Storage: storage,
-		Hardware: partition,
-		AccessPoint: Addresses,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	req, err := http.NewRequest("POST", 
 		Secrets.EdgeFunctions.StorageRegister, 
-		bytes.NewBuffer(data))
+		bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err
+		return nil, err,nil
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, err,nil
 	}
 
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil,err
 	} else if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+		return nil, nil,fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
 	} else if string(data) == "\"NOT_REGISTER\"" {
-		return nil,fmt.Errorf("aborted storage credential save")
+		return nil, nil,fmt.Errorf("aborted storage credential save")
 	}
 
 	storage = &Account{}
 	err = json.Unmarshal(data, storage)
 	if err != nil {
-		return nil, err
+		return nil, nil,err
 	}
 
-	return storage,nil
+	return storage,nil,nil
 }
