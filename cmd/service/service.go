@@ -68,7 +68,7 @@ func main() {
 		log.PushLog("registering storage account for drive %s",p.Mountpoint)
 		_,err,apierr := credential.ReadOrRegisterStorageAccount(proxy_cred,worker_cred, p)
 		if apierr != nil {
-			log.PushLog("unable to register storage %s", err.Error())
+			log.PushLog("unable to register storage %s", apierr.Error())
 		} else if err != nil {
 			log.PushLog("unable to read or register credential file, %s", err.Error())
 			return
