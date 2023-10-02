@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	// oauth2l "github.com/thinkonmay/thinkshare-daemon/credential/oauth2"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
@@ -30,19 +29,20 @@ type Account struct {
 
 var Secrets = &struct {
 	EdgeFunctions struct {
-		UserKeygen              string `json:"user_keygen"`
 		ProxyRegister           string `json:"proxy_register"`
+		TurnRegister            string `json:"turn_register"`
+		WorkerRegister          string `json:"worker_register"`
+		StorageRegister        	string `json:"storage_register"`
+
 		SessionAuthenticate     string `json:"session_authenticate"`
 		SignalingAuthenticate   string `json:"signaling_authenticate"`
-		TurnRegister            string `json:"turn_register"`
+
 		WorkerProfileFetch      string `json:"worker_profile_fetch"`
-		WorkerRegister          string `json:"worker_register"`
 		WorkerSessionCreate     string `json:"worker_session_create"`
 		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
-		StorageRegister        	string `json:"storage_register"`
+
 		UserApplicationFetch  	string `json:"user_application_fetch"`
 		RequestApplication     	string `json:"request_application"`
-		FetchWorkerStatus     	string `json:"fetch_worker_status"`
 	} `json:"edge_functions"`
 
 	Secret struct {
@@ -55,23 +55,14 @@ var Secrets = &struct {
 	Conductor struct {
 		Hostname string  `json:"host"`
 		GrpcPort int     `json:"port"`
-		Commit   *string `json:"commit"`
 	} `json:"conductor"`
 
 	Signaling *struct {
-		HostName					string 	`json:"HostName"`
-		ValidateUrl 				string 	`json:"ValidationUrl"`
-
-		Data struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
-			Path					string  `json:"Path"`
-		} `json:"Data"`
+		Validate 					string 	`json:"Validation"`
 		Video struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
 			Path					string  `json:"Path"`
 		} `json:"Video"`
 		Audio struct {
-			GrpcPort      			int 	`json:"GrpcPort"`
 			Path					string  `json:"Path"`
 		} `json:"Audio"`
 	}`json:"signaling"`
@@ -91,7 +82,7 @@ var Addresses = &struct {
 
 func SetupEnvAdmin(proj string,admin_key string) {
 	req,err := http.NewRequest("GET",
-		fmt.Sprintf("https://%s.supabase.co/rest/v1/constant?select=value&type=eq.ADMIN", proj),
+		fmt.Sprintf("%s/rest/v1/constant?select=value&type=eq.ADMIN", proj),
 		bytes.NewBuffer([]byte("")))
 	if err != nil {
 		panic(err)
@@ -121,7 +112,7 @@ func SetupEnvAdmin(proj string,admin_key string) {
 func SetupEnv(proj string,anon_key string) {
 	os.Mkdir(SecretDir, os.ModeDir)
 	req,err := http.NewRequest("GET",
-		fmt.Sprintf("https://%s.supabase.co/rest/v1/constant?select=value", proj),
+		fmt.Sprintf("%s/rest/v1/constant?select=value", proj),
 		bytes.NewBuffer([]byte("")))
 	if err != nil {
 		panic(err)
@@ -219,36 +210,54 @@ func ReadOrRegisterStorageAccount(proxy Account,
 								  worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
-								   err error) {
+								   readerr error,
+								   registerr error,
+								   ) {
 	path := GetStorageCredentialFile(partition.Mountpoint)
 	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to readfie %s",err.Error()),nil
 	}
 
-	data, _ := io.ReadAll(secret_f)
-
+	body := []byte{}
 	storage = &Account{}
-	err = json.Unmarshal(data, storage)
-	if  err              != nil || 
-		storage.Username == nil || 
-		storage.Password == nil {
-		storage = nil
+	data, _ := io.ReadAll(secret_f)
+	if len(data) == 0 {
+		body,_ = json.Marshal(struct {
+			Proxy Account `json:"proxy"`
+			Worker Account `json:"worker"`
+			Hardware *packet.Partition `json:"hardware"`
+			AccessPoint *struct {
+				PublicIP  string `json:"public_ip"`
+				PrivateIP string `json:"private_ip"`
+			} `json:"access_point"`
+		}{
+			Proxy: proxy,
+			Worker: worker,
+			Hardware: partition,
+			AccessPoint: Addresses,
+		})
+	} else {
+		err = json.Unmarshal(data, storage)
+		if err != nil {
+			return nil, err,nil
+		}
+
+		body,_ = json.Marshal(struct {
+			Proxy Account `json:"proxy"`
+			Worker Account `json:"worker"`
+			Storage *Account `json:"storage"`
+		}{
+			Proxy: proxy,
+			Worker: worker,
+			Storage: storage,
+		})
 	}
 
-	do_save := true
 	defer func() {
-		defer func ()  {
-			secret_f.Close()
-			if !do_save {
-				os.Remove(path)
-			}
-		}() 
-		if err != nil || storage == nil || !do_save {
-			return
-		} else if storage.Username == nil || storage.Password == nil {
-			return
-		}
+		if registerr != nil { defer os.Remove(path) } 
+		defer secret_f.Close()
+		if err != nil || registerr != nil { return } 
 
 		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
@@ -256,57 +265,33 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	}()
 
 
-
-	data, _ = json.Marshal(struct {
-		Proxy Account `json:"proxy"`
-		Worker Account `json:"worker"`
-		Storage *Account `json:"storage,omitempty"`
-		Hardware *packet.Partition `json:"hardware"`
-		AccessPoint *struct {
-			PublicIP  string `json:"public_ip"`
-			PrivateIP string `json:"private_ip"`
-		} `json:"access_point"`
-	}{
-		Proxy: proxy,
-		Worker: worker,
-		Storage: storage,
-		Hardware: partition,
-		AccessPoint: Addresses,
-	})
-
 	req, err := http.NewRequest("POST", 
 		Secrets.EdgeFunctions.StorageRegister, 
-		bytes.NewBuffer(data))
+		bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err
+		return nil, err,nil
 	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, err,nil
 	}
 
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
-	} 
-
-	if string(data) == "\"NOT_REGISTER\"" {
-		fmt.Println("aborted storage credential save")
-		do_save = false
-		return &Account{},nil
+		return nil, nil,err
+	} else if resp.StatusCode != 200 {
+		return nil, nil,fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
+	} else if string(data) == "\"NOT_REGISTER\"" {
+		return nil, nil,fmt.Errorf("aborted storage credential save")
 	}
 
 	storage = &Account{}
 	err = json.Unmarshal(data, storage)
 	if err != nil {
-		return nil, err
+		return nil, nil,err
 	}
 
-	return
+	return storage,nil,nil
 }

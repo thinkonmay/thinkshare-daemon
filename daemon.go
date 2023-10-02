@@ -19,7 +19,6 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"
-	"github.com/thinkonmay/thinkshare-daemon/utils/port"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -48,14 +47,16 @@ func NewDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			child_log := <-daemon.childprocess.LogChan
-			daemon.persist.Log(fmt.Sprintf("childprocess %d", child_log.ID), child_log.LogType, child_log.Log)
+			name := fmt.Sprintf("childprocess %d", child_log.ID)
+			daemon.persist.Log(name, child_log.LogType, child_log.Log)
+			fmt.Printf("%s : %s\n",name,child_log.Log)
 		}
 	}()
 	go func() {
 		for {
 			out := log.TakeLog()
 			daemon.persist.Log("daemon.exe", "infor", out)
-			fmt.Println(out)
+			fmt.Printf("daemon.exe : %s\n",out)
 		}
 	}()
 	go func() {
@@ -99,7 +100,7 @@ func NewDaemon(persistent persistent.Persistent,
 			}
 
 			daemon.persist.Media(devices)
-			time.Sleep(10 * time.Minute)
+			time.Sleep(30 * time.Second)
 		}
 	}()
 	go func() {
@@ -116,7 +117,7 @@ func NewDaemon(persistent persistent.Persistent,
 			}
 
 			daemon.persist.Infor(infor)
-			time.Sleep(10 * time.Minute)
+			time.Sleep(30 * time.Second)
 		}
 	}()
 
@@ -131,7 +132,6 @@ func NewDaemon(persistent persistent.Persistent,
 		}
 	}()
 
-	go daemon.handleHID()
 	go daemon.handleHub()
 	go daemon.handleApp()
 	return daemon
@@ -149,7 +149,6 @@ func (daemon *Daemon) TerminateAtTheEnd() {
 }
 
 type SessionManifest struct {
-	HidPort   int `json:"hid_port"`
 	FailCount int `json:"fail_count"`
 
 	HidProcessID childprocess.ProcessID `json:"hid_process_id"`
@@ -158,7 +157,6 @@ type SessionManifest struct {
 
 func (manifest SessionManifest) Default() *SessionManifest {
 	return &SessionManifest{
-		HidPort:      0,
 		FailCount:    0,
 		HidProcessID: childprocess.NullProcID,
 		HubProcessID: childprocess.NullProcID,
@@ -337,100 +335,6 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 	return ret
 }
 
-func (daemon *Daemon) handleHID() {
-	presync := func() (string, int, error) {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if len(daemon.sessions) == 0 {
-			return "", 0, fmt.Errorf("no current session")
-		}
-
-		current := &daemon.sessions[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		free_port, err := port.GetFreePort()
-		if err != nil {
-			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find open port: %s",err.Error()))
-			session.FailCount++
-			return "", 0, err
-		}
-
-		path, err := utils.FindProcessPath("", "dotnet")
-		if err != nil {
-			// current.SessionLog = append(current.SessionLog, fmt.Sprintf("unable to find hid port: %s",err.Error()))
-			session.FailCount++
-			return "", 0, err
-		}
-
-		if session.HidPort == 0 {
-			session.HidPort = free_port
-		}
-
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("found available hid port : %d",session.HidPort))
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hid.exe at path : %s",path))
-		return path, session.HidPort, nil
-	}
-	aftersync := func(id childprocess.ProcessID) error {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if len(daemon.sessions) == 0 {
-			return fmt.Errorf("no current session")
-		}
-
-		current := &daemon.sessions[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		if !session.HidProcessID.Valid() {
-			// current.SessionLog = append(current.SessionLog, "fail to start hid.exe")
-			session.FailCount++
-		}
-
-		session.HidProcessID = id
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("started hid.exe with processID %d",id))
-		return nil
-	}
-
-	for {
-		time.Sleep(time.Millisecond * 100)
-
-		path, free_port, err := presync()
-		if err != nil || path == "" {
-			continue
-		}
-		process := exec.Command(path, 
-			"run", "--project",
-			"..\\hid\\",
-			fmt.Sprintf("--urls=http://localhost:%d", free_port))
-		id, err := daemon.childprocess.NewChildProcess(process,true)
-		if err != nil {
-			log.PushLog("fail to start hid process: %s", err.Error())
-			continue
-		}
-		err = aftersync(id)
-
-		if err != nil {
-			log.PushLog("fail to start hid process: %s", err.Error())
-		} else {
-			daemon.childprocess.WaitID(id)
-		}
-	}
-}
 
 func (daemon *Daemon) handleHub() {
 	presync :=  func() (path string, 
@@ -440,7 +344,6 @@ func (daemon *Daemon) handleHub() {
 						audioHash string, 
 						videoHash string, 
 						micHash string, 
-						hidport int, 
 						err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
@@ -465,14 +368,6 @@ func (daemon *Daemon) handleHub() {
 			session.FailCount++
 			return
 		}
-
-		if session.HidPort == 0 {
-			session.FailCount++
-			err = fmt.Errorf("hid port not available")
-			return
-		}
-
-		hidport = session.HidPort
 
 		authBytes := base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))
 		signalingBytes := base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))
@@ -532,13 +427,12 @@ func (daemon *Daemon) handleHub() {
 	}
 	for {
 		time.Sleep(time.Millisecond * 500)
-		path, authHash, signaling, webrtc, audioHash, videoHash,micHash, hidport, err := presync()
+		path, authHash, signaling, webrtc, audioHash, videoHash,micHash, err := presync()
 		if err != nil {
 			continue
 		}
 
 		process := exec.Command(path,
-			"--hid", fmt.Sprintf("localhost:%d", hidport),
 			"--auth", authHash,
 			"--audio", audioHash,
 			"--video", videoHash,
@@ -562,7 +456,6 @@ func (daemon *Daemon) handleHub() {
 }
 
 func (daemon *Daemon) handleApp() {
-
 	presync := func() (path string, args []string, envs []string,err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()

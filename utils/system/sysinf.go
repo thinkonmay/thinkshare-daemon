@@ -50,9 +50,10 @@ func GetPrivateIP() string {
 
 
 func GetPublicIPCurl() (result string) {
-	result = strings.Split(getPublicIPCurl("https://icanhazip.com/"), "\n")[0];
-	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
-	if result == "" { result = getPublicIPCurl("https://ifconfig.me/ip") }
+	result = ""
+	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
+	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
+	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
 	if result == "" { result = getPublicIPSTUN() }
 	return result
 }

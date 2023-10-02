@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -83,7 +84,7 @@ func InitGRPCClient(host string,
 			)
 
 			if err != nil {
-				fmt.Printf("failed to dial : %s",err.Error())
+				log.PushLog("failed to dial : %s",err.Error())
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -105,7 +106,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Storagesync(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -132,14 +133,14 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Logger(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
 
 			for {
 				msg := <-ret.logger
-				if err := client.Send(msg); err != nil && err != io.EOF{
+				if err := client.Send(msg); err != nil && err != io.EOF && !strings.Contains(err.Error(), "error while marshaling"){
 					log.PushLog("error sending log to conductor %s", err.Error())
 					ret.logger <- msg
 					ret.connected = false
@@ -158,7 +159,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Monitor(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -184,7 +185,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Mediadevice(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -209,7 +210,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Infor(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -236,7 +237,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Sync(ret.genContext())
 			if err != nil {
-				fmt.Printf("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s\n", err.Error())
 				ret.connected = false
 				continue
 			}
