@@ -90,6 +90,7 @@ func NewDaemon(persistent persistent.Persistent,
 					continue
 				} else if m.Adapter == "Microsoft Basic Render Driver" {
 					proc.Kill()
+					time.Sleep(15 * time.Second)
 					continue
 				} else if m.Pipeline, err = pipeline.VideoPipeline(m);err != nil {
 					continue
