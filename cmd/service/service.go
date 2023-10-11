@@ -9,6 +9,7 @@ import (
 	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
@@ -29,6 +30,9 @@ func init() {
 
 
 func main() {
+	media.ActivateVirtualDriver()
+	defer media.DeactivateVirtualDriver()
+
 	credential.SetupEnv(proj,anon_key)
 	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {

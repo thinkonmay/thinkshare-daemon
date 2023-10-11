@@ -15,10 +15,10 @@ import (
 	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"
+	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -61,64 +61,59 @@ func NewDaemon(persistent persistent.Persistent,
 	}()
 	go func() {
 		for {
+			var err error
+			proc := media.StartVirtualDisplay()
 			devices := media.GetDevice()
-			for _, soundcard := range devices.Soundcards {
-				audio, err := pipeline.AudioPipeline(soundcard)
-				if err != nil {
+
+
+
+
+			result := &packet.MediaDevice{}
+			for _,m := range devices.Microphones {
+				if m.Name != "CABLE-A Input (VB-Audio Cable A)" {
+					continue
+				} else if m.Pipeline, err = pipeline.MicPipeline(m);err != nil {
 					continue
 				}
-
-				soundcard.Pipeline = audio
+				result.Microphones = []*packet.Microphone{m}
 			}
-			for _, monitor := range devices.Monitors {
-				video, err := pipeline.VideoPipeline(monitor)
-				if err != nil {
+			for _,m := range devices.Soundcards{
+				if m.Name != "CABLE Output (VB-Audio Virtual Cable)" {
+					continue
+				} else if m.Pipeline, err = pipeline.AudioPipeline(m);err != nil {
 					continue
 				}
-
-				monitor.Pipeline = video
+				result.Soundcards = []*packet.Soundcard{m}
 			}
-			for _, mic := range devices.Microphones {
-				video, err := pipeline.MicPipeline(mic)
-				if err != nil {
+			for _,m := range devices.Monitors {
+				if m.MonitorName != "Linux FHD" {
+					continue
+				} else if m.Adapter == "Microsoft Basic Render Driver" {
+					proc.Kill()
+					continue
+				} else if m.Pipeline, err = pipeline.VideoPipeline(m);err != nil {
 					continue
 				}
-
-				mic.Pipeline = video
+				result.Monitors = []*packet.Monitor{m}
 			}
 
-			reset := true
-			for _, m := range devices.Monitors {
-				if m.Pipeline != nil {
-					reset = false
-				}
-			}
-
-			if reset {
-				media.ResetVirtualDisplay()
-				continue
-			}
 
 			daemon.persist.Media(devices)
-			time.Sleep(30 * time.Second)
+			proc.Wait()
 		}
 	}()
 	go func() {
-		for {
-			infor, err := system.GetInfor()
-			if err != nil {
-				log.PushLog("error get sysinfor : %s", err.Error())
-				continue
-			}
-
-
-			for _,partition := range infor.Partitions {
-				handlePartition(partition)
-			}
-
-			daemon.persist.Infor(infor)
-			time.Sleep(30 * time.Second)
+		infor, err := system.GetInfor()
+		if err != nil {
+			log.PushLog("error get sysinfor : %s", err.Error())
+			return
 		}
+
+		for _,partition := range infor.Partitions {
+			handlePartition(partition)
+		}
+
+		daemon.persist.Infor(infor)
 	}()
 
 	go func() {

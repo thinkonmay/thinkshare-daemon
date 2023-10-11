@@ -1,13 +1,13 @@
 package media
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"time"
 	"unsafe"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 /*
@@ -195,50 +195,70 @@ import "C"
 type DeviceQuery unsafe.Pointer
 
 
-var kill_display = make(chan bool)
-func init() {
-	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
-        return
+
+var (
+    virtual_displays []*os.Process = []*os.Process{}
+)
+
+func ActivateVirtualDriver() {
+    cmd := exec.Command("./VBCABLE_Setup_x64.exe","-i","-h")
+    cmd.Dir = "./audio"
+    cmd.Run()
+
+    cmd = exec.Command("./VBCABLE_Setup_x64.exe","-i","-h")
+    cmd.Dir = "./microphone"
+    cmd.Run()
+
+    cmd = exec.Command("./nefconc.exe","--install-driver","--inf-path","ViGEmBus.inf")
+    cmd.Dir = "./gamepad"
+    cmd.Run()
+
+    cmd = exec.Command("./CertMgr.exe","/add","IddSampleDriver.cer","/s","/r","localMachine","root")
+    cmd.Dir = "./display"
+    cmd.Run()
+
+    cmd = exec.Command("./nefconc.exe","--install-driver","--inf-path","IddSampleDriver.inf")
+    cmd.Dir = "./display"
+    cmd.Run()
+
+}
+
+func DeactivateVirtualDriver() {
+    cmd := exec.Command("./nefconc.exe","--uninstall-driver","--inf-path","IddSampleDriver.inf")
+    cmd.Dir = "./display"
+    cmd.Run()
+
+    cmd = exec.Command("./VBCABLE_Setup_x64.exe","-u","-h")
+    cmd.Dir = "./audio"
+    cmd.Run()
+
+    cmd = exec.Command("./VBCABLE_Setup_x64.exe","-u","-h")
+    cmd.Dir = "./microphone"
+    cmd.Run()
+
+    cmd = exec.Command("./nefconc.exe","--uninstall-driver","--inf-path","ViGEmBus.inf")
+    cmd.Dir = "./gamepad"
+    cmd.Run()
+
+    for _, p := range virtual_displays {
+        p.Kill()
     }
-
-    var proc *os.Process = nil
-    go func() {
-        for {
-            time.Sleep(5 * time.Second)
-            cmd := exec.Command("./virtual_display.exe")
-            err := cmd.Start()
-            if err != nil {
-                log.PushLog("failed to start virtual display %s",err.Error())
-                continue
-            }
-
-
-            proc = cmd.Process
-            cmd.Process.Wait()
-            proc = nil
-        }
-    }()
-
-    go func() {
-        for {
-            <-kill_display
-            if proc == nil {
-                continue
-            }
-
-            proc.Kill()
-        }
-    }()
 }
 
 
-func ResetVirtualDisplay() {
-	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
-        return
-    }
+func StartVirtualDisplay() *os.Process {
+    width  := 1920
+    height := 1200
 
-    kill_display<-true
-    time.Sleep(10 * time.Second)
+    cmd := exec.Command("./IddSampleApp.exe")
+    cmd.Dir = "./display"
+    cmd.Env = []string{
+        fmt.Sprintf("DISPLAY_WIDTH=%d",width),
+        fmt.Sprintf("DISPLAY_HEIGHT=%d",height),
+    }
+    cmd.Start()
+    virtual_displays = append(virtual_displays, cmd.Process)
+    return cmd.Process
 }
 
 func GetDevice() *packet.MediaDevice {
