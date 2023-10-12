@@ -60,9 +60,13 @@ func NewDaemon(persistent persistent.Persistent,
 		}
 	}()
 	go func() {
+		var err error
+		virtual_display := os.Getenv("VIRTUAL_DISPLAY") == "TRUE"
+		var proc *os.Process = nil
 		for {
-			var err error
-			proc := media.StartVirtualDisplay()
+			if virtual_display {
+				proc = media.StartVirtualDisplay()
+			}
 			devices := media.GetDevice()
 
 
@@ -76,6 +80,7 @@ func NewDaemon(persistent persistent.Persistent,
 					continue
 				}
 				result.Microphones = []*packet.Microphone{m}
+				break
 			}
 			for _,m := range devices.Soundcards{
 				if m.Name != "CABLE Output (VB-Audio Virtual Cable)" {
@@ -84,23 +89,32 @@ func NewDaemon(persistent persistent.Persistent,
 					continue
 				}
 				result.Soundcards = []*packet.Soundcard{m}
+				break
 			}
 			for _,m := range devices.Monitors {
-				if m.MonitorName != "Linux FHD" {
-					continue
-				} else if m.Adapter == "Microsoft Basic Render Driver" {
-					proc.Kill()
-					time.Sleep(15 * time.Second)
+				if (m.MonitorName != "Linux FHD" ||
+				    m.Adapter     == "Microsoft Basic Render Driver") &&
+				    virtual_display {
 					continue
 				} else if m.Pipeline, err = pipeline.VideoPipeline(m);err != nil {
 					continue
 				}
 				result.Monitors = []*packet.Monitor{m}
+				break
+			}
+
+			if len(result.Monitors) == 0 && virtual_display && proc != nil {
+				proc.Kill()
+				time.Sleep(15 * time.Second)
 			}
 
 
 			daemon.persist.Media(devices)
-			proc.Wait()
+			if virtual_display && proc != nil {
+				proc.Wait()
+			} else {
+				return
+			}
 		}
 	}()
 	go func() {
