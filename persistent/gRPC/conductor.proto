@@ -42,15 +42,10 @@ message WorkerSessions {
 }
 
 message AppSession { 
-	int32  id = 1;
-	string timestamp = 2;
-
 	string exe			 = 3;
 	string folder        = 4;
 	repeated string args = 5;
 	repeated string envs = 6;
-
-	string manifest      = 7; // not sync
 }
 message WorkerSession{ 
 	int32  id = 1;

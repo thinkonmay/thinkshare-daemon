@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 
@@ -294,4 +295,117 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	}
 
 	return storage,nil,nil
+}
+
+type TurnCred struct {
+	Username string `json:"username"`
+	Password string `json:"credential"`
+}
+type TurnResult struct {
+	AccountID string   `json:"account_id"`
+	Turn      TurnCred `json:"credential"`
+}
+type TurnInfo struct {
+	PublicIP  string `json:"public_ip"`
+	PrivateIP string `json:"private_ip"`
+	Port      int    `json:"turn_port"`
+	Scope     string `json:"scope"`
+}
+
+func GetFreeUDPPort(min int,max int) (int, error) {
+	addr, err := net.ResolveUDPAddr("udp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	port := l.LocalAddr().(*net.UDPAddr).Port
+	if port > max {
+		return 0,fmt.Errorf("invalid port %d",port)
+	} else if port < min {
+		return GetFreeUDPPort(min,max)
+	}
+	return port, nil
+}
+
+
+
+func SetupTurnAccount(proxy Account,
+					 min int, 
+					 max int) (
+					 cred string,
+					 turn TurnCred,
+					 info TurnInfo,
+					 err error) {
+	port,_ := GetFreeUDPPort(min,max)
+	info = TurnInfo{
+		PublicIP: Addresses.PublicIP,
+		PrivateIP: Addresses.PrivateIP,
+		Port: port,
+		Scope: "ip",
+	}
+
+	b, _ := json.Marshal(info)
+	req, err := http.NewRequest("POST", 
+		Secrets.EdgeFunctions.TurnRegister, 
+		bytes.NewBuffer(b))
+	if err != nil {
+		return 
+	}
+
+	req.Header.Set("username", *proxy.Username)
+	req.Header.Set("password", *proxy.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		body_str := string(body)
+        err = fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
+        return
+	}
+
+	turn_account := TurnResult{}
+	if err = json.Unmarshal(body, &turn_account); err != nil {
+		return 
+	}
+
+	turn = turn_account.Turn
+	cred = turn_account.AccountID
+
+	return
+}
+
+func Ping(uid string)( err error)  {
+	body,_ := json.Marshal( struct {
+		AccountID string `json:"account_uid"`
+	}{
+		AccountID: uid,
+	})
+
+	req,err := http.NewRequest("POST",fmt.Sprintf("%s/rest/v1/rpc/ping_account",Secrets.Secret.Url),bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+Secrets.Secret.Anon)
+	req.Header.Set("apikey",Secrets.Secret.Anon)
+	resp,err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		data,_ := io.ReadAll(resp.Body)
+		return fmt.Errorf(string(data))
+	}
+
+	return
 }
