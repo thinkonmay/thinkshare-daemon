@@ -216,6 +216,7 @@ func GetDevice() *packet.MediaDevice {
             continue
         }
         result.Microphone = m
+        break
     }
 
     for _,sound := range query.soundcards {
@@ -233,6 +234,8 @@ func GetDevice() *packet.MediaDevice {
         if m.Pipeline,err = pipeline.AudioPipeline(m);err != nil {
             continue
         }
+        result.Soundcard = m
+        break
     }
 
 	return result
