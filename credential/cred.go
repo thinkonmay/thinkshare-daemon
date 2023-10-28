@@ -14,9 +14,13 @@ import (
 )
 
 const (
-	SecretDir = "./secret"
-	ProxySecretFile = "./secret/proxy.json"
-	StorageCred = "/.credential.thinkmay.json"
+	SecretDir 				= "./secret"
+	ProxySecretFile 		= "./secret/proxy.json"
+	StorageCred 			= "/.credential.thinkmay.json"
+
+	API_VERSION				= "v2"
+	PROJECT 	 			= "supabase.thinkmay.net"
+	ANON_KEY 				= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
 )
 
 func GetStorageCredentialFile(mountpoint string) string {
@@ -28,51 +32,6 @@ type Account struct {
 	Password *string `json:"password"`
 }
 
-var Secrets = &struct {
-	EdgeFunctions struct {
-		ProxyRegister           string `json:"proxy_register"`
-		TurnRegister            string `json:"turn_register"`
-		WorkerRegister          string `json:"worker_register"`
-		StorageRegister        	string `json:"storage_register"`
-
-		SessionAuthenticate     string `json:"session_authenticate"`
-		SignalingAuthenticate   string `json:"signaling_authenticate"`
-
-		WorkerProfileFetch      string `json:"worker_profile_fetch"`
-		WorkerSessionCreate     string `json:"worker_session_create"`
-		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
-
-		UserApplicationFetch  	string `json:"user_application_fetch"`
-		RequestApplication     	string `json:"request_application"`
-	} `json:"edge_functions"`
-
-	Secret struct {
-		Url   string `json:"url"`
-		Anon  string `json:"anon_key"`
-		DbCon *string `json:"db_conn"`
-		Admin *string `json:"admin_key"`
-	} `json:"secret"`
-
-	Conductor struct {
-		Hostname string  `json:"host"`
-		GrpcPort int     `json:"port"`
-	} `json:"conductor"`
-
-	Signaling *struct {
-		Validate 					string 	`json:"Validation"`
-		Video struct {
-			Path					string  `json:"Path"`
-		} `json:"Video"`
-		Audio struct {
-			Path					string  `json:"Path"`
-		} `json:"Audio"`
-	}`json:"signaling"`
-
-	Daemon struct {
-		Commit string `json:"commit"`
-	} `json:"daemon"`
-}{}
-
 var Addresses = &struct {
 	PublicIP  string `json:"public_ip"`
 	PrivateIP string `json:"private_ip"`
@@ -81,65 +40,6 @@ var Addresses = &struct {
 	PrivateIP: system.GetPrivateIP(),
 }
 
-func SetupEnvAdmin(proj string,admin_key string) {
-	req,err := http.NewRequest("GET",
-		fmt.Sprintf("%s/rest/v1/constant?select=value&type=eq.ADMIN", proj),
-		bytes.NewBuffer([]byte("")))
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Set("apikey", admin_key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",admin_key))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	} else if resp.StatusCode != 200 {
-		panic("unable to fetch constant from server")
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-
-	var data [](interface{})
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		panic(err)
-	}
-
-	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
-	json.Unmarshal(val, &Secrets)
-}
-func SetupEnv(proj string,anon_key string) {
-	os.Mkdir(SecretDir, os.ModeDir)
-	req,err := http.NewRequest("GET",
-		fmt.Sprintf("%s/rest/v1/constant?select=value", proj),
-		bytes.NewBuffer([]byte("")))
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Set("apikey", anon_key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",anon_key))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	} else if resp.StatusCode != 200 {
-		panic("unable to fetch constant from server")
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-
-	var data [](interface{})
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		panic(err)
-	}
-
-	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
-	json.Unmarshal(val, &Secrets)
-}
 
 func InputProxyAccount() (account Account, err error) {
 	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
@@ -180,14 +80,17 @@ func SetupWorkerAccount(proxy Account) (
 	err error) {
 
 	b, _ := json.Marshal(Addresses)
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerRegister, bytes.NewBuffer(b))
+	req, err := http.NewRequest(
+		"POST", 
+		fmt.Sprintf("https://%s/functions/%s/worker_register",PROJECT,API_VERSION), 
+		bytes.NewBuffer(b))
 	if err != nil {
 		return Account{}, err
 	}
 
 	req.Header.Set("username", *proxy.Username)
 	req.Header.Set("password", *proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -207,8 +110,7 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-func ReadOrRegisterStorageAccount(proxy Account,
-								  worker Account,
+func ReadOrRegisterStorageAccount( worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
 								   readerr error,
@@ -225,16 +127,12 @@ func ReadOrRegisterStorageAccount(proxy Account,
 	data, _ := io.ReadAll(secret_f)
 	if len(data) == 0 {
 		body,_ = json.Marshal(struct {
-			Proxy Account `json:"proxy"`
-			Worker Account `json:"worker"`
 			Hardware *packet.Partition `json:"hardware"`
 			AccessPoint *struct {
 				PublicIP  string `json:"public_ip"`
 				PrivateIP string `json:"private_ip"`
 			} `json:"access_point"`
 		}{
-			Proxy: proxy,
-			Worker: worker,
 			Hardware: partition,
 			AccessPoint: Addresses,
 		})
@@ -245,12 +143,8 @@ func ReadOrRegisterStorageAccount(proxy Account,
 		}
 
 		body,_ = json.Marshal(struct {
-			Proxy Account `json:"proxy"`
-			Worker Account `json:"worker"`
 			Storage *Account `json:"storage"`
 		}{
-			Proxy: proxy,
-			Worker: worker,
 			Storage: storage,
 		})
 	}
@@ -267,13 +161,15 @@ func ReadOrRegisterStorageAccount(proxy Account,
 
 
 	req, err := http.NewRequest("POST", 
-		Secrets.EdgeFunctions.StorageRegister, 
+		fmt.Sprintf("https://%s/functions/%s/storage_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err,nil
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	req.Header.Set("username", *worker.Username)
+	req.Header.Set("password", *worker.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err,nil
@@ -351,7 +247,7 @@ func SetupTurnAccount(proxy Account,
 
 	b, _ := json.Marshal(info)
 	req, err := http.NewRequest("POST", 
-		Secrets.EdgeFunctions.TurnRegister, 
+		fmt.Sprintf("https://%s/functions/%s/turn_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(b))
 	if err != nil {
 		return 
@@ -359,7 +255,7 @@ func SetupTurnAccount(proxy Account,
 
 	req.Header.Set("username", *proxy.Username)
 	req.Header.Set("password", *proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -391,14 +287,17 @@ func Ping(uid string)( err error)  {
 		AccountID: uid,
 	})
 
-	req,err := http.NewRequest("POST",fmt.Sprintf("%s/rest/v1/rpc/ping_account",Secrets.Secret.Url),bytes.NewBuffer(body))
+	req,err := http.NewRequest(
+		"POST",
+		fmt.Sprintf("https://%s/rest/v1/rpc/ping_account",PROJECT),
+		bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+Secrets.Secret.Anon)
-	req.Header.Set("apikey",Secrets.Secret.Anon)
+	req.Header.Set("Authorization", "Bearer "+ANON_KEY)
+	req.Header.Set("apikey",ANON_KEY)
 	resp,err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

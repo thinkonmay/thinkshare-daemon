@@ -8,8 +8,9 @@ import (
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
-	grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
+	// grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
@@ -40,7 +41,6 @@ func main() {
 		defer proc.Kill()
 	}
 
-	credential.SetupEnv(proj,anon_key)
 	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {
 		fmt.Printf("failed to find proxy account: %s", err.Error())
@@ -75,9 +75,10 @@ func main() {
 		return
 	}
 
-	grpc, err := grpc.InitGRPCClient(
-		credential.Secrets.Conductor.Hostname,
-		credential.Secrets.Conductor.GrpcPort,
+	grpc, err := websocket.InitGRPCClient(
+		credential.PROJECT,
+		credential.API_VERSION,
+		credential.ANON_KEY,
 		worker_cred)
 	if err != nil {
 		fmt.Printf("failed to setup grpc: %s", err.Error())
@@ -93,7 +94,7 @@ func main() {
 		}
 
 		log.PushLog("registering storage account for drive %s",p.Mountpoint)
-		_,err,apierr := credential.ReadOrRegisterStorageAccount(proxy_cred,worker_cred, p)
+		_,err,apierr := credential.ReadOrRegisterStorageAccount(worker_cred,p)
 		if apierr != nil {
 			log.PushLog("unable to register storage %s", apierr.Error())
 		} else if err != nil {

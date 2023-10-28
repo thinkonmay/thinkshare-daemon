@@ -230,6 +230,22 @@ func (daemon *Daemon) handleHub() {
 		}()
 
 
+		if daemon.media == nil {
+			err = fmt.Errorf("media device not ready")
+			return 
+		} else if daemon.media.Soundcard == nil {
+			err = fmt.Errorf("media device not ready")
+			return 
+		} else if daemon.media.Soundcard.Pipeline == nil {
+			err = fmt.Errorf("media device not ready")
+			return 
+		} else if daemon.media.Microphone == nil {
+			err = fmt.Errorf("media device not ready")
+			return 
+		} else if daemon.media.Microphone.Pipeline == nil {
+			err = fmt.Errorf("media device not ready")
+			return 
+		}
 		audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
 		micHash   = daemon.media.Microphone.Pipeline.PipelineHash
 
