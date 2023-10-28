@@ -32,8 +32,13 @@ func init() {
 
 
 func main() {
+	virtual_display := os.Getenv("VIRTUAL_DISPLAY") == "TRUE"
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
+	if virtual_display {
+		proc := media.StartVirtualDisplay()
+		defer proc.Kill()
+	}
 
 	credential.SetupEnv(proj,anon_key)
 	proxy_cred, err := credential.InputProxyAccount()

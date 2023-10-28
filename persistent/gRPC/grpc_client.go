@@ -25,16 +25,11 @@ type GRPCclient struct {
 	password string
 
 	logger     chan *packet.WorkerLog
-	monitoring chan *packet.WorkerMetric
 	infor      chan *packet.WorkerInfor
 	devices    chan *packet.MediaDevice
-	storage    chan *packet.StorageStatus
 
 	state_out chan *packet.WorkerSessions
 	state_in  chan *packet.WorkerSessions
-
-	chunk_in  chan *packet.StorageChunk
-	chunk_out chan *packet.StorageChunk
 
 	done      bool
 	connected bool
@@ -53,16 +48,11 @@ func InitGRPCClient(host string,
 		password : *account.Password,
 
 		logger     : make(chan *packet.WorkerLog,100),
-		monitoring : make(chan *packet.WorkerMetric,100),
 		infor      : make(chan *packet.WorkerInfor,100),
 		devices    : make(chan *packet.MediaDevice,100),
-		storage    : make(chan *packet.StorageStatus,100),
 
 		state_out : make(chan *packet.WorkerSessions,100),
 		state_in  : make(chan *packet.WorkerSessions,100),
-
-		chunk_in  : make(chan *packet.StorageChunk,100),
-		chunk_out : make(chan *packet.StorageChunk,100),
 	}
 
 
@@ -104,33 +94,6 @@ func InitGRPCClient(host string,
 				continue
 			} 
 
-			client, err := ret.stream.Storagesync(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
-				ret.connected = false
-				continue
-			}
-
-			for {
-				msg := <-ret.storage
-				if err := client.Send(msg); err != nil && err != io.EOF{
-					log.PushLog("error sending log to conductor %s", err.Error())
-					ret.storage <- msg
-					ret.connected = false
-					break
-				}
-			}
-		}
-	}()
-	go func() {
-		for {
-			if ret.done {
-				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			} 
-
 			client, err := ret.stream.Logger(ret.genContext())
 			if err != nil {
 				log.PushLog("fail to request stream: %s\n", err.Error())
@@ -149,57 +112,7 @@ func InitGRPCClient(host string,
 			}
 		}
 	}()
-	go func() {
-		for {
-			if ret.done {
-				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			client, err := ret.stream.Monitor(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
-				ret.connected = false
-				continue
-			}
 
-			for {
-				msg := <-ret.monitoring
-				if err := client.Send(msg); err != nil && err != io.EOF{
-					log.PushLog("error sending metric to conductor %s", err.Error())
-					ret.monitoring<-msg
-					ret.connected = false
-					break
-				}
-			}
-		}
-	}()
-	go func() {
-		for {
-			if ret.done {
-				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			client, err := ret.stream.Mediadevice(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
-				ret.connected = false
-				continue
-			}
-
-			for {
-				dv := <-ret.devices
-				if err := client.Send(dv); err != nil && err != io.EOF{
-					log.PushLog("error sync media device : %s", err.Error())
-					ret.connected = false
-					break
-				}
-			}
-		}
-	}()
 	go func() {
 		for {
 			if ret.done {
@@ -295,9 +208,7 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 		Source:    source,
 	}
 }
-func (grpc *GRPCclient) Metric(log *packet.WorkerMetric) {
-	grpc.monitoring <- log
-}
+
 func (grpc *GRPCclient) Infor(log *packet.WorkerInfor) {
 	grpc.infor <- log
 }
@@ -309,14 +220,4 @@ func (grpc *GRPCclient) RecvSession() *packet.WorkerSessions {
 }
 func (grpc *GRPCclient) SyncSession(log *packet.WorkerSessions) {
 	grpc.state_in <- log
-}
-
-func (grpc *GRPCclient) StorageReport(status *packet.StorageStatus) {
-	grpc.storage <- status
-}
-func (grpc *GRPCclient) StorageUpload() *packet.StorageChunk{
-	return <-grpc.chunk_out
-}
-func (grpc *GRPCclient) StorageReceive(chunk *packet.StorageChunk) {
-	grpc.chunk_in <- chunk
 }

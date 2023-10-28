@@ -18,7 +18,6 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"
-	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -26,6 +25,7 @@ type Daemon struct {
 	childprocess *childprocess.ChildProcesses
 	Shutdown     chan bool
 	persist      persistent.Persistent
+	media        *packet.MediaDevice
 
 	mutex   *sync.Mutex
 
@@ -60,61 +60,9 @@ func NewDaemon(persistent persistent.Persistent,
 		}
 	}()
 	go func() {
-		var err error
-		virtual_display := os.Getenv("VIRTUAL_DISPLAY") == "TRUE"
-		var proc *os.Process = nil
 		for {
-			if virtual_display {
-				proc = media.StartVirtualDisplay()
-			}
-			devices := media.GetDevice()
-
-
-
-
-			result := &packet.MediaDevice{}
-			for _,m := range devices.Microphones {
-				if m.Name != "CABLE-A Input (VB-Audio Cable A)" {
-					continue
-				} else if m.Pipeline, err = pipeline.MicPipeline(m);err != nil {
-					continue
-				}
-				result.Microphones = []*packet.Microphone{m}
-				break
-			}
-			for _,m := range devices.Soundcards{
-				if m.Name != "CABLE Output (VB-Audio Virtual Cable)" {
-					continue
-				} else if m.Pipeline, err = pipeline.AudioPipeline(m);err != nil {
-					continue
-				}
-				result.Soundcards = []*packet.Soundcard{m}
-				break
-			}
-			for _,m := range devices.Monitors {
-				if (m.MonitorName != "Linux FHD" ||
-				    m.Adapter     == "Microsoft Basic Render Driver") &&
-				    virtual_display {
-					continue
-				} else if m.Pipeline, err = pipeline.VideoPipeline(m);err != nil {
-					continue
-				}
-				result.Monitors = []*packet.Monitor{m}
-				break
-			}
-
-			if len(result.Monitors) == 0 && virtual_display && proc != nil {
-				proc.Kill()
-				time.Sleep(15 * time.Second)
-			}
-
-
-			daemon.persist.Media(devices)
-			if virtual_display && proc != nil {
-				proc.Wait()
-			} else {
-				return
-			}
+			daemon.media = media.GetDevice()
+			time.Sleep(5 * time.Second)
 		}
 	}()
 	go func() {
@@ -236,7 +184,6 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSession
 		if desired_session.Id != current_session.Id && desired_session.AuthConfig != "{}" {
 
 			// reset daemon current session state if sync is required
-			current_session.MediaConfig = desired_session.MediaConfig
 			current_session.WebrtcConfig = desired_session.WebrtcConfig
 			current_session.SignalingConfig = desired_session.SignalingConfig
 			current_session.AuthConfig = desired_session.AuthConfig
@@ -262,7 +209,6 @@ func (daemon *Daemon) handleHub() {
 						signalingHash string, 
 						webrtcHash string, 
 						audioHash string, 
-						videoHash string, 
 						micHash string, 
 						err error) {
 		daemon.mutex.Lock()
@@ -284,27 +230,9 @@ func (daemon *Daemon) handleHub() {
 		}()
 
 
+		audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
+		micHash   = daemon.media.Microphone.Pipeline.PipelineHash
 
-		// current.SessionLog = append(current.SessionLog, "tested video and audio pipeline")
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hub.exe at path : %s",path))
-		if current.MediaConfig == nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		} else if current.MediaConfig.Soundcard 	== nil ||
-				  current.MediaConfig.Microphone 	== nil ||
-				  current.MediaConfig.Monitor 		== nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		} else if current.MediaConfig.Soundcard.Pipeline == nil ||
-				  current.MediaConfig.Microphone.Pipeline == nil ||
-				  current.MediaConfig.Monitor.Pipeline == nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		}
-
-		audioHash = current.MediaConfig.Soundcard.Pipeline.PipelineHash
-		videoHash = current.MediaConfig.Monitor.Pipeline.PipelineHash
-		micHash   = current.MediaConfig.Microphone.Pipeline.PipelineHash
 	 	authHash, signalingHash, webrtcHash = 
 		string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
 		string(base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))),
@@ -356,7 +284,7 @@ func (daemon *Daemon) handleHub() {
 
 	for {
 		time.Sleep(time.Millisecond * 500)
-		authHash, signaling, webrtc, audioHash,videoHash,micHash, err := presync()
+		authHash, signaling, webrtc, audioHash,micHash, err := presync()
 		if err != nil {
 			continue
 		} else if app_path,args,envs,err := appsession(); err == nil {
@@ -374,7 +302,6 @@ func (daemon *Daemon) handleHub() {
 		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path,
 			"--auth", authHash,
 			"--audio", audioHash,
-			"--video", videoHash,
 			"--mic", micHash,
 			"--grpc", signaling,
 			"--webrtc", webrtc),true)
