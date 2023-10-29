@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
@@ -35,9 +36,20 @@ type Account struct {
 var Addresses = &struct {
 	PublicIP  string `json:"public_ip"`
 	PrivateIP string `json:"private_ip"`
-}{
-	PublicIP:  system.GetPublicIPCurl(),
-	PrivateIP: system.GetPrivateIP(),
+}{}
+
+func init() {
+	retry := 0 
+	for {
+		if retry == 10 {
+			panic("server is not connected to the internet")
+		}
+
+		Addresses.PublicIP  = system.GetPublicIPCurl()
+		Addresses.PrivateIP = system.GetPrivateIP()
+		time.Sleep(10 * time.Second)
+		retry = retry + 1
+	}
 }
 
 
