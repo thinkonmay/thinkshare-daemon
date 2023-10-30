@@ -41,12 +41,13 @@ var Addresses = &struct {
 func init() {
 	retry := 0 
 	for {
-		if retry == 10 {
-			panic("server is not connected to the internet")
-		}
-
 		Addresses.PublicIP  = system.GetPublicIPCurl()
 		Addresses.PrivateIP = system.GetPrivateIP()
+		if  Addresses.PrivateIP != "" && Addresses.PublicIP != "" {
+			break
+		} else if retry == 10 {
+			panic("server is not connected to the internet")
+		}
 		time.Sleep(10 * time.Second)
 		retry = retry + 1
 	}
