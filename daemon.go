@@ -230,24 +230,36 @@ func (daemon *Daemon) handleHub() {
 		}()
 
 
+		bypass := false
 		if daemon.media == nil {
-			err = fmt.Errorf("media device not ready")
-			return 
+			// err = fmt.Errorf("media device not ready")
+			// return 
+			bypass = true
 		} else if daemon.media.Soundcard == nil {
-			err = fmt.Errorf("media device not ready")
-			return 
+			// err = fmt.Errorf("media device not ready")
+			// return 
+			bypass = true
 		} else if daemon.media.Soundcard.Pipeline == nil {
-			err = fmt.Errorf("media device not ready")
-			return 
+			// err = fmt.Errorf("media device not ready")
+			// return 
+			bypass = true
 		} else if daemon.media.Microphone == nil {
-			err = fmt.Errorf("media device not ready")
-			return 
+			// err = fmt.Errorf("media device not ready")
+			// return 
+			bypass = true
 		} else if daemon.media.Microphone.Pipeline == nil {
-			err = fmt.Errorf("media device not ready")
-			return 
+			// err = fmt.Errorf("media device not ready")
+			// return 
+			bypass = true
 		}
-		audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
-		micHash   = daemon.media.Microphone.Pipeline.PipelineHash
+
+		if bypass {
+			audioHash = ""
+			micHash   = ""
+		} else {
+			audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
+			micHash   = daemon.media.Microphone.Pipeline.PipelineHash
+		}
 
 	 	authHash, signalingHash, webrtcHash = 
 		string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
@@ -315,12 +327,22 @@ func (daemon *Daemon) handleHub() {
 			continue
 		}
 
-		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path,
+
+		cmd := []string{
 			"--auth", authHash,
-			"--audio", audioHash,
-			"--mic", micHash,
 			"--grpc", signaling,
-			"--webrtc", webrtc),true)
+			"--webrtc", webrtc,
+		}
+
+		if micHash != "" {
+			cmd = append(cmd, "--mic", )
+			cmd = append(cmd, "--mic", micHash)
+		} else if audioHash != "" {
+			cmd = append(cmd, "--audio", )
+			cmd = append(cmd, "--audio", audioHash)
+		}
+
+		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path,cmd...),true)
 		if err != nil {
 			log.PushLog("fail to start hub process: %s", err.Error())
 			continue
