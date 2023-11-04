@@ -336,6 +336,7 @@ func (daemon *Daemon) handleHub() {
 
 		if micHash != "" {
 			cmd = append(cmd, "--mic", micHash)
+		} 
 		if audioHash != "" {
 			cmd = append(cmd, "--audio", audioHash)
 		}
