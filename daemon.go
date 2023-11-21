@@ -72,11 +72,20 @@ func NewDaemon(persistent persistent.Persistent,
 			return
 		}
 
-		for _,partition := range infor.Partitions {
-			handlePartition(partition)
-		}
-
 		daemon.persist.Infor(infor)
+	}()
+
+	go func() {
+		for {
+			partitions,err := system.GetPartitions()
+			if err == nil {
+				for _,partition := range partitions {
+					handlePartition(partition)
+				}
+			}
+
+			time.Sleep(10 * time.Second)
+		}
 	}()
 
 	go func() {

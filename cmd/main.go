@@ -92,6 +92,7 @@ func main() {
 
 		blacklists = append(blacklists, p)
 	})
+	
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown
 }

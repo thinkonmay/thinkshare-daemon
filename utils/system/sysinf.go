@@ -104,6 +104,24 @@ func getPublicIPSTUN() (result string) {
 
 
 
+func GetPartitions() ([]*packet.Partition, error) {
+	partitions,err := disk.Partitions(true)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := []*packet.Partition{}
+    for _, partition := range partitions {
+		ret = append(ret, &packet.Partition{
+			Device: partition.Device,
+			Opts: partition.Opts,
+			Mountpoint: partition.Mountpoint,
+			Fstype: partition.Fstype,
+		})
+    }
+
+	return ret,nil
+}
 
 func GetInfor() (*packet.WorkerInfor, error) {
 	hostStat, err := host.Info()
