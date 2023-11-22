@@ -76,7 +76,7 @@ func main() {
 	blacklists := []*packet.Partition{}
 	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
 		for _,s := range blacklists {
-			if s.Mountpoint == p.Mountpoint {
+			if s.Mountpoint == p.Mountpoint || p.Mountpoint == "C:" {
 				return
 			}
 		}
