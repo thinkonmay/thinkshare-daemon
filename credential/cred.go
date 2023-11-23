@@ -22,6 +22,9 @@ const (
 	API_VERSION				= "v2"
 	PROJECT 	 			= "supabase.thinkmay.net"
 	ANON_KEY 				= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
+
+
+	NEED_WAIT               = 8
 )
 
 func GetStorageCredentialFile(mountpoint string) string {
@@ -126,16 +129,16 @@ func SetupWorkerAccount(proxy Account) (
 func ReadOrRegisterStorageAccount( worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
-								   readerr error,
-								   registerr error,
+								   err error,
+								   abort bool,
 								   ) {
 	path := GetStorageCredentialFile(partition.Mountpoint)
 	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("unable to readfie %s",err.Error()),nil
+		return nil, fmt.Errorf("unable to readfie %s",err.Error()),false
 	}
 
-	body := []byte{}
+	var body []byte
 	storage = &Account{}
 	data, _ := io.ReadAll(secret_f)
 	if len(data) == 0 {
@@ -152,7 +155,7 @@ func ReadOrRegisterStorageAccount( worker Account,
 	} else {
 		err = json.Unmarshal(data, storage)
 		if err != nil {
-			return nil, err,nil
+			return nil, err,false
 		}
 
 		body,_ = json.Marshal(struct {
@@ -163,9 +166,9 @@ func ReadOrRegisterStorageAccount( worker Account,
 	}
 
 	defer func() {
-		if registerr != nil { defer os.Remove(path) } 
+		if abort { defer os.Remove(path) } 
 		defer secret_f.Close()
-		if err != nil || registerr != nil { return } 
+		if err != nil || abort { return } 
 
 		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
@@ -177,7 +180,7 @@ func ReadOrRegisterStorageAccount( worker Account,
 		fmt.Sprintf("https://%s/functions/%s/storage_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err,nil
+		return nil, err,false
 	}
 
 	req.Header.Set("username", *worker.Username)
@@ -185,25 +188,38 @@ func ReadOrRegisterStorageAccount( worker Account,
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err,nil
+		return nil, err,false
 	}
 
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil,err
+		return nil, err,false
 	} else if resp.StatusCode != 200 {
-		return nil, nil,fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
-	} else if string(data) == "\"NOT_REGISTER\"" {
-		return nil, nil,fmt.Errorf("aborted storage credential save")
-	}
+		errcode := &struct{
+			Message *string `json:"message"`
+			Code *int `json:"code"`
+		}{
+			Message: nil,
+			Code:nil,
+		}
 
-	storage = &Account{}
-	err = json.Unmarshal(data, storage)
-	if err != nil {
-		return nil, nil,err
+		err = json.Unmarshal(data, errcode)
+		if err != nil {
+			return nil,err,false
+		} else if (*errcode.Code == NEED_WAIT) {
+			return nil,fmt.Errorf(*errcode.Message),false
+		} else {
+			return nil,fmt.Errorf("%s",*errcode.Message),true
+		}
+	} else {
+		storage = &Account{}
+		err = json.Unmarshal(data, storage)
+		if err != nil {
+			return nil, err,false
+		} else {
+			return storage,nil,false
+		}
 	}
-
-	return storage,nil,nil
 }
 
 type TurnCred struct {
