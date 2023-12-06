@@ -1,4 +1,4 @@
-package steambackup
+package backup
 
 import (
 	"archive/zip"

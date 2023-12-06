@@ -19,10 +19,10 @@ message Closer{
 
 
 message AppSession { 
-	string exe			 = 3;
-	string folder        = 4;
-	repeated string args = 5;
-	repeated string envs = 6;
+	string backup_folder = 1;
+}
+message Manifest { 
+	int64 process_id    = 1;
 }
 message WorkerSession{ 
 	int32  id = 1;
@@ -31,11 +31,11 @@ message WorkerSession{
 	string authConfig 		   	= 3; // do sync
 	string signalingConfig 		= 4; // do sync
 	string webrtcConfig    		= 5; // do sync
-	string manifest        		= 8; // not sync
+	Manifest manifest        	= 8; // not sync
 }
 message WorkerSessions {
-	repeated WorkerSession sessions = 1;
-	repeated AppSession apps = 2;
+	WorkerSession session = 1;
+	AppSession app = 2;
 }
 
 

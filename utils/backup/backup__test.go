@@ -1,12 +1,10 @@
-package steambackup
+package backup
 
 import (
-	"testing"
 	"math"
+	"testing"
 	"time"
-
 )
-
 
 func TestBackup(t *testing.T) {
 	StartBackup(
