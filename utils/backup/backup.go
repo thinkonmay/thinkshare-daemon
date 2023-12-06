@@ -120,14 +120,14 @@ func extractFile(file *zip.File, extractFolder string) error {
 
 
 func CopyFromBackupToTemp(source, destination string) {
-	err := UnzipFolder(source+"/Backup.zip", destination)
+	err := UnzipFolder(source, destination)
 	if err != nil {
 		fmt.Printf("error backup folder : %s\n",err.Error())
 	}
 }
 
 func CopyFromTempToBackup(source, destination string) {
-	err := ZipFolder(destination+"/Backup.zip", source)
+	err := ZipFolder(destination, source)
 	if err != nil {
 		fmt.Printf("error backup folder : %s\n",err.Error())
 	}

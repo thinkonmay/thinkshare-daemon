@@ -120,61 +120,46 @@ func Default() *packet.Manifest {
 	}
 }
 
-func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSessions) {
+func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
-	ret = &packet.WorkerSessions{
-		Session: &packet.WorkerSession{},
-		App:     &packet.AppSession{}, // change data type
-	}
-
 	kill := func() {
-		backup.StopBackup()
 		manifest := daemon.session.Manifest
-		if childprocess.ProcessID(manifest.ProcessId).Valid() {
-			daemon.childprocess.CloseID(childprocess.ProcessID(manifest.ProcessId))
-		}
+		if !childprocess.ProcessID(manifest.ProcessId).Valid() { return }
+		daemon.childprocess.CloseID(childprocess.ProcessID(manifest.ProcessId))
 	}
-	reset := kill
 
-	// TODO multiple sessions
-	if ss.Session == nil {
-		log.PushLog("number of session is more than 1, not valid")
-		ret.Session = nil
-		return
-	} else if ss.Session == nil && daemon.session != nil {
-		kill()
-		daemon.session = nil
+	if ss.App != nil && daemon.app == nil {
+		daemon.app = ss.App
+		log.PushLog("start running backup on folder %s",ss.App.BackupFolder)
+		backup.StartBackup(ss.App.BackupFolder, "C:/backup/thinkmay_backup.zip")
+	} else if ss.App == nil && daemon.app != nil {
+		log.PushLog("stop running backup")
 		daemon.app = nil
-		return
-	} else if ss.Session == nil && daemon.session == nil {
-		return
+		backup.StopBackup()
 	}
 
-	desired_session := ss.Session
-	if ss.Session != nil && daemon.session == nil {
-		daemon.session = &packet.WorkerSession{
-			Manifest: Default(),
+	if ss.Session == nil  {
+		if daemon.session != nil {
+			kill()
+			daemon.session = nil
 		}
+	} else {
+		if daemon.session == nil {
+			daemon.session = &packet.WorkerSession{ Manifest: Default(), }
+		} else if  ss.Session.Id 			   != daemon.session.Id {
+			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
+			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
+			daemon.session.AuthConfig 			= ss.Session.AuthConfig
+			daemon.session.Id 					= ss.Session.Id
+			kill()
+		}
+
+		ss.Session.Manifest = daemon.session.Manifest
 	}
 
-	current_session := daemon.session
-
-	// check if sync-required feature need to resync
-	if  desired_session.Id 				   != current_session.Id {
-		current_session.WebrtcConfig 		= desired_session.WebrtcConfig
-		current_session.SignalingConfig 	= desired_session.SignalingConfig
-		current_session.AuthConfig 			= desired_session.AuthConfig
-		current_session.Id 					= desired_session.Id
-
-		reset()
-	}
-
-	desired_session.Manifest = current_session.Manifest
-	ret.Session = desired_session
-
-	return ret
+	return ss
 }
 
 func (daemon *Daemon) handleHub() {
@@ -235,24 +220,12 @@ func (daemon *Daemon) handleHub() {
 		return nil
 	}
 
-	appsession := func() *string {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if daemon.app == nil {
-			return nil
-		}
-
-		return &daemon.app.BackupFolder
-	}
 
 	for {
 		time.Sleep(time.Millisecond * 500)
 		authHash, signaling, webrtc, audioHash, micHash, err := presync()
 		if err != nil {
 			continue
-		} else if path := appsession(); path != nil {
-			backup.StartBackup(*path, "D:/thinkmay_backup.zip")
 		}
 
 		hub_path, err := path.FindProcessPath("", "hub.exe")
