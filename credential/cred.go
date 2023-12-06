@@ -19,7 +19,7 @@ const (
 	ProxySecretFile 		= "./secret/proxy.json"
 	StorageCred 			= "/.credential.thinkmay.json"
 
-	API_VERSION				= "v2"
+	API_VERSION				= "v1"
 	PROJECT 	 			= "supabase.thinkmay.net"
 	ANON_KEY 				= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
 
