@@ -96,7 +96,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Logger(ret.genContext())
 			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -123,7 +123,7 @@ func InitGRPCClient(host string,
 			}
 			client, err := ret.stream.Infor(ret.genContext())
 			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s", err.Error())
 				ret.connected = false
 				continue
 			}
@@ -150,7 +150,7 @@ func InitGRPCClient(host string,
 
 			client, err := ret.stream.Sync(ret.genContext())
 			if err != nil {
-				log.PushLog("fail to request stream: %s\n", err.Error())
+				log.PushLog("fail to request stream: %s", err.Error())
 				ret.connected = false
 				continue
 			}

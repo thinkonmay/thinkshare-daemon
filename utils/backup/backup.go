@@ -2,11 +2,12 @@ package backup
 
 import (
 	"archive/zip"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 
@@ -122,14 +123,14 @@ func extractFile(file *zip.File, extractFolder string) error {
 func CopyFromBackupToTemp(source, destination string) {
 	err := UnzipFolder(source, destination)
 	if err != nil {
-		fmt.Printf("error backup folder : %s\n",err.Error())
+		log.PushLog("error backup folder : %s",err.Error())
 	}
 }
 
 func CopyFromTempToBackup(source, destination string) {
 	err := ZipFolder(destination, source)
 	if err != nil {
-		fmt.Printf("error backup folder : %s\n",err.Error())
+		log.PushLog("error backup folder : %s",err.Error())
 	}
 }
 
@@ -138,7 +139,6 @@ var (
 )
 
 func StartBackup(source, backup string) {
-	fmt.Println("start backing up folders")
 	CopyFromBackupToTemp(backup, source)
 
 	go func() {

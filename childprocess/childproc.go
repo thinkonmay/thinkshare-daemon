@@ -66,11 +66,11 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 		cmd:      cmd,
 	}
 
-	log.PushLog("process %s, process id %d booting up\n", cmd.Args[0], int(id))
+	log.PushLog("process %s, process id %d booting up", cmd.Args[0], int(id))
 	procs.handleProcess(id,hidewnd)
 	go func ()  {
 		procs.WaitID(id);
-		log.PushLog("process id %d closed\n",id)
+		log.PushLog("process id %d closed",id)
 		procs.CloseID(id)
 	}()
 	return id,nil
@@ -95,7 +95,7 @@ func (procs *ChildProcesses) CloseID(ID ProcessID) error {
 		return fmt.Errorf("attempting to kill null process")
 	}
 
-	log.PushLog("force terminate process name %s, process id %d \n", proc.cmd.Args[0], int(ID))
+	log.PushLog("force terminate process name %s, process id %d", proc.cmd.Args[0], int(ID))
 	return proc.cmd.Process.Kill()
 }
 
@@ -143,11 +143,11 @@ func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) {
 	stdoutIn, _ := proc.cmd.StdoutPipe()
 	stderrIn, _ := proc.cmd.StderrPipe()
 	
-	log.PushLog("starting %s : %s\n", processname, strings.Join(proc.cmd.Args, " "))
+	log.PushLog("starting %s : %s", processname, strings.Join(proc.cmd.Args, " "))
 	proc.cmd.SysProcAttr = &syscall.SysProcAttr{ HideWindow: hidewnd, }
 	err := proc.cmd.Start()
 	if err != nil {
-		log.PushLog("error init process %s\n", err.Error())
+		log.PushLog("error init process %s", err.Error())
 		return
 	}
 
