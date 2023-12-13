@@ -20,6 +20,9 @@ message Closer{
 
 message AppSession { 
 	string backup_folder = 1;
+
+	string app_path      		= 2;
+	repeated string app_args    = 3;
 }
 message Manifest { 
 	int64 process_id    = 1;

@@ -128,10 +128,13 @@ func CopyFromBackupToTemp(source, destination string) {
 }
 
 func CopyFromTempToBackup(source, destination string) {
-	err := ZipFolder(destination, source)
+	err := ZipFolder(destination+".temp", source)
 	if err != nil {
 		log.PushLog("error backup folder : %s",err.Error())
 	}
+
+	os.Remove(destination)
+	os.Rename(destination+".temp",destination)
 }
 
 var (

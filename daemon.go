@@ -14,6 +14,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	apps "github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/backup"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
@@ -133,7 +134,12 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 	if ss.App != nil && daemon.app == nil {
 		daemon.app = ss.App
 		log.PushLog("start running backup on folder %s",ss.App.BackupFolder)
-		backup.StartBackup(ss.App.BackupFolder, "D:/thinkmay_backup.zip")
+		if ss.App.BackupFolder != "none" {
+			backup.StartBackup(ss.App.BackupFolder, "D:/thinkmay_backup.zip")
+		}
+		if ss.App.AppPath != "none" {
+			apps.StartApp(ss.App.AppPath, ss.App.AppArgs...)
+		}
 	} else if ss.App == nil && daemon.app != nil {
 		log.PushLog("stop running backup")
 		daemon.app = nil
