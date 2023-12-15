@@ -147,13 +147,20 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 	}
 
 	if ss.Session == nil  {
-		if daemon.session != nil {
+		if  daemon.session != nil {
 			kill()
 			daemon.session = nil
 		}
 	} else {
-		if daemon.session == nil {
+		if  daemon.session == nil &&
+			ss.Session.AuthConfig 	   != "" &&
+			ss.Session.SignalingConfig  != "" &&
+			ss.Session.WebrtcConfig 	   != "" {
 			daemon.session = &packet.WorkerSession{ Manifest: Default(), }
+			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
+			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
+			daemon.session.AuthConfig 			= ss.Session.AuthConfig
+			daemon.session.Id 					= ss.Session.Id
 		} else if  ss.Session.Id 			   != daemon.session.Id {
 			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
 			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
@@ -178,12 +185,16 @@ func (daemon *Daemon) handleHub() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if daemon.session == nil {
+		current := daemon.session
+		if current == nil {
+			err = fmt.Errorf("no current session")
+			return
+		} else if current.AuthConfig == "" || 
+				  current.SignalingConfig == "" || 
+				  current.WebrtcConfig == ""{
 			err = fmt.Errorf("no current session")
 			return
 		}
-
-		current := daemon.session
 
 		bypass := false
 		if daemon.media == nil {
