@@ -161,7 +161,10 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
 			daemon.session.AuthConfig 			= ss.Session.AuthConfig
 			daemon.session.Id 					= ss.Session.Id
-		} else if  ss.Session.Id 			   != daemon.session.Id {
+		} else if   ss.Session.Id 			   != daemon.session.Id 
+					ss.Session.AuthConfig 	   != "" &&
+					ss.Session.SignalingConfig != "" &&
+					ss.Session.WebrtcConfig    != "" {
 			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
 			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
 			daemon.session.AuthConfig 			= ss.Session.AuthConfig
