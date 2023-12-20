@@ -5,17 +5,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
 const (
-	SecretDir = "./secret"
-	ProxySecretFile = "./secret/proxy.json"
-	StorageCred = "/.credential.thinkmay.json"
+	SecretDir 				= "./secret"
+	ProxySecretFile 		= "./secret/proxy.json"
+	StorageCred 			= "/.credential.thinkmay.json"
+
+	API_VERSION				= "v1"
+	PROJECT 	 			= "supabase.thinkmay.net"
+	ANON_KEY 				= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
+
+
+	NEED_WAIT               = 8
 )
 
 func GetStorageCredentialFile(mountpoint string) string {
@@ -27,118 +36,26 @@ type Account struct {
 	Password *string `json:"password"`
 }
 
-var Secrets = &struct {
-	EdgeFunctions struct {
-		ProxyRegister           string `json:"proxy_register"`
-		TurnRegister            string `json:"turn_register"`
-		WorkerRegister          string `json:"worker_register"`
-		StorageRegister        	string `json:"storage_register"`
-
-		SessionAuthenticate     string `json:"session_authenticate"`
-		SignalingAuthenticate   string `json:"signaling_authenticate"`
-
-		WorkerProfileFetch      string `json:"worker_profile_fetch"`
-		WorkerSessionCreate     string `json:"worker_session_create"`
-		WorkerSessionDeactivate string `json:"worker_session_deactivate"`
-
-		UserApplicationFetch  	string `json:"user_application_fetch"`
-		RequestApplication     	string `json:"request_application"`
-	} `json:"edge_functions"`
-
-	Secret struct {
-		Url   string `json:"url"`
-		Anon  string `json:"anon_key"`
-		DbCon *string `json:"db_conn"`
-		Admin *string `json:"admin_key"`
-	} `json:"secret"`
-
-	Conductor struct {
-		Hostname string  `json:"host"`
-		GrpcPort int     `json:"port"`
-	} `json:"conductor"`
-
-	Signaling *struct {
-		Validate 					string 	`json:"Validation"`
-		Video struct {
-			Path					string  `json:"Path"`
-		} `json:"Video"`
-		Audio struct {
-			Path					string  `json:"Path"`
-		} `json:"Audio"`
-	}`json:"signaling"`
-
-	Daemon struct {
-		Commit string `json:"commit"`
-	} `json:"daemon"`
-}{}
-
 var Addresses = &struct {
 	PublicIP  string `json:"public_ip"`
 	PrivateIP string `json:"private_ip"`
-}{
-	PublicIP:  system.GetPublicIPCurl(),
-	PrivateIP: system.GetPrivateIP(),
+}{}
+
+func init() {
+	retry := 0 
+	for {
+		Addresses.PublicIP  = system.GetPublicIPCurl()
+		Addresses.PrivateIP = system.GetPrivateIP()
+		if  Addresses.PrivateIP != "" && Addresses.PublicIP != "" {
+			break
+		} else if retry == 10 {
+			panic("server is not connected to the internet")
+		}
+		time.Sleep(10 * time.Second)
+		retry = retry + 1
+	}
 }
 
-func SetupEnvAdmin(proj string,admin_key string) {
-	req,err := http.NewRequest("GET",
-		fmt.Sprintf("%s/rest/v1/constant?select=value&type=eq.ADMIN", proj),
-		bytes.NewBuffer([]byte("")))
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Set("apikey", admin_key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",admin_key))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	} else if resp.StatusCode != 200 {
-		panic("unable to fetch constant from server")
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-
-	var data [](interface{})
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		panic(err)
-	}
-
-	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
-	json.Unmarshal(val, &Secrets)
-}
-func SetupEnv(proj string,anon_key string) {
-	os.Mkdir(SecretDir, os.ModeDir)
-	req,err := http.NewRequest("GET",
-		fmt.Sprintf("%s/rest/v1/constant?select=value", proj),
-		bytes.NewBuffer([]byte("")))
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Set("apikey", anon_key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s",anon_key))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	} else if resp.StatusCode != 200 {
-		panic("unable to fetch constant from server")
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-
-	var data [](interface{})
-	err = json.Unmarshal(body, &data)
-	if err != nil {
-		panic(err)
-	}
-
-	val,_ := json.Marshal(data[0].(map[string]interface{})["value"])
-	json.Unmarshal(val, &Secrets)
-}
 
 func InputProxyAccount() (account Account, err error) {
 	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
@@ -179,14 +96,17 @@ func SetupWorkerAccount(proxy Account) (
 	err error) {
 
 	b, _ := json.Marshal(Addresses)
-	req, err := http.NewRequest("POST", Secrets.EdgeFunctions.WorkerRegister, bytes.NewBuffer(b))
+	req, err := http.NewRequest(
+		"POST", 
+		fmt.Sprintf("https://%s/functions/%s/worker_register",PROJECT,API_VERSION), 
+		bytes.NewBuffer(b))
 	if err != nil {
 		return Account{}, err
 	}
 
 	req.Header.Set("username", *proxy.Username)
 	req.Header.Set("password", *proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -206,58 +126,49 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-func ReadOrRegisterStorageAccount(proxy Account,
-								  worker Account,
+func ReadOrRegisterStorageAccount( worker Account,
 								  partition *packet.Partition,
 								) (storage *Account,
-								   readerr error,
-								   registerr error,
+								   err error,
+								   abort bool,
 								   ) {
 	path := GetStorageCredentialFile(partition.Mountpoint)
 	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("unable to readfie %s",err.Error()),nil
+		return nil, fmt.Errorf("unable to readfie %s",err.Error()),false
 	}
 
-	body := []byte{}
+	var body []byte
 	storage = &Account{}
 	data, _ := io.ReadAll(secret_f)
 	if len(data) == 0 {
 		body,_ = json.Marshal(struct {
-			Proxy Account `json:"proxy"`
-			Worker Account `json:"worker"`
 			Hardware *packet.Partition `json:"hardware"`
 			AccessPoint *struct {
 				PublicIP  string `json:"public_ip"`
 				PrivateIP string `json:"private_ip"`
 			} `json:"access_point"`
 		}{
-			Proxy: proxy,
-			Worker: worker,
 			Hardware: partition,
 			AccessPoint: Addresses,
 		})
 	} else {
 		err = json.Unmarshal(data, storage)
 		if err != nil {
-			return nil, err,nil
+			return nil, err,false
 		}
 
 		body,_ = json.Marshal(struct {
-			Proxy Account `json:"proxy"`
-			Worker Account `json:"worker"`
 			Storage *Account `json:"storage"`
 		}{
-			Proxy: proxy,
-			Worker: worker,
 			Storage: storage,
 		})
 	}
 
 	defer func() {
-		if registerr != nil { defer os.Remove(path) } 
+		if abort { defer os.Remove(path) } 
 		defer secret_f.Close()
-		if err != nil || registerr != nil { return } 
+		if err != nil || abort { return } 
 
 		bytes, _ := json.MarshalIndent(storage, "", "	")
 		secret_f.Truncate(0)
@@ -266,32 +177,163 @@ func ReadOrRegisterStorageAccount(proxy Account,
 
 
 	req, err := http.NewRequest("POST", 
-		Secrets.EdgeFunctions.StorageRegister, 
+		fmt.Sprintf("https://%s/functions/%s/storage_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err,nil
+		return nil, err,false
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", Secrets.Secret.Anon))
+	req.Header.Set("username", *worker.Username)
+	req.Header.Set("password", *worker.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err,nil
+		return nil, err,false
 	}
 
 	data, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil,err
+		return nil, err,false
 	} else if resp.StatusCode != 200 {
-		return nil, nil,fmt.Errorf("response code %d: %s", resp.StatusCode, string(data))
-	} else if string(data) == "\"NOT_REGISTER\"" {
-		return nil, nil,fmt.Errorf("aborted storage credential save")
-	}
+		errcode := &struct{
+			Message *string `json:"message"`
+			Code *int `json:"code"`
+		}{
+			Message: nil,
+			Code:nil,
+		}
 
-	storage = &Account{}
-	err = json.Unmarshal(data, storage)
+		err = json.Unmarshal(data, errcode)
+		if err != nil {
+			return nil,err,false
+		} else if (*errcode.Code == NEED_WAIT) {
+			return nil,fmt.Errorf(*errcode.Message),false
+		} else {
+			return nil,fmt.Errorf("%s",*errcode.Message),true
+		}
+	} else {
+		storage = &Account{}
+		err = json.Unmarshal(data, storage)
+		if err != nil {
+			return nil, err,false
+		} else {
+			return storage,nil,false
+		}
+	}
+}
+
+type TurnCred struct {
+	Username string `json:"username"`
+	Password string `json:"credential"`
+}
+type TurnResult struct {
+	AccountID string   `json:"account_id"`
+	Turn      TurnCred `json:"credential"`
+}
+type TurnInfo struct {
+	PublicIP  string `json:"public_ip"`
+	PrivateIP string `json:"private_ip"`
+	Port      int    `json:"turn_port"`
+	Scope     string `json:"scope"`
+}
+
+func GetFreeUDPPort(min int,max int) (int, error) {
+	addr, err := net.ResolveUDPAddr("udp", "localhost:0")
 	if err != nil {
-		return nil, nil,err
+		return 0, err
 	}
 
-	return storage,nil,nil
+	l, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	port := l.LocalAddr().(*net.UDPAddr).Port
+	if port > max {
+		return 0,fmt.Errorf("invalid port %d",port)
+	} else if port < min {
+		return GetFreeUDPPort(min,max)
+	}
+	return port, nil
+}
+
+
+
+func SetupTurnAccount(proxy Account,
+					 min int, 
+					 max int) (
+					 cred string,
+					 turn TurnCred,
+					 info TurnInfo,
+					 err error) {
+	port,_ := GetFreeUDPPort(min,max)
+	info = TurnInfo{
+		PublicIP: Addresses.PublicIP,
+		PrivateIP: Addresses.PrivateIP,
+		Port: port,
+		Scope: "ip",
+	}
+
+	b, _ := json.Marshal(info)
+	req, err := http.NewRequest("POST", 
+		fmt.Sprintf("https://%s/functions/%s/turn_register",PROJECT,API_VERSION), 
+		bytes.NewBuffer(b))
+	if err != nil {
+		return 
+	}
+
+	req.Header.Set("username", *proxy.Username)
+	req.Header.Set("password", *proxy.Password)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		body_str := string(body)
+        err = fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
+        return
+	}
+
+	turn_account := TurnResult{}
+	if err = json.Unmarshal(body, &turn_account); err != nil {
+		return 
+	}
+
+	turn = turn_account.Turn
+	cred = turn_account.AccountID
+
+	return
+}
+
+func Ping(uid string)( err error)  {
+	body,_ := json.Marshal( struct {
+		AccountID string `json:"account_uid"`
+	}{
+		AccountID: uid,
+	})
+
+	req,err := http.NewRequest(
+		"POST",
+		fmt.Sprintf("https://%s/rest/v1/rpc/ping_account",PROJECT),
+		bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+ANON_KEY)
+	req.Header.Set("apikey",ANON_KEY)
+	resp,err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		data,_ := io.ReadAll(resp.Body)
+		return fmt.Errorf(string(data))
+	}
+
+	return
 }

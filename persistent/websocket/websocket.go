@@ -1,26 +1,21 @@
-package grpc
+package websocket
 
 import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 )
 
-const (
-	largerWindowSize = 65535 + 100 // https://github.com/grpc/grpc-go/issues/5358
-)
+
 type GRPCclient struct {
-	stream packet.ConductorClient
-
 	username string
 	password string
 
@@ -32,16 +27,15 @@ type GRPCclient struct {
 	state_in  chan *packet.WorkerSessions
 
 	done      bool
-	connected bool
 }
 
 func InitGRPCClient(host string,
-					port int,
+					version string,
+					anon_key string,
 					account credential.Account,
 					) (ret *GRPCclient, err error) {
 
 	ret = &GRPCclient{
-		connected: false,
 		done:      false,
 
 		username : *account.Username,
@@ -56,57 +50,52 @@ func InitGRPCClient(host string,
 	}
 
 
-	go func() {
-		var conn *grpc.ClientConn = nil
-		for {
-			if ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			} else if conn != nil {
-				conn.Close()
-			}
+	connect := func(url string) *websocket.Conn{
+		if ret.done {
+			return nil
+		}
 
-			conn, err = grpc.Dial(
-				fmt.Sprintf("%s:%d", host, port),
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-				grpc.WithInitialWindowSize(largerWindowSize),
-				grpc.WithInitialConnWindowSize(largerWindowSize),
-			)
 
-			if err != nil {
-				log.PushLog("failed to dial : %s",err.Error())
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
+		dialer := websocket.Dialer{ HandshakeTimeout: 10 * time.Second, }
+		dial_ctx,_ := context.WithTimeout(context.TODO(),10 * time.Second)
+		conn, _, err := dialer.DialContext(dial_ctx,
+			fmt.Sprintf("wss://%s/api/persistent/%s/%s",host,version,url),
+			http.Header{
+				"username" : []string{*account.Username},
+				"password" : []string{*account.Password},
+			})
 
-			ret.stream = packet.NewConductorClient(conn)
-			ret.connected = true
-		}	
-	}()
+
+		if err != nil {
+			log.PushLog("failed to dial : %s",err.Error())
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		}
+
+		return conn
+	}
 
 
 	go func() {
 		for {
 			if ret.done {
 				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
 			} 
 
-			client, err := ret.stream.Logger(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s", err.Error())
-				ret.connected = false
+			conn := connect("log")
+			if conn == nil {
 				continue
 			}
 
 			for {
 				msg := <-ret.logger
-				if err := client.Send(msg); err != nil && err != io.EOF && !strings.Contains(err.Error(), "error while marshaling"){
+				if ret.done {
+					break
+				}
+
+				if err := conn.WriteJSON(msg); err != nil && err != io.EOF && !strings.Contains(err.Error(), "error while marshaling"){
 					log.PushLog("error sending log to conductor %s", err.Error())
 					ret.logger <- msg
-					ret.connected = false
 					break
 				}
 			}
@@ -117,23 +106,18 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			client, err := ret.stream.Infor(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s", err.Error())
-				ret.connected = false
+			} 
+
+			conn := connect("info")
+			if conn == nil {
 				continue
 			}
 
 			for {
 				msg := <-ret.infor
-				if err := client.Send(msg); err != nil && err != io.EOF{
+				if err := conn.WriteJSON(msg); err != nil && err != io.EOF{
 					log.PushLog("error sending hwinfor to conductor %s", err.Error())
 					ret.infor <- msg
-					ret.connected = false
 					break
 				}
 			}
@@ -143,15 +127,10 @@ func InitGRPCClient(host string,
 		for {
 			if ret.done {
 				return
-			} else if !ret.connected {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
+			} 
 
-			client, err := ret.stream.Sync(ret.genContext())
-			if err != nil {
-				log.PushLog("fail to request stream: %s", err.Error())
-				ret.connected = false
+			conn := connect("sync")
+			if conn == nil {
 				continue
 			}
 
@@ -159,7 +138,11 @@ func InitGRPCClient(host string,
 			go func() {
 				for {
 					msg :=<- ret.state_in
-					if err := client.Send(msg); err != nil && err != io.EOF{
+					if conn == nil {
+						done <- true
+						break
+					}
+					if err := conn.WriteJSON(msg); err != nil {
 						log.PushLog("error sending session state to conductor %s", err.Error())
 						ret.state_in <- msg
 						done <- true
@@ -170,7 +153,11 @@ func InitGRPCClient(host string,
 			go func() {
 				for {
 					msg := &packet.WorkerSessions{}
-					if msg, err = client.Recv(); err != nil && err != io.EOF{
+					if conn == nil {
+						done <- true
+						break
+					}
+					if err = conn.ReadJSON(msg); err != nil {
 						log.PushLog("error receive session state from conductor %s", err.Error())
 						done <- true
 						break
@@ -179,24 +166,14 @@ func InitGRPCClient(host string,
 				}
 			}()
 			<-done
-			ret.connected = false
 		}
 	}()
 	return ret, nil
 }
 
-func (ret *GRPCclient) genContext() context.Context {
-	return metadata.NewOutgoingContext(
-		context.Background(),
-		metadata.Pairs(
-			"username", ret.username,
-			"password", ret.password,
-		),
-	)
-}
+
 
 func (client *GRPCclient) Stop() {
-	client.connected = false
 	client.done = true
 }
 

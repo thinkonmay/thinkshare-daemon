@@ -1,12 +1,3 @@
 [submodule "hub"]
 	path = hub
 	url = https://github.com/thinkonmay/thinkremote-rtchub
-[submodule "display"]
-	path = display
-	url = https://github.com/pigeatgarlic/virtual-display
-[submodule "package"]
-	path = package
-	url = https://github.com/pigeatgarlic/package
-[submodule "turn"]
-	path = turn
-	url = https://github.com/thinkonmay/turn

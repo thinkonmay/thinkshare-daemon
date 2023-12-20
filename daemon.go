@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	childprocess "github.com/thinkonmay/thinkshare-daemon/child-process"
+	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
+	apps "github.com/thinkonmay/thinkshare-daemon/utils/app"
+	"github.com/thinkonmay/thinkshare-daemon/utils/backup"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-	"github.com/thinkonmay/thinkshare-daemon/utils/media"
-	utils "github.com/thinkonmay/thinkshare-daemon/utils/path"
+	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -26,98 +25,60 @@ type Daemon struct {
 	childprocess *childprocess.ChildProcesses
 	Shutdown     chan bool
 	persist      persistent.Persistent
+	media        *packet.MediaDevice
 
-	mutex   *sync.Mutex
+	mutex *sync.Mutex
 
-	sessions []packet.WorkerSession
-	apps     []packet.AppSession
+	session *packet.WorkerSession
+	app     *packet.AppSession
 }
 
 func NewDaemon(persistent persistent.Persistent,
-				handlePartition func(*packet.Partition)) *Daemon {
+	handlePartition func(*packet.Partition)) *Daemon {
 	daemon := &Daemon{
 		persist:      persistent,
 		Shutdown:     make(chan bool),
 		childprocess: childprocess.NewChildProcessSystem(),
 
 		mutex:   &sync.Mutex{},
-		sessions: []packet.WorkerSession{},
-		apps: 	  []packet.AppSession{},
+		session: nil,
+		app:     nil,
 	}
 	go func() {
 		for {
 			child_log := <-daemon.childprocess.LogChan
 			name := fmt.Sprintf("childprocess %d", child_log.ID)
 			daemon.persist.Log(name, child_log.LogType, child_log.Log)
-			fmt.Printf("%s : %s\n",name,child_log.Log)
+			fmt.Printf("%s : %s\n", name, child_log.Log)
 		}
 	}()
 	go func() {
 		for {
 			out := log.TakeLog()
 			daemon.persist.Log("daemon.exe", "infor", out)
-			fmt.Printf("daemon.exe : %s\n",out)
+			fmt.Printf("daemon.exe : %s\n", out)
 		}
 	}()
 	go func() {
-		for {
-			devices := media.GetDevice()
-			for _, soundcard := range devices.Soundcards {
-				audio, err := pipeline.AudioPipeline(soundcard)
-				if err != nil {
-					continue
-				}
-
-				soundcard.Pipeline = audio
-			}
-			for _, monitor := range devices.Monitors {
-				video, err := pipeline.VideoPipeline(monitor)
-				if err != nil {
-					continue
-				}
-
-				monitor.Pipeline = video
-			}
-			for _, mic := range devices.Microphones {
-				video, err := pipeline.MicPipeline(mic)
-				if err != nil {
-					continue
-				}
-
-				mic.Pipeline = video
-			}
-
-			reset := true
-			for _, m := range devices.Monitors {
-				if m.Pipeline != nil {
-					reset = false
-				}
-			}
-
-			if reset {
-				media.ResetVirtualDisplay()
-				continue
-			}
-
-			daemon.persist.Media(devices)
-			time.Sleep(30 * time.Second)
+		infor, err := system.GetInfor()
+		if err != nil {
+			log.PushLog("error get sysinfor : %s", err.Error())
+			return
 		}
+
+		daemon.persist.Infor(infor)
 	}()
+
 	go func() {
 		for {
-			infor, err := system.GetInfor()
-			if err != nil {
-				log.PushLog("error get sysinfor : %s", err.Error())
-				continue
+			partitions, err := system.GetPartitions()
+			if err == nil {
+				for _, partition := range partitions {
+					handlePartition(partition)
+				}
 			}
 
-
-			for _,partition := range infor.Partitions {
-				handlePartition(partition)
-			}
-
-			daemon.persist.Infor(infor)
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}()
 
@@ -133,7 +94,6 @@ func NewDaemon(persistent persistent.Persistent,
 	}()
 
 	go daemon.handleHub()
-	go daemon.handleApp()
 	return daemon
 }
 
@@ -148,254 +108,117 @@ func (daemon *Daemon) TerminateAtTheEnd() {
 	}()
 }
 
-type SessionManifest struct {
-	FailCount int `json:"fail_count"`
-
-	HidProcessID childprocess.ProcessID `json:"hid_process_id"`
-	HubProcessID childprocess.ProcessID `json:"hub_process_id"`
-}
-
-func (manifest SessionManifest) Default() *SessionManifest {
-	return &SessionManifest{
-		FailCount:    0,
-		HidProcessID: childprocess.NullProcID,
-		HubProcessID: childprocess.NullProcID,
+func Default() *packet.Manifest {
+	return &packet.Manifest{
+		ProcessId: childprocess.NullProcID,
 	}
 }
 
-type AppManifest struct {
-	FailCount int `json:"fail_count"`
-	ProcessID childprocess.ProcessID `json:"process_id"`
-}
-
-func (manifest AppManifest) Default() *AppManifest {
-	return &AppManifest{
-		ProcessID: childprocess.NullProcID,
-	}
-}
-func (daemon *Daemon) sync(ss *packet.WorkerSessions) (ret *packet.WorkerSessions) {
+func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
-	ret = &packet.WorkerSessions{
-		Sessions: []*packet.WorkerSession{},
-		Apps: []*packet.AppSession{},
+	kill := func() {
+		manifest := daemon.session.Manifest
+		if !childprocess.ProcessID(manifest.ProcessId).Valid() { return }
+		daemon.childprocess.CloseID(childprocess.ProcessID(manifest.ProcessId))
 	}
 
-	func(){
-		reset := func() {
-			current := &daemon.sessions[0]
-			session := &SessionManifest{}
-			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-				session = SessionManifest{}.Default()
-			}
-			defer func() {
-				bytes, _ := json.Marshal(session)
-				current.Manifest = string(bytes)
-			}()
-
-			if session.HubProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
-			}
+	if ss.App != nil && daemon.app == nil {
+		daemon.app = ss.App
+		log.PushLog("start running backup on folder %s",ss.App.BackupFolder)
+		if ss.App.BackupFolder != "none" {
+			backup.StartBackup(ss.App.BackupFolder, "D:/thinkmay_backup.zip")
 		}
-		kill := func() {
-			current := &daemon.sessions[0]
-			session := &SessionManifest{}
-			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-				session = SessionManifest{}.Default()
-			}
-			defer func() {
-				bytes, _ := json.Marshal(session)
-				current.Manifest = string(bytes)
-			}()
-
-			if session.HidProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HidProcessID))
-			}
-			if session.HubProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.HubProcessID))
-			}
+		if ss.App.AppPath != "none" {
+			apps.StartApp(ss.App.AppPath, ss.App.AppArgs...)
 		}
+	} else if ss.App == nil && daemon.app != nil {
+		log.PushLog("stop running backup")
+		daemon.app = nil
+		backup.StopBackup()
+	}
 
-		// TODO multiple sessions
-		if len(ss.Sessions) > 1 {
-			log.PushLog("number of session is more than 1, not valid")
-			ret.Sessions = []*packet.WorkerSession{ss.Sessions[0]}
-			return 
-		} else if len(ss.Sessions) == 0 && len(daemon.sessions) > 0 {
+	if ss.Session == nil  {
+		if  daemon.session != nil {
 			kill()
-			daemon.sessions = []packet.WorkerSession{}
-			return 
-		} else if len(ss.Sessions) == 0 && len(daemon.sessions) == 0 {
-			return 
+			daemon.session = nil
 		}
+	} else {
+		if  		daemon.session 			   == nil &&
+					ss.Session.AuthConfig 	   != "" && ss.Session.AuthConfig 	   != "{}" && 
+					ss.Session.SignalingConfig != "" && ss.Session.SignalingConfig != "{}" &&
+					ss.Session.WebrtcConfig    != "" && ss.Session.WebrtcConfig    != "{}" {
 
-		desired_session := ss.Sessions[0]
-		if len(ss.Sessions) == 1 && len(daemon.sessions) == 0 {
-			defaultManifest, _ := json.Marshal(SessionManifest{}.Default())
-			daemon.sessions = []packet.WorkerSession{{
-				Manifest: string(defaultManifest),
-			}}
-		}
+			daemon.session = &packet.WorkerSession{ Manifest: Default(), }
+			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
+			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
+			daemon.session.AuthConfig 			= ss.Session.AuthConfig
+			daemon.session.Id 					= ss.Session.Id
+		} else if   ss.Session.Id 			   != daemon.session.Id &&
+					ss.Session.AuthConfig 	   != "" && ss.Session.AuthConfig 	   != "{}" && 
+					ss.Session.SignalingConfig != "" && ss.Session.SignalingConfig != "{}" &&
+					ss.Session.WebrtcConfig    != "" && ss.Session.WebrtcConfig    != "{}" {
 
-		current_session := &daemon.sessions[0]
-
-		// check if sync-required feature need to resync
-		if desired_session.Id != current_session.Id && desired_session.AuthConfig != "{}" {
-
-			// reset daemon current session state if sync is required
-			current_session.MediaConfig = desired_session.MediaConfig
-			current_session.WebrtcConfig = desired_session.WebrtcConfig
-			current_session.SignalingConfig = desired_session.SignalingConfig
-			current_session.AuthConfig = desired_session.AuthConfig
-			current_session.Id = desired_session.Id
-
-			reset()
-		}
-
-		// reset daemon current session state if sync is required
-		// desired.SessionLog = current.SessionLog
-		desired_session.Manifest = current_session.Manifest
-
-		ret.Sessions = []*packet.WorkerSession{ desired_session }
-	}()
-
-
-
-
-
-
-	func ()  {
-		reset := func() {
-			current := &daemon.apps[0]
-			app := &AppManifest{}
-			if err := json.Unmarshal([]byte(current.Manifest), app); err != nil {
-				app = AppManifest{}.Default()
-			}
-			defer func() {
-				bytes, _ := json.Marshal(app)
-				current.Manifest = string(bytes)
-			}()
-
-			if app.ProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(app.ProcessID))
-			}
-		}
-		kill := func() {
-			current := &daemon.apps[0]
-			session := &AppManifest{}
-			if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-				session = AppManifest{}.Default()
-			}
-			defer func() {
-				bytes, _ := json.Marshal(session)
-				current.Manifest = string(bytes)
-			}()
-
-			if session.ProcessID.Valid() {
-				daemon.childprocess.CloseID(childprocess.ProcessID(session.ProcessID))
-			}
-		}
-
-		if len(ss.Apps) > 1 {
-			log.PushLog("number of appp is more than 1, not valid")
-			ret.Apps = []*packet.AppSession{ss.Apps[0]}
-			return 
-		} else if len(ss.Apps) == 0 && len(daemon.apps) > 0 {
+			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
+			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
+			daemon.session.AuthConfig 			= ss.Session.AuthConfig
+			daemon.session.Id 					= ss.Session.Id
 			kill()
-			daemon.apps = []packet.AppSession{}
-			return
-		} else if len(ss.Apps) == 0 && len(daemon.apps) == 0 {
-			return
 		}
 
-		desired_app := ss.Apps[0]
-		if len(ss.Apps) == 1 && len(daemon.apps) == 0 {
-			defaultManifest, _ := json.Marshal(AppManifest{}.Default())
-			daemon.apps = []packet.AppSession{{
-				Manifest: string(defaultManifest),
-			}}
-		}
+		ss.Session.Manifest = daemon.session.Manifest
+	}
 
-		current_app := &daemon.apps[0]
-		if desired_app.Id != current_app.Id {
-			current_app.Envs =  desired_app.Envs
-			current_app.Args = desired_app.Args
-			current_app.Exe = desired_app.Exe
-			current_app.Folder = desired_app.Folder
-			current_app.Id = desired_app.Id
-
-			reset()
-		}
-	}()
-
-
-
-
-	return ret
+	return ss
 }
 
-
 func (daemon *Daemon) handleHub() {
-	presync :=  func() (path string, 
-						authHash string, 
-						signalingHash string, 
-						webrtcHash string, 
-						audioHash string, 
-						videoHash string, 
-						micHash string, 
-						err error) {
+	presync := func() (authHash string,
+		signalingHash string,
+		webrtcHash string,
+		audioHash string,
+		micHash string,
+		err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.sessions) == 0 {
+		current := daemon.session
+		if current == nil {
+			err = fmt.Errorf("no current session")
+			return
+		} else if current.AuthConfig == "" || 
+				  current.SignalingConfig == "" || 
+				  current.WebrtcConfig == ""{
 			err = fmt.Errorf("no current session")
 			return
 		}
 
-		current := &daemon.sessions[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		path, err = utils.FindProcessPath("", "hub.exe")
-		if err != nil {
-			session.FailCount++
-			return
+		bypass := false
+		if daemon.media == nil {
+			bypass = true
+		} else if daemon.media.Soundcard == nil {
+			bypass = true
+		} else if daemon.media.Soundcard.Pipeline == nil {
+			bypass = true
+		} else if daemon.media.Microphone == nil {
+			bypass = true
+		} else if daemon.media.Microphone.Pipeline == nil {
+			bypass = true
 		}
 
-		authBytes := base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))
-		signalingBytes := base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))
-		webrtcBytes := base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig))
-		signalingHash, webrtcHash, authHash = string(signalingBytes), string(webrtcBytes), string(authBytes)
-
-		// current.SessionLog = append(current.SessionLog, "tested video and audio pipeline")
-		// current.SessionLog = append(current.SessionLog, fmt.Sprintf("inialize hub.exe at path : %s",path))
-		if current.MediaConfig == nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		} else if current.MediaConfig.Soundcard == nil ||
-			current.MediaConfig.Monitor == nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		} else if current.MediaConfig.Soundcard.Pipeline == nil ||
-			current.MediaConfig.Monitor.Pipeline == nil {
-			err = fmt.Errorf("invalid pipeline")
-			return
-		} else if current.MediaConfig.Soundcard.Pipeline.PipelineHash == "" ||
-			current.MediaConfig.Monitor.Pipeline.PipelineHash == "" {
-			err = fmt.Errorf("invalid pipeline")
-			return
+		if bypass {
+			audioHash = ""
+			micHash = ""
+		} else {
+			audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
+			micHash = daemon.media.Microphone.Pipeline.PipelineHash
 		}
 
-		audioHash = current.MediaConfig.Soundcard.Pipeline.PipelineHash
-		videoHash = current.MediaConfig.Monitor.Pipeline.PipelineHash
-		micHash   = current.MediaConfig.Microphone.Pipeline.PipelineHash
+		authHash, signalingHash, webrtcHash =
+			string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
+			string(base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))),
+			string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig)))
 
 		return
 	}
@@ -404,43 +227,41 @@ func (daemon *Daemon) handleHub() {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
 
-		if len(daemon.sessions) == 0 {
+		if daemon.session == nil {
 			return fmt.Errorf("no current session")
 		}
 
-		current := &daemon.sessions[0]
-		session := &SessionManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = SessionManifest{}.Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		if !session.HubProcessID.Valid() {
-			session.FailCount++
-		}
-
-		session.HubProcessID = id
+		daemon.session.Manifest.ProcessId = int64(id)
 		return nil
 	}
+
+
 	for {
 		time.Sleep(time.Millisecond * 500)
-		path, authHash, signaling, webrtc, audioHash, videoHash,micHash, err := presync()
+		authHash, signaling, webrtc, audioHash, micHash, err := presync()
 		if err != nil {
 			continue
 		}
 
-		process := exec.Command(path,
+		hub_path, err := path.FindProcessPath("", "hub.exe")
+		if err != nil {
+			continue
+		}
+
+		cmd := []string{
 			"--auth", authHash,
-			"--audio", audioHash,
-			"--video", videoHash,
-			"--mic", micHash,
 			"--grpc", signaling,
-			"--webrtc", webrtc)
+			"--webrtc", webrtc,
+		}
 
-		id, err := daemon.childprocess.NewChildProcess(process,true)
+		if micHash != "" {
+			cmd = append(cmd, "--mic", micHash)
+		}
+		if audioHash != "" {
+			cmd = append(cmd, "--audio", audioHash)
+		}
+
+		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 		if err != nil {
 			log.PushLog("fail to start hub process: %s", err.Error())
 			continue
@@ -454,73 +275,3 @@ func (daemon *Daemon) handleHub() {
 		}
 	}
 }
-
-func (daemon *Daemon) handleApp() {
-	presync := func() (path string, args []string, envs []string,err error) {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if len(daemon.apps) == 0 {
-			err = fmt.Errorf("no current session")
-			return 
-		}
-
-		current := &daemon.apps[0]
-		path, err = utils.FindProcessPath(current.Folder, current.Exe)
-		if err != nil {
-			return
-		}
-
-		return path,current.Args,current.Envs,nil
-	}
-
-	aftersync := func(id childprocess.ProcessID) error {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if len(daemon.apps) == 0 {
-			return fmt.Errorf("no current session")
-		}
-
-		current := &daemon.apps[0]
-		session := &AppManifest{}
-		if err := json.Unmarshal([]byte(current.Manifest), session); err != nil {
-			session = (&AppManifest{}).Default()
-		}
-		defer func() {
-			bytes, _ := json.Marshal(session)
-			current.Manifest = string(bytes)
-		}()
-
-		if !session.ProcessID.Valid() {
-			session.FailCount++
-		}
-
-		session.ProcessID = id
-		return nil
-	}
-
-	for {
-		time.Sleep(time.Millisecond * 500)
-		path,args,envs,err := presync()
-		if path == "" || err != nil{
-			continue
-		}
-
-		process := exec.Command(path,args...)
-		process.Env = envs
-		id, err := daemon.childprocess.NewChildProcess(process,false)
-		if err != nil {
-			log.PushLog("fail to start app process: %s", err.Error())
-			continue
-		}
-		err = aftersync(id)
-
-		if err != nil {
-			log.PushLog("fail to start app process: %s", err.Error())
-		} else {
-			daemon.childprocess.WaitID(id)
-		}
-	}
-}
-

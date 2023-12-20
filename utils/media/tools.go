@@ -1,13 +1,13 @@
 package media
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
-	"time"
 	"unsafe"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/pipeline"
 )
 
 /*
@@ -38,22 +38,8 @@ typedef struct _Mic {
     int active;
 }Mic;
 
-typedef struct _Monitor {
-    guint64 monitor_handle;
-    int primary;
-
-    char device_name[100];
-    char adapter[100];
-    char monitor_name[100];
-
-    int width, height;
-
-    int active;
-}Monitor;
-
 typedef struct _MediaDevice
 {
-    Monitor monitors[10];
     Soundcard soundcards[10];
     Mic microphones[10];
 }MediaDevice;
@@ -64,43 +50,6 @@ device_foreach(GstDevice* device,
 {
     MediaDevice* source = (MediaDevice*) data;
     gchar* klass = gst_device_get_device_class(device);
-
-    // handle monitor
-    if(!g_strcmp0(klass,"Source/Monitor")) {
-        GstStructure* device_structure = gst_device_get_properties(device);
-        gchar* api = (gchar*)gst_structure_get_string(device_structure,"device.api");
-        if(g_strcmp0(api,"d3d11")) {
-            g_object_unref(device);
-            return;
-        }
-
-        int i = 0;
-        while (source->monitors[i].active) { i++; }
-        Monitor* monitor = &source->monitors[i];
-
-        gchar* name = gst_device_get_display_name(device);
-        memcpy(monitor->monitor_name,name,strlen(name));
-        monitor->active = TRUE;
-
-        gchar* adapter = (gchar*)gst_structure_get_string(device_structure,"device.adapter.description");
-        memcpy(monitor->adapter,adapter,strlen(adapter));
-
-        gchar* device_name = (gchar*)gst_structure_get_string(device_structure,"device.name");
-        memcpy(monitor->device_name,device_name,strlen(device_name));
-
-        int top, left, right, bottom = 0;
-        gst_structure_get_int(device_structure,"display.coordinates.right",&right);
-        gst_structure_get_int(device_structure,"display.coordinates.top",&top);
-        gst_structure_get_int(device_structure,"display.coordinates.left",&left);
-        gst_structure_get_int(device_structure,"display.coordinates.bottom",&bottom);
-
-        monitor->width =  right - left;
-        monitor->height = bottom - top;
-
-
-        gst_structure_get_uint64(device_structure,"device.hmonitor",&monitor->monitor_handle);
-        gst_structure_get_boolean(device_structure,"device.primary",&monitor->primary);
-    }
 
     // handle audio
     if(!g_strcmp0(klass,"Audio/Source")) {
@@ -195,97 +144,99 @@ import "C"
 type DeviceQuery unsafe.Pointer
 
 
-var kill_display = make(chan bool)
-func init() {
-	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
-        return
+
+var (
+    virtual_displays []*os.Process = []*os.Process{}
+)
+
+
+func execute(dir string,name string, args ...string) {
+    cmd := exec.Command(name,args...)
+    cmd.Dir = dir
+    b,err := cmd.Output()
+    if err != nil {
+        fmt.Println(dir + " failed : " + err.Error())
+    } else {
+        fmt.Println(dir + " sucess : " + string(b))
     }
+}
 
-    var proc *os.Process = nil
-    go func() {
-        for {
-            time.Sleep(5 * time.Second)
-            cmd := exec.Command("./virtual_display.exe")
-            err := cmd.Start()
-            if err != nil {
-                log.PushLog("failed to start virtual display %s",err.Error())
-                continue
-            }
+func ActivateVirtualDriver() {
+    fmt.Println("Activating virtual driver")
+    execute("./audio",         "./VBCABLE_Setup_x64.exe","-i","-h")
+    execute("./microphone",    "./VBCABLE_Setup_x64.exe","-i","-h")
+    // execute("./gamepad",       "./nefconc.exe","--install-driver","--inf-path","ViGEmBus.inf")
+    execute("./display",       "./CertMgr.exe","/add","IddSampleDriver.cer","/s","/r","localMachine","root")
+    execute("./display",       "./nefconc.exe","--install-driver","--inf-path","IddSampleDriver.inf")
+}
 
-
-            proc = cmd.Process
-            cmd.Process.Wait()
-            proc = nil
-        }
-    }()
-
-    go func() {
-        for {
-            <-kill_display
-            if proc == nil {
-                continue
-            }
-
-            proc.Kill()
-        }
-    }()
+func DeactivateVirtualDriver() {
+    fmt.Println("Deactivating virtual driver")
+    execute("./display",       "./nefconc.exe","--uninstall-driver","--inf-path","IddSampleDriver.inf")
+    execute("./audio",         "./VBCABLE_Setup_x64.exe","-u","-h")
+    execute("./microphone",    "./VBCABLE_Setup_x64.exe","-u","-h")
+    // execute("./gamepad",       "./nefconc.exe","--uninstall-driver","--inf-path","ViGEmBus.inf")
+    for _, p := range virtual_displays {
+        p.Kill()
+    }
 }
 
 
-func ResetVirtualDisplay() {
-	if os.Getenv("VIRTUAL_DISPLAY") != "TRUE" {
-        return
-    }
+func StartVirtualDisplay() *os.Process {
+    width  := 1920
+    height := 1200
 
-    kill_display<-true
-    time.Sleep(10 * time.Second)
+    cmd := exec.Command("./IddSampleApp.exe")
+    cmd.Dir = "./display"
+    cmd.Env = []string{
+        fmt.Sprintf("DISPLAY_WIDTH=%d",width),
+        fmt.Sprintf("DISPLAY_HEIGHT=%d",height),
+    }
+    cmd.Start()
+    virtual_displays = append(virtual_displays, cmd.Process)
+    return cmd.Process
 }
 
 func GetDevice() *packet.MediaDevice {
-	result := &packet.MediaDevice{
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
+	result := &packet.MediaDevice{ }
 	query := C.query_media_device()
 
     for _,mic := range query.microphones {
         if mic.active == 0 {
             continue
         }
-        result.Microphones = append(result.Microphones, &packet.Microphone{
+        m := &packet.Microphone{
 			Name:       C.GoString(&mic.name[0]),
 			DeviceID:   C.GoString(&mic.device_id[0]),
 			Api:        C.GoString(&mic.api[0]) + "-in",
-        })
+        }
+
+        var err error
+        if m.Pipeline,err = pipeline.MicPipeline(m);err != nil {
+            continue
+        }
+        result.Microphone = m
+        break
     }
 
     for _,sound := range query.soundcards {
         if sound.active == 0 {
             continue
         }
-        result.Soundcards = append(result.Soundcards, &packet.Soundcard{
+        m := &packet.Soundcard{
 			Name:       C.GoString(&sound.name[0]),
 			DeviceID:   C.GoString(&sound.device_id[0]),
 			Api:        C.GoString(&sound.api[0]) + "-out",
-        })
-    }
+        }
 
-    for _,monitor := range query.monitors {
-        if monitor.active == 0 {
+
+        var err error
+        if m.Pipeline,err = pipeline.AudioPipeline(m);err != nil {
             continue
         }
-        result.Monitors = append(result.Monitors, &packet.Monitor{
-			Framerate:     60,
-			MonitorHandle: int32(monitor.monitor_handle),
-			Width:         int32(monitor.width),
-			Height:        int32(monitor.height),
-			MonitorName:   C.GoString(&monitor.monitor_name[0]),
-			Adapter:       C.GoString(&monitor.adapter[0]),
-			DeviceName:    C.GoString(&monitor.device_name[0]),
-			IsPrimary:     monitor.primary == 1,
-        })
+        result.Soundcard = m
+        break
     }
-
 
 	return result
 }
-
