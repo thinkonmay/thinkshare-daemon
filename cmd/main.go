@@ -18,16 +18,13 @@ import (
 
 
 func main() {
-	virtual_display := os.Getenv("VIRTUAL_DISPLAY") == "TRUE"
-	disable_driver  := os.Getenv("DISABLE_DRIVER")  == "TRUE"
-	if !disable_driver {
-		media.ActivateVirtualDriver()
-		defer media.DeactivateVirtualDriver()
+	if len(os.Args) == 2 && os.Args[1] == "driver"{
+		if os.Args[2] == "activate" {
+			media.ActivateVirtualDriver()
+		} else if os.Args[2] == "deactivate" {
+			media.DeactivateVirtualDriver()
+		}
 	} 
-	if virtual_display {
-		proc := media.StartVirtualDisplay()
-		defer proc.Kill()
-	}
 
 	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {
