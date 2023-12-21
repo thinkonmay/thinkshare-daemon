@@ -17,6 +17,7 @@ import (
 	apps "github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/backup"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
@@ -57,6 +58,12 @@ func NewDaemon(persistent persistent.Persistent,
 			out := log.TakeLog()
 			daemon.persist.Log("daemon.exe", "infor", out)
 			fmt.Printf("daemon.exe : %s\n", out)
+		}
+	}()
+	go func() {
+		for {
+			daemon.media = media.GetDevice()
+			time.Sleep(30 * time.Second)
 		}
 	}()
 	go func() {
