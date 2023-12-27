@@ -152,16 +152,18 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 			daemon.session = nil
 		}
 	} else {
-		if  		daemon.session 			   == nil &&
-					ss.Session.AuthConfig 	   != "" && ss.Session.AuthConfig 	   != "{}" && 
-					ss.Session.SignalingConfig != "" && ss.Session.SignalingConfig != "{}" &&
-					ss.Session.WebrtcConfig    != "" && ss.Session.WebrtcConfig    != "{}" {
-
-			daemon.session = &packet.WorkerSession{ Manifest: Default(), }
-			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
-			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
-			daemon.session.AuthConfig 			= ss.Session.AuthConfig
-			daemon.session.Id 					= ss.Session.Id
+		if daemon.session 			   == nil {
+			if ss.Session.AuthConfig 	  != "" && ss.Session.AuthConfig 	   != "{}" && 
+			   ss.Session.SignalingConfig != ""  && ss.Session.SignalingConfig != "{}" &&
+			   ss.Session.WebrtcConfig    != ""  && ss.Session.WebrtcConfig    != "{}" {
+				daemon.session = &packet.WorkerSession{ Manifest: Default(), }
+				daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
+				daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
+				daemon.session.AuthConfig 			= ss.Session.AuthConfig
+				daemon.session.Id 					= ss.Session.Id
+			} else {
+				return ss
+			}
 		} else if   ss.Session.Id 			   != daemon.session.Id &&
 					ss.Session.AuthConfig 	   != "" && ss.Session.AuthConfig 	   != "{}" && 
 					ss.Session.SignalingConfig != "" && ss.Session.SignalingConfig != "{}" &&
