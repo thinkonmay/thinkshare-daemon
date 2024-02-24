@@ -8,10 +8,7 @@ import (
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
-	// grpc "github.com/thinkonmay/thinkshare-daemon/persistent/gRPC"
-	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/websocket"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
@@ -21,8 +18,10 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "driver"{
 		if os.Args[2] == "activate" {
 			media.ActivateVirtualDriver()
+			return
 		} else if os.Args[2] == "deactivate" {
 			media.DeactivateVirtualDriver()
+			return
 		}
 	} 
 
@@ -70,29 +69,7 @@ func main() {
 		return
 	}
 
-	blacklists := []*packet.Partition{}
-	dm := daemon.NewDaemon(grpc, func(p *packet.Partition) {
-		if p.Mountpoint == "C:" {
-			return
-		}
-		for _,s := range blacklists {
-			if s.Mountpoint == p.Mountpoint {
-				return
-			}
-		}
-
-		log.PushLog("registering storage account for drive %s",p.Mountpoint)
-		_,err,abort := credential.ReadOrRegisterStorageAccount(worker_cred,p)
-		if err != nil && abort{
-			log.PushLog("abort register storage %s", err.Error())
-		} else if err != nil && !abort{
-			log.PushLog("register storage %s, retry after 15s", err.Error())
-			return
-		}
-
-		blacklists = append(blacklists, p)
-	})
-
+	dm := daemon.NewDaemon(grpc)
 	dm.TerminateAtTheEnd()
 	<-dm.Shutdown
 }

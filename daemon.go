@@ -14,10 +14,9 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	apps "github.com/thinkonmay/thinkshare-daemon/utils/app"
+	"github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/backup"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
@@ -34,8 +33,7 @@ type Daemon struct {
 	app     *packet.AppSession
 }
 
-func NewDaemon(persistent persistent.Persistent,
-	handlePartition func(*packet.Partition)) *Daemon {
+func NewDaemon(persistent persistent.Persistent) *Daemon {
 	daemon := &Daemon{
 		persist:      persistent,
 		Shutdown:     make(chan bool),
@@ -61,12 +59,6 @@ func NewDaemon(persistent persistent.Persistent,
 		}
 	}()
 	go func() {
-		for {
-			daemon.media = media.GetDevice()
-			time.Sleep(30 * time.Second)
-		}
-	}()
-	go func() {
 		infor, err := system.GetInfor()
 		if err != nil {
 			log.PushLog("error get sysinfor : %s", err.Error())
@@ -74,19 +66,6 @@ func NewDaemon(persistent persistent.Persistent,
 		}
 
 		daemon.persist.Infor(infor)
-	}()
-
-	go func() {
-		for {
-			partitions, err := system.GetPartitions()
-			if err == nil {
-				for _, partition := range partitions {
-					handlePartition(partition)
-				}
-			}
-
-			time.Sleep(10 * time.Second)
-		}
 	}()
 
 	go func() {
@@ -138,7 +117,7 @@ func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
 			backup.StartBackup(ss.App.BackupFolder, "D:/thinkmay_backup.zip")
 		}
 		if ss.App.AppPath != "none" {
-			apps.StartApp(ss.App.AppPath, ss.App.AppArgs...)
+			app.StartApp(ss.App.AppPath, ss.App.AppArgs...)
 		}
 	} else if ss.App == nil && daemon.app != nil {
 		log.PushLog("stop running backup")
@@ -186,8 +165,6 @@ func (daemon *Daemon) handleHub() {
 	presync := func() (authHash string,
 		signalingHash string,
 		webrtcHash string,
-		audioHash string,
-		micHash string,
 		err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
@@ -201,27 +178,6 @@ func (daemon *Daemon) handleHub() {
 				  current.WebrtcConfig == ""{
 			err = fmt.Errorf("no current session")
 			return
-		}
-
-		bypass := false
-		if daemon.media == nil {
-			bypass = true
-		} else if daemon.media.Soundcard == nil {
-			bypass = true
-		} else if daemon.media.Soundcard.Pipeline == nil {
-			bypass = true
-		} else if daemon.media.Microphone == nil {
-			bypass = true
-		} else if daemon.media.Microphone.Pipeline == nil {
-			bypass = true
-		}
-
-		if bypass {
-			audioHash = ""
-			micHash = ""
-		} else {
-			audioHash = daemon.media.Soundcard.Pipeline.PipelineHash
-			micHash = daemon.media.Microphone.Pipeline.PipelineHash
 		}
 
 		authHash, signalingHash, webrtcHash =
@@ -247,7 +203,7 @@ func (daemon *Daemon) handleHub() {
 
 	for {
 		time.Sleep(time.Millisecond * 500)
-		authHash, signaling, webrtc, audioHash, micHash, err := presync()
+		authHash, signaling, webrtc, err := presync()
 		if err != nil {
 			continue
 		}
@@ -261,13 +217,6 @@ func (daemon *Daemon) handleHub() {
 			"--auth", authHash,
 			"--grpc", signaling,
 			"--webrtc", webrtc,
-		}
-
-		if micHash != "" {
-			cmd = append(cmd, "--mic", micHash)
-		}
-		if audioHash != "" {
-			cmd = append(cmd, "--audio", audioHash)
 		}
 
 		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
