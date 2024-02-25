@@ -1,16 +1,60 @@
 package media
 
+/*
+#include <Windows.h>
+typedef int (*FUNC)	();
+
+static FUNC _init_virtual_display;
+static FUNC _deinit_virtual_display;
+static FUNC _add_virtual_display;
+static FUNC _remove_virtual_display;
+
+int
+initlibrary() {
+	void* hModule 	= LoadLibrary(".\\libsunshine.dll");
+	_init_virtual_display 	= (FUNC)	GetProcAddress( hModule,"init_virtual_display");
+	_deinit_virtual_display = (FUNC)	GetProcAddress( hModule,"deinit_virtual_display");
+	_add_virtual_display 	= (FUNC)	GetProcAddress( hModule,"add_virtual_display");
+	_remove_virtual_display	= (FUNC)	GetProcAddress( hModule,"remove_virtual_display");
+
+    if (_init_virtual_display == 0 ||
+        _deinit_virtual_display == 0 ||
+        _add_virtual_display == 0 ||
+        _remove_virtual_display == 0) 
+        return 1;
+
+
+	return 0;
+}
+
+int init_virtual_display() {
+_init_virtual_display();
+}
+int deinit_virtual_display() {
+_deinit_virtual_display();
+}
+int add_virtual_display() {
+_add_virtual_display();
+}
+int remove_virtual_display() {
+_remove_virtual_display();
+}
+
+*/
+import "C"
 import (
 	"fmt"
 	"os"
 	"os/exec"
-	"unsafe"
-
 )
 
-type DeviceQuery unsafe.Pointer
 
 
+func init() {
+    if C.initlibrary() == 1 {
+		panic(fmt.Errorf("failed to load libdisplay.dll"))
+	}
+}
 
 var (
     virtual_displays []*os.Process = []*os.Process{}
@@ -31,35 +75,18 @@ func execute(dir string,name string, args ...string) {
 func ActivateVirtualDriver() {
     fmt.Println("Activating virtual driver")
     execute("./audio",         "./VBCABLE_Setup_x64.exe","-i","-h")
-    execute("./microphone",    "./VBCABLE_Setup_x64.exe","-i","-h")
-    // execute("./gamepad",       "./nefconc.exe","--install-driver","--inf-path","ViGEmBus.inf")
-    execute("./display",       "./CertMgr.exe","/add","IddSampleDriver.cer","/s","/r","localMachine","root")
-    execute("./display",       "./nefconc.exe","--install-driver","--inf-path","IddSampleDriver.inf")
+    execute("./display",       "./powershell.exe",".\\instruction.ps1")
+    C.init_virtual_display()
 }
 
 func DeactivateVirtualDriver() {
-    fmt.Println("Deactivating virtual driver")
-    execute("./display",       "./nefconc.exe","--uninstall-driver","--inf-path","IddSampleDriver.inf")
-    execute("./audio",         "./VBCABLE_Setup_x64.exe","-u","-h")
-    execute("./microphone",    "./VBCABLE_Setup_x64.exe","-u","-h")
-    // execute("./gamepad",       "./nefconc.exe","--uninstall-driver","--inf-path","ViGEmBus.inf")
-    for _, p := range virtual_displays {
-        p.Kill()
-    }
+    C.deinit_virtual_display()
 }
 
+func StartVirtualDisplay() {
+    C.add_virtual_display()
+}
 
-func StartVirtualDisplay() *os.Process {
-    width  := 1920
-    height := 1200
-
-    cmd := exec.Command("./IddSampleApp.exe")
-    cmd.Dir = "./display"
-    cmd.Env = []string{
-        fmt.Sprintf("DISPLAY_WIDTH=%d",width),
-        fmt.Sprintf("DISPLAY_HEIGHT=%d",height),
-    }
-    cmd.Start()
-    virtual_displays = append(virtual_displays, cmd.Process)
-    return cmd.Process
+func RemoveVirtualDisplay() {
+    C.remove_virtual_display()
 }

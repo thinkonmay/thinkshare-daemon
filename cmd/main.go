@@ -15,15 +15,8 @@ import (
 
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "driver"{
-		if os.Args[2] == "activate" {
-			media.ActivateVirtualDriver()
-			return
-		} else if os.Args[2] == "deactivate" {
-			media.DeactivateVirtualDriver()
-			return
-		}
-	} 
+	media.ActivateVirtualDriver()
+	defer media.DeactivateVirtualDriver()
 
 	proxy_cred, err := credential.InputProxyAccount()
 	if err != nil {
