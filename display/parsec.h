@@ -343,6 +343,67 @@ static void VddRemoveDisplay(HANDLE vdd, int index)
     VddUpdate(vdd);
 }
 
+
+void SetResolution(std::string display_name,
+			  		int Width,
+			  		int Height,
+			  		int refreshRate) {
+
+
+	HRESULT result = 1;
+	int deviceIndex = 0;
+	do
+	{
+		DISPLAY_DEVICEA dpd = {0};
+		PDISPLAY_DEVICEA displayDevice = &dpd;
+		displayDevice->cb = sizeof(DISPLAY_DEVICE);
+
+		result = EnumDisplayDevicesA(NULL, 
+			deviceIndex++, displayDevice, 0);
+		if ((displayDevice->StateFlags & DISPLAY_DEVICE_ACTIVE) || 
+			 std::string(displayDevice->DeviceName) != display_name) {
+
+			DISPLAY_DEVICEA monitor = {0};
+			monitor.cb = sizeof(DISPLAY_DEVICEA);
+			EnumDisplayDevicesA(displayDevice->DeviceName, 
+				0, &monitor, 0);
+			
+			DEVMODEA dm = {};
+			if (!EnumDisplaySettingsA(displayDevice->DeviceName, ENUM_CURRENT_SETTINGS, &dm) ) 
+				continue;
+
+			dm.dmPelsWidth  = Width;
+			dm.dmPelsHeight = Height;
+			dm.dmDisplayFrequency = refreshRate;
+			printf("changing resolution of display %ls to %dx%d \n",displayDevice->DeviceString,Width,Height);
+			ChangeDisplaySettingsExA(displayDevice->DeviceName, &dm,  \
+									NULL, (CDS_GLOBAL | CDS_UPDATEREGISTRY | CDS_RESET), NULL);
+		}
+	} while (result);
+}
+
+
+std::vector<std::string> Displays() {
+	std::vector<std::string> ret;	
+	HRESULT result = 1;
+	int deviceIndex = 0;
+	do
+	{
+		DISPLAY_DEVICEA dpd = {0};
+		PDISPLAY_DEVICEA displayDevice = &dpd;
+		displayDevice->cb = sizeof(DISPLAY_DEVICE);
+
+		result = EnumDisplayDevicesA(NULL, 
+			deviceIndex++, displayDevice, 0);
+		if ((displayDevice->StateFlags & DISPLAY_DEVICE_ACTIVE)) {
+			ret.push_back(std::string(displayDevice->DeviceName));
+		}
+	} while (result);
+
+
+	return ret;
+}
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <conio.h>
 #include <thread>
+#include <string>
 #include <chrono>
 #include <vector>
 #include "parsec.h"
@@ -43,14 +44,30 @@ int __cdecl init_virtual_display() {
 }
 
 
-int __cdecl add_virtual_display() {
-	if (displays.size() < VDD_MAX_DISPLAYS) {
-		int index = VddAddDisplay(vdd);
-		displays.push_back(index);
-		return 0;
+int __cdecl add_virtual_display(int width, int height) {
+	if (displays.size() >= VDD_MAX_DISPLAYS) {
+		return 1;
 	}
 
-	return 1;
+	auto pre = Displays();
+	int index = VddAddDisplay(vdd);
+	std::this_thread::sleep_for(5s);
+	auto after = Displays();
+
+    for (std::string a : after) {
+		bool n = true;
+		for (std::string p : pre) {
+			if (a == p)
+				n = false;
+		}
+
+		if (n)
+			SetResolution(a,width,height,240);
+    }
+
+	displays.push_back(index);
+	return 0;
+
 }
 
 int __cdecl remove_virtual_display() {
@@ -74,3 +91,5 @@ int __cdecl deinit_virtual_display() {
     CloseDeviceHandle(vdd);
 	return 0;
 }
+
+

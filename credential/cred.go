@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -126,101 +125,6 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-func ReadOrRegisterStorageAccount( worker Account,
-								  partition *packet.Partition,
-								) (storage *Account,
-								   err error,
-								   abort bool,
-								   ) {
-	path := GetStorageCredentialFile(partition.Mountpoint)
-	secret_f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return nil, fmt.Errorf("unable to readfie %s",err.Error()),false
-	}
-
-	var body []byte
-	storage = &Account{}
-	data, _ := io.ReadAll(secret_f)
-	if len(data) == 0 {
-		body,_ = json.Marshal(struct {
-			Hardware *packet.Partition `json:"hardware"`
-			AccessPoint *struct {
-				PublicIP  string `json:"public_ip"`
-				PrivateIP string `json:"private_ip"`
-			} `json:"access_point"`
-		}{
-			Hardware: partition,
-			AccessPoint: Addresses,
-		})
-	} else {
-		err = json.Unmarshal(data, storage)
-		if err != nil {
-			return nil, err,false
-		}
-
-		body,_ = json.Marshal(struct {
-			Storage *Account `json:"storage"`
-		}{
-			Storage: storage,
-		})
-	}
-
-	defer func() {
-		if abort { defer os.Remove(path) } 
-		defer secret_f.Close()
-		if err != nil || abort { return } 
-
-		bytes, _ := json.MarshalIndent(storage, "", "	")
-		secret_f.Truncate(0)
-		secret_f.WriteAt(bytes, 0)
-	}()
-
-
-	req, err := http.NewRequest("POST", 
-		fmt.Sprintf("https://%s/functions/%s/storage_register",PROJECT,API_VERSION), 
-		bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err,false
-	}
-
-	req.Header.Set("username", *worker.Username)
-	req.Header.Set("password", *worker.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err,false
-	}
-
-	data, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err,false
-	} else if resp.StatusCode != 200 {
-		errcode := &struct{
-			Message *string `json:"message"`
-			Code *int `json:"code"`
-		}{
-			Message: nil,
-			Code:nil,
-		}
-
-		err = json.Unmarshal(data, errcode)
-		if err != nil {
-			return nil,err,false
-		} else if (*errcode.Code == NEED_WAIT) {
-			return nil,fmt.Errorf(*errcode.Message),false
-		} else {
-			return nil,fmt.Errorf("%s",*errcode.Message),true
-		}
-	} else {
-		storage = &Account{}
-		err = json.Unmarshal(data, storage)
-		if err != nil {
-			return nil, err,false
-		} else {
-			return storage,nil,false
-		}
-	}
-}
 
 type TurnCred struct {
 	Username string `json:"username"`

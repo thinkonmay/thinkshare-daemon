@@ -15,12 +15,4 @@ func TestSysinf(t *testing.T) {
 	}
 	out,_ := yaml.Marshal(inf)
 	fmt.Printf("%s",string(out))
-
-	status,err := GetStatus()
-	if err != nil {
-		t.Error(err)
-		return 
-	}
-	out,_ = yaml.Marshal(status)
-	fmt.Printf("%s",string(out))
 }

@@ -7,15 +7,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"sync"
-
 	"syscall"
-	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/app"
-	"github.com/thinkonmay/thinkshare-daemon/utils/backup"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
@@ -25,12 +21,10 @@ type Daemon struct {
 	childprocess *childprocess.ChildProcesses
 	Shutdown     chan bool
 	persist      persistent.Persistent
-	media        *packet.MediaDevice
 
 	mutex *sync.Mutex
 
-	session *packet.WorkerSession
-	app     *packet.AppSession
+	session []packet.WorkerSession
 }
 
 func NewDaemon(persistent persistent.Persistent) *Daemon {
@@ -40,8 +34,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		childprocess: childprocess.NewChildProcessSystem(),
 
 		mutex:   &sync.Mutex{},
-		session: nil,
-		app:     nil,
+		session: []packet.WorkerSession{},
 	}
 	go func() {
 		for {
@@ -71,15 +64,12 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	go func() {
 		for {
 			ss := daemon.persist.RecvSession()
-			if ss == nil {
-				break
-			}
-			result := daemon.sync(ss)
-			daemon.persist.SyncSession(result)
+			daemon.handleHub(ss)
+			daemon.session = append(daemon.session, ss)
+			daemon.persist.SyncSession(daemon.session)
 		}
 	}()
 
-	go daemon.handleHub()
 	return daemon
 }
 
@@ -94,91 +84,17 @@ func (daemon *Daemon) TerminateAtTheEnd() {
 	}()
 }
 
-func Default() *packet.Manifest {
-	return &packet.Manifest{
-		ProcessId: childprocess.NullProcID,
-	}
-}
 
-func (daemon *Daemon) sync(ss *packet.WorkerSessions) *packet.WorkerSessions {
-	daemon.mutex.Lock()
-	defer daemon.mutex.Unlock()
 
-	kill := func() {
-		manifest := daemon.session.Manifest
-		if !childprocess.ProcessID(manifest.ProcessId).Valid() { return }
-		daemon.childprocess.CloseID(childprocess.ProcessID(manifest.ProcessId))
-	}
 
-	if ss.App != nil && daemon.app == nil {
-		daemon.app = ss.App
-		log.PushLog("start running backup on folder %s",ss.App.BackupFolder)
-		if ss.App.BackupFolder != "none" {
-			backup.StartBackup(ss.App.BackupFolder, "D:/thinkmay_backup.zip")
-		}
-		if ss.App.AppPath != "none" {
-			app.StartApp(ss.App.AppPath, ss.App.AppArgs...)
-		}
-	} else if ss.App == nil && daemon.app != nil {
-		log.PushLog("stop running backup")
-		daemon.app = nil
-		backup.StopBackup()
-	}
 
-	if ss.Session == nil  {
-		if  daemon.session != nil {
-			kill()
-			daemon.session = nil
-		}
-	} else {
-		if daemon.session 			   == nil {
-			if ss.Session.AuthConfig 	  != "" && ss.Session.AuthConfig 	   != "{}" && 
-			   ss.Session.SignalingConfig != ""  && ss.Session.SignalingConfig != "{}" &&
-			   ss.Session.WebrtcConfig    != ""  && ss.Session.WebrtcConfig    != "{}" {
-				daemon.session = &packet.WorkerSession{ Manifest: Default(), }
-				daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
-				daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
-				daemon.session.AuthConfig 			= ss.Session.AuthConfig
-				daemon.session.Id 					= ss.Session.Id
-			} else {
-				return ss
-			}
-		} else if   ss.Session.Id 			   != daemon.session.Id &&
-					ss.Session.AuthConfig 	   != "" && ss.Session.AuthConfig 	   != "{}" && 
-					ss.Session.SignalingConfig != "" && ss.Session.SignalingConfig != "{}" &&
-					ss.Session.WebrtcConfig    != "" && ss.Session.WebrtcConfig    != "{}" {
-
-			daemon.session.WebrtcConfig 		= ss.Session.WebrtcConfig
-			daemon.session.SignalingConfig 		= ss.Session.SignalingConfig
-			daemon.session.AuthConfig 			= ss.Session.AuthConfig
-			daemon.session.Id 					= ss.Session.Id
-			kill()
-		}
-
-		ss.Session.Manifest = daemon.session.Manifest
-	}
-
-	return ss
-}
-
-func (daemon *Daemon) handleHub() {
-	presync := func() (authHash string,
-		signalingHash string,
-		webrtcHash string,
-		err error) {
+func (daemon *Daemon) handleHub(n packet.WorkerSession) error {
+	presync := func(current packet.WorkerSession) (authHash string,
+													signalingHash string,
+													webrtcHash string,
+													err error) {
 		daemon.mutex.Lock()
 		defer daemon.mutex.Unlock()
-
-		current := daemon.session
-		if current == nil {
-			err = fmt.Errorf("no current session")
-			return
-		} else if current.AuthConfig == "" || 
-				  current.SignalingConfig == "" || 
-				  current.WebrtcConfig == ""{
-			err = fmt.Errorf("no current session")
-			return
-		}
 
 		authHash, signalingHash, webrtcHash =
 			string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
@@ -189,47 +105,30 @@ func (daemon *Daemon) handleHub() {
 	}
 
 	aftersync := func(id childprocess.ProcessID) error {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
-
-		if daemon.session == nil {
-			return fmt.Errorf("no current session")
-		}
-
-		daemon.session.Manifest.ProcessId = int64(id)
 		return nil
 	}
 
 
-	for {
-		time.Sleep(time.Millisecond * 500)
-		authHash, signaling, webrtc, err := presync()
-		if err != nil {
-			continue
-		}
-
-		hub_path, err := path.FindProcessPath("", "hub.exe")
-		if err != nil {
-			continue
-		}
-
-		cmd := []string{
-			"--auth", authHash,
-			"--grpc", signaling,
-			"--webrtc", webrtc,
-		}
-
-		id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
-		if err != nil {
-			log.PushLog("fail to start hub process: %s", err.Error())
-			continue
-		}
-		err = aftersync(id)
-
-		if err != nil {
-			log.PushLog("fail to start hub process: %s", err.Error())
-		} else {
-			daemon.childprocess.WaitID(id)
-		}
+	authHash, signaling, webrtc, err := presync(n)
+	if err != nil {
+		return err
 	}
+
+	hub_path, err := path.FindProcessPath("", "hub.exe")
+	if err != nil {
+		return err
+	}
+
+	cmd := []string{
+		"--auth", authHash,
+		"--grpc", signaling,
+		"--webrtc", webrtc,
+	}
+
+	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	if err != nil {
+		return err
+	}
+
+	return aftersync(id)
 }

@@ -21,10 +21,9 @@ type GRPCclient struct {
 
 	logger     chan *packet.WorkerLog
 	infor      chan *packet.WorkerInfor
-	devices    chan *packet.MediaDevice
 
-	state_out chan *packet.WorkerSessions
-	state_in  chan *packet.WorkerSessions
+	state_out chan *packet.WorkerSession
+	state_in  chan *[]packet.WorkerSession
 
 	done      bool
 }
@@ -43,10 +42,9 @@ func InitGRPCClient(host string,
 
 		logger     : make(chan *packet.WorkerLog,100),
 		infor      : make(chan *packet.WorkerInfor,100),
-		devices    : make(chan *packet.MediaDevice,100),
 
-		state_out : make(chan *packet.WorkerSessions,100),
-		state_in  : make(chan *packet.WorkerSessions,100),
+		state_out : make(chan *packet.WorkerSession,100),
+		state_in  : make(chan *[]packet.WorkerSession,100),
 	}
 
 
@@ -152,7 +150,7 @@ func InitGRPCClient(host string,
 			}()
 			go func() {
 				for {
-					msg := &packet.WorkerSessions{}
+					msg := &packet.WorkerSession{}
 					if conn == nil {
 						done <- true
 						break
@@ -189,12 +187,9 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 func (grpc *GRPCclient) Infor(log *packet.WorkerInfor) {
 	grpc.infor <- log
 }
-func (grpc *GRPCclient) Media(log *packet.MediaDevice) {
-	grpc.devices <- log
+func (grpc *GRPCclient) RecvSession() packet.WorkerSession {
+	return *<-grpc.state_out
 }
-func (grpc *GRPCclient) RecvSession() *packet.WorkerSessions {
-	return <-grpc.state_out
-}
-func (grpc *GRPCclient) SyncSession(log *packet.WorkerSessions) {
-	grpc.state_in <- log
+func (grpc *GRPCclient) SyncSession(log []packet.WorkerSession) {
+	grpc.state_in <-&log
 }
