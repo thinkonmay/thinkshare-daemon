@@ -32,6 +32,7 @@ type ProcessLog struct {
 
 type ChildProcess struct {
 	cmd *exec.Cmd
+	force_closed bool
 }
 type ChildProcesses struct {
 	mutex sync.Mutex
@@ -43,7 +44,7 @@ type ChildProcesses struct {
 
 func NewChildProcessSystem() *ChildProcesses {
 	ret := ChildProcesses{
-		LogChan: make(chan ProcessLog,100),
+		LogChan: make(chan ProcessLog,1024),
 		procs: make(map[ProcessID]*ChildProcess),
 		mutex: sync.Mutex{},
 	}
@@ -69,9 +70,20 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 	log.PushLog("process %s, process id %d booting up", cmd.Args[0], int(id))
 	procs.handleProcess(id,hidewnd)
 	go func ()  {
-		procs.WaitID(id);
-		log.PushLog("process id %d closed",id)
-		procs.CloseID(id)
+		for {
+			procs.WaitID(id);
+			if procs.procs[id].force_closed {
+				log.PushLog("process id %d closed",id)
+				return
+			}
+
+			log.PushLog("process id %d closed, revoking",id)
+			procs.procs[id] = &ChildProcess{
+				cmd:      exec.Command(cmd.Args[0],cmd.Args[1:]...),
+				force_closed: false,
+			}
+			procs.handleProcess(id,hidewnd)
+		}
 	}()
 	return id,nil
 }
@@ -83,39 +95,48 @@ func (procs *ChildProcesses) CloseAll() {
 }
 
 func (procs *ChildProcesses) CloseID(ID ProcessID) error {
-	procs.mutex.Lock()
-	defer procs.mutex.Unlock()
-
-	proc := procs.procs[ID]
-	if proc == nil {
-		return fmt.Errorf("no such ProcessID")
-	} else if proc.cmd == nil{
-		return fmt.Errorf("attempting to kill null process")
-	} else if proc.cmd.Process == nil {
-		return fmt.Errorf("attempting to kill null process")
+	proc,err := procs.filterprocess(ID)
+	if err != nil {
+		return err
 	}
-
 	log.PushLog("force terminate process name %s, process id %d", proc.cmd.Args[0], int(ID))
+	proc.force_closed = true
 	return proc.cmd.Process.Kill()
 }
 
 func (procs *ChildProcesses) WaitID(ID ProcessID) error {
+	proc,err := procs.filterprocess(ID)
+	if err != nil {
+		return err
+	}
+	proc.cmd.Process.Wait()
+	return nil;
+}
+
+func (procs *ChildProcesses) RevokeID(ID ProcessID) error {
+	proc,err := procs.filterprocess(ID)
+	if err != nil {
+		return err
+	}
+	proc.cmd.Process.Wait()
+	return nil;
+}
+
+func (procs *ChildProcesses)filterprocess(ID ProcessID) (*ChildProcess,error) {
 	procs.mutex.Lock()
 	proc := procs.procs[ID]
 	procs.mutex.Unlock()
 
 	if proc == nil {
-		return fmt.Errorf("no such ProcessID")
+		return nil,fmt.Errorf("no such ProcessID")
 	} else if proc.cmd == nil{
-		return fmt.Errorf("attempting to wait null process")
+		return nil,fmt.Errorf("attempting to wait null process")
 	} else if proc.cmd.Process == nil {
-		return fmt.Errorf("attempting to wait null process")
+		return nil,fmt.Errorf("attempting to wait null process")
 	}
 
-	proc.cmd.Process.Wait()
-	return nil;
+	return proc,nil
 }
-
 
 
 
@@ -161,16 +182,13 @@ func (procs *ChildProcesses) copyAndCapture(id ProcessID, logtype string, r io.R
 	for {
 		n, err := r.Read(buf[:])
 		if err != nil {
-			// Read returns io.EOF at the end of file, which is not an error for us
-			if err == io.EOF {
-				err = nil
-			}
 			return
 		}
 
 		if n < 1 {
 			continue
 		}
+
 		lines := strings.Split(string(buf[:n]),"\n")
 		for _,line := range lines {
 			sublines := strings.Split(line,"\r")

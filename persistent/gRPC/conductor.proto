@@ -9,6 +9,9 @@ message WorkerSession{
 	string authConfig 		   	= 3; // do sync
 	string signalingConfig 		= 4; // do sync
 	string webrtcConfig    		= 5; // do sync
+
+	int32 screen_width = 6;
+	int32 screen_height = 7;
 }
 
 message WorkerInfor{ 

@@ -44,13 +44,14 @@ int __cdecl init_virtual_display() {
 }
 
 
-int __cdecl add_virtual_display(int width, int height) {
+int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
 	if (displays.size() >= VDD_MAX_DISPLAYS) {
 		return 1;
 	}
 
 	auto pre = Displays();
 	int index = VddAddDisplay(vdd);
+	displays.push_back(index);
 	std::this_thread::sleep_for(5s);
 	auto after = Displays();
 
@@ -61,11 +62,14 @@ int __cdecl add_virtual_display(int width, int height) {
 				n = false;
 		}
 
-		if (n)
+		if (n) {
 			SetResolution(a,width,height,240);
+            memcpy(byte,a.c_str(),a.size());
+            *size = a.size();
+        } else
+            return 1;
     }
 
-	displays.push_back(index);
 	return 0;
 
 }

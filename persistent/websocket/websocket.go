@@ -3,9 +3,7 @@ package websocket
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,14 +14,16 @@ import (
 
 
 type GRPCclient struct {
+	host, version,anon_key string
 	username string
 	password string
 
 	logger     chan *packet.WorkerLog
 	infor      chan *packet.WorkerInfor
 
-	state_out chan *packet.WorkerSession
-	state_in  chan *[]packet.WorkerSession
+	recv_session 	 chan *packet.WorkerSession
+	failed_sesssion  chan *packet.WorkerSession
+	closed_sesssion  chan int
 
 	done      bool
 }
@@ -35,6 +35,9 @@ func InitGRPCClient(host string,
 					) (ret *GRPCclient, err error) {
 
 	ret = &GRPCclient{
+		host : host,
+		version : version,
+		anon_key : anon_key,
 		done:      false,
 
 		username : *account.Username,
@@ -42,13 +45,49 @@ func InitGRPCClient(host string,
 
 		logger     : make(chan *packet.WorkerLog,100),
 		infor      : make(chan *packet.WorkerInfor,100),
+		failed_sesssion : make(chan *packet.WorkerSession,100),
 
-		state_out : make(chan *packet.WorkerSession,100),
-		state_in  : make(chan *[]packet.WorkerSession,100),
+		recv_session : make(chan *packet.WorkerSession,100),
+		closed_sesssion : make(chan int,100),
 	}
 
+	ret.wrapper("log",func(conn *websocket.Conn) error {
+		return conn.WriteJSON(<-ret.logger)
+	})
+	ret.wrapper("ping",func(conn *websocket.Conn) error {
+		time.Sleep(5 * time.Second)
+		return conn.WriteMessage(websocket.TextMessage,[]byte("ping"))
+	})
+	ret.wrapper("info",func(conn *websocket.Conn) error {
+		return conn.WriteJSON(<-ret.infor)
+	})
+	ret.wrapper("failed",func(conn *websocket.Conn) error {
+		return conn.WriteJSON(<-ret.failed_sesssion)
+	})
+	ret.wrapper("new",func(conn *websocket.Conn) error {
+		msg := &packet.WorkerSession{}
+		if err = conn.ReadJSON(msg); err != nil {
+			return err
+		}
 
-	connect := func(url string) *websocket.Conn{
+		ret.recv_session <- msg
+		return nil
+	})
+	ret.wrapper("closed",func(conn *websocket.Conn) error {
+		msg := &struct{ Id int `json:"id"` }{ Id: 0, }
+		if err = conn.ReadJSON(msg); err != nil {
+			return err
+		}
+
+		ret.closed_sesssion <- msg.Id
+		return nil
+	})
+	return ret, nil
+}
+
+
+func (ret *GRPCclient) wrapper(url string,fun func(conn *websocket.Conn) error ) {
+	connect := func() *websocket.Conn{
 		if ret.done {
 			return nil
 		}
@@ -57,10 +96,10 @@ func InitGRPCClient(host string,
 		dialer := websocket.Dialer{ HandshakeTimeout: 10 * time.Second, }
 		dial_ctx,_ := context.WithTimeout(context.TODO(),10 * time.Second)
 		conn, _, err := dialer.DialContext(dial_ctx,
-			fmt.Sprintf("wss://%s/api/persistent/%s/%s",host,version,url),
+			fmt.Sprintf("wss://%s/api/persistent/%s/%s",ret.host,ret.version,url),
 			http.Header{
-				"username" : []string{*account.Username},
-				"password" : []string{*account.Password},
+				"username" : []string{ret.username},
+				"password" : []string{ret.password},
 			})
 
 
@@ -73,103 +112,28 @@ func InitGRPCClient(host string,
 		return conn
 	}
 
-
 	go func() {
 		for {
 			if ret.done {
 				return
 			} 
 
-			conn := connect("log")
+
+			conn := connect()
 			if conn == nil {
 				continue
 			}
 
 			for {
-				msg := <-ret.logger
-				if ret.done {
-					break
-				}
-
-				if err := conn.WriteJSON(msg); err != nil && err != io.EOF && !strings.Contains(err.Error(), "error while marshaling"){
-					log.PushLog("error sending log to conductor %s", err.Error())
-					ret.logger <- msg
+				err := fun(conn)
+				if err != nil {
+					log.PushLog("error receive channel %s from conductor %s",url, err.Error())
 					break
 				}
 			}
 		}
 	}()
-
-	go func() {
-		for {
-			if ret.done {
-				return
-			} 
-
-			conn := connect("info")
-			if conn == nil {
-				continue
-			}
-
-			for {
-				msg := <-ret.infor
-				if err := conn.WriteJSON(msg); err != nil && err != io.EOF{
-					log.PushLog("error sending hwinfor to conductor %s", err.Error())
-					ret.infor <- msg
-					break
-				}
-			}
-		}
-	}()
-	go func() {
-		for {
-			if ret.done {
-				return
-			} 
-
-			conn := connect("sync")
-			if conn == nil {
-				continue
-			}
-
-			done := make(chan bool, 2)
-			go func() {
-				for {
-					msg :=<- ret.state_in
-					if conn == nil {
-						done <- true
-						break
-					}
-					if err := conn.WriteJSON(msg); err != nil {
-						log.PushLog("error sending session state to conductor %s", err.Error())
-						ret.state_in <- msg
-						done <- true
-						break
-					}
-				}
-			}()
-			go func() {
-				for {
-					msg := &packet.WorkerSession{}
-					if conn == nil {
-						done <- true
-						break
-					}
-					if err = conn.ReadJSON(msg); err != nil {
-						log.PushLog("error receive session state from conductor %s", err.Error())
-						done <- true
-						break
-					}
-					ret.state_out <- msg
-				}
-			}()
-			<-done
-		}
-	}()
-	return ret, nil
 }
-
-
 
 func (client *GRPCclient) Stop() {
 	client.done = true
@@ -187,9 +151,12 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 func (grpc *GRPCclient) Infor(log *packet.WorkerInfor) {
 	grpc.infor <- log
 }
-func (grpc *GRPCclient) RecvSession() packet.WorkerSession {
-	return *<-grpc.state_out
+func (grpc *GRPCclient) RecvSession() *packet.WorkerSession {
+	return <-grpc.recv_session
 }
-func (grpc *GRPCclient) SyncSession(log []packet.WorkerSession) {
-	grpc.state_in <-&log
+func (grpc *GRPCclient) ClosedSession() int {
+	return <-grpc.closed_sesssion
+}
+func (grpc *GRPCclient) FailedSession(log *packet.WorkerSession) {
+	grpc.failed_sesssion<-log
 }

@@ -6,6 +6,7 @@ type Persistent interface {
 	Log(source string, level string, log string)
 	Infor(log *packet.WorkerInfor)
 
-	RecvSession() packet.WorkerSession
-	SyncSession(log []packet.WorkerSession)
+	RecvSession() *packet.WorkerSession
+	ClosedSession() int
+	FailedSession(log *packet.WorkerSession)
 }

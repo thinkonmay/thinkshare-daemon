@@ -13,9 +13,17 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
+
+
+type internalWorkerSession struct {
+	packet.WorkerSession
+
+	childprocess childprocess.ProcessID
+}
 
 type Daemon struct {
 	childprocess *childprocess.ChildProcesses
@@ -24,7 +32,7 @@ type Daemon struct {
 
 	mutex *sync.Mutex
 
-	session []packet.WorkerSession
+	session []internalWorkerSession
 }
 
 func NewDaemon(persistent persistent.Persistent) *Daemon {
@@ -34,7 +42,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		childprocess: childprocess.NewChildProcessSystem(),
 
 		mutex:   &sync.Mutex{},
-		session: []packet.WorkerSession{},
+		session: []internalWorkerSession{},
 	}
 	go func() {
 		for {
@@ -64,9 +72,30 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	go func() {
 		for {
 			ss := daemon.persist.RecvSession()
-			daemon.handleHub(ss)
-			daemon.session = append(daemon.session, ss)
-			daemon.persist.SyncSession(daemon.session)
+			process,err := daemon.handleHub(ss)
+			if err != nil {
+				daemon.persist.FailedSession(ss)
+				continue
+			}
+
+			daemon.session = append(daemon.session, 
+				internalWorkerSession{
+					*ss, process,
+				})
+		}
+	}()
+	go func() {
+		for {
+			ss := daemon.persist.ClosedSession()
+			queue := []internalWorkerSession{}
+			for _,ws := range daemon.session {
+				if int(ws.Id) == ss {
+					daemon.childprocess.CloseID(ws.childprocess)
+				} else {
+					queue = append(queue, ws)
+				}
+			}
+			daemon.session = queue
 		}
 	}()
 
@@ -88,47 +117,32 @@ func (daemon *Daemon) TerminateAtTheEnd() {
 
 
 
-func (daemon *Daemon) handleHub(n packet.WorkerSession) error {
-	presync := func(current packet.WorkerSession) (authHash string,
-													signalingHash string,
-													webrtcHash string,
-													err error) {
-		daemon.mutex.Lock()
-		defer daemon.mutex.Unlock()
+func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.ProcessID,error) {
+	daemon.mutex.Lock()
+	defer daemon.mutex.Unlock()
 
-		authHash, signalingHash, webrtcHash =
-			string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
-			string(base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))),
-			string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig)))
-
-		return
-	}
-
-	aftersync := func(id childprocess.ProcessID) error {
-		return nil
-	}
-
-
-	authHash, signaling, webrtc, err := presync(n)
-	if err != nil {
-		return err
-	}
+	authHash, signalingHash, webrtcHash :=
+		string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
+		string(base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))),
+		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig)))
 
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
-		return err
+		return childprocess.NullProcID,err
 	}
 
+	media.StartVirtualDisplay(int(current.ScreenWidth),int(current.ScreenHeight))
 	cmd := []string{
 		"--auth", authHash,
-		"--grpc", signaling,
-		"--webrtc", webrtc,
+		"--grpc", signalingHash,
+		"--webrtc", webrtcHash,
 	}
+
 
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
-		return err
+		return childprocess.NullProcID,err
 	}
 
-	return aftersync(id)
+	return id,nil
 }
