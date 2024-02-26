@@ -12,7 +12,7 @@ static FUNC2 _add_virtual_display;
 
 int
 initlibrary() {
-	void* hModule 	= LoadLibrary(".\\libsunshine.dll");
+	void* hModule 	= LoadLibrary(".\\libdisplay.dll");
 	_init_virtual_display 	= (FUNC)	GetProcAddress( hModule,"init_virtual_display");
 	_deinit_virtual_display = (FUNC)	GetProcAddress( hModule,"deinit_virtual_display");
 	_remove_virtual_display	= (FUNC)	GetProcAddress( hModule,"remove_virtual_display");

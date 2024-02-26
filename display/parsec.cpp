@@ -55,22 +55,26 @@ int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
 	std::this_thread::sleep_for(5s);
 	auto after = Displays();
 
-    for (std::string a : after) {
+    bool failed = true;
+    for (auto a : after) {
+        if (strcmp(VDD_ADAPTER_NAME, a.DeviceString) != 0)
+            continue;
+
 		bool n = true;
-		for (std::string p : pre) {
-			if (a == p)
+		for (auto p : pre) {
+			if (strcmp(a.DeviceName, p.DeviceName) == 0)
 				n = false;
 		}
 
 		if (n) {
-			SetResolution(a,width,height,240);
-            memcpy(byte,a.c_str(),a.size());
-            *size = a.size();
-        } else
-            return 1;
+			SetResolution(a.DeviceName,width,height,240);
+            memcpy(byte,a.DeviceName,strlen(a.DeviceName));
+            *size = strlen(a.DeviceName);
+            failed = false;
+        } 
     }
 
-	return 0;
+	return failed ? 1 : 0;
 
 }
 
