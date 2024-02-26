@@ -9,5 +9,9 @@ set_target_properties(display PROPERTIES CXX_STANDARD 17)
 target_link_libraries(display setupapi cfgmgr32)
 target_compile_options(display PRIVATE ${SVC_COMPILE_OPTIONS})
 
+set_property(TARGET display APPEND_STRING PROPERTY LINK_FLAGS " -static")
+set_property(TARGET display APPEND_STRING PROPERTY LINK_FLAGS " -static-libgcc")
+set_property(TARGET display APPEND_STRING PROPERTY LINK_FLAGS " -static-libstdc++")
+
 
 add_executable(test ./main.c)
