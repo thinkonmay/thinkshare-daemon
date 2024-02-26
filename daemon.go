@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"sync"
-	"syscall"
 
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
@@ -27,7 +25,7 @@ type internalWorkerSession struct {
 
 type Daemon struct {
 	childprocess *childprocess.ChildProcesses
-	Shutdown     chan bool
+	log 		 *os.File
 	persist      persistent.Persistent
 
 	mutex *sync.Mutex
@@ -38,27 +36,50 @@ type Daemon struct {
 func NewDaemon(persistent persistent.Persistent) *Daemon {
 	daemon := &Daemon{
 		persist:      persistent,
-		Shutdown:     make(chan bool),
 		childprocess: childprocess.NewChildProcessSystem(),
 
 		mutex:   &sync.Mutex{},
 		session: []internalWorkerSession{},
 	}
-	go func() {
-		for {
-			child_log := <-daemon.childprocess.LogChan
-			name := fmt.Sprintf("childprocess %d", child_log.ID)
-			daemon.persist.Log(name, child_log.LogType, child_log.Log)
-			fmt.Printf("%s : %s\n", name, child_log.Log)
-		}
-	}()
-	go func() {
-		for {
-			out := log.TakeLog()
-			daemon.persist.Log("daemon.exe", "infor", out)
-			fmt.Printf("daemon.exe : %s\n", out)
-		}
-	}()
+
+	var err error
+	if daemon.log,err = os.OpenFile("./thinkmay.log",os.O_RDWR|os.O_CREATE, 0755); err == nil {
+		go func() {
+			for {
+				child_log := <-daemon.childprocess.LogChan
+				name := fmt.Sprintf("childprocess %d", child_log.ID)
+				daemon.persist.Log(name, child_log.LogType, child_log.Log)
+				str := fmt.Sprintf("%s : %s", name, child_log.Log)
+				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
+			}
+		}()
+		go func() {
+			for {
+				out := log.TakeLog()
+				daemon.persist.Log("daemon.exe", "infor", out)
+				str := fmt.Sprintf("daemon.exe : %s", out)
+				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
+			}
+		}()
+	} else {
+		go func() {
+			for {
+				child_log := <-daemon.childprocess.LogChan
+				name := fmt.Sprintf("childprocess %d", child_log.ID)
+				daemon.persist.Log(name, child_log.LogType, child_log.Log)
+				fmt.Printf("%s : %s\n", name, child_log.Log)
+			}
+		}()
+		go func() {
+			for {
+				out := log.TakeLog()
+				daemon.persist.Log("daemon.exe", "infor", out)
+				fmt.Printf("daemon.exe : %s\n", out)
+			}
+		}()
+	}
+
+
 	go func() {
 		infor, err := system.GetInfor()
 		if err != nil {
@@ -102,19 +123,13 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	return daemon
 }
 
-func (daemon *Daemon) TerminateAtTheEnd() {
-	go func() {
-		chann := make(chan os.Signal, 10)
-		signal.Notify(chann, syscall.SIGTERM, os.Interrupt)
-		<-chann
 
-		daemon.childprocess.CloseAll()
-		daemon.Shutdown <- true
-	}()
+func (daemon *Daemon) Close() () {
+	daemon.childprocess.CloseAll()
+	if daemon.log != nil {
+		daemon.log.Close()
+	}
 }
-
-
-
 
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.ProcessID,error) {

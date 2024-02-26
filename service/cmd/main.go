@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 )
 
 
-func main() {
+func Start(stop chan bool) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
@@ -62,7 +62,8 @@ func main() {
 		return
 	}
 
+	defer grpc.Stop()
 	dm := daemon.NewDaemon(grpc)
-	dm.TerminateAtTheEnd()
-	<-dm.Shutdown
+	defer dm.Close()
+	<-stop
 }
