@@ -14,21 +14,13 @@ import (
 )
 
 const (
-	SecretDir 				= "./secret"
-	ProxySecretFile 		= "./secret/proxy.json"
-	StorageCred 			= "/.credential.thinkmay.json"
+	SecretDir       = "./secret"
+	ProxySecretFile = "./secret/proxy.json"
 
-	API_VERSION				= "v1"
-	PROJECT 	 			= "supabase.thinkmay.net"
-	ANON_KEY 				= "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
-
-
-	NEED_WAIT               = 8
+	API_VERSION = "v1"
+	PROJECT 	= "supabase.thinkmay.net"
+	ANON_KEY    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
 )
-
-func GetStorageCredentialFile(mountpoint string) string {
-	return fmt.Sprintf("%s%s", mountpoint, StorageCred)
-}
 
 type Account struct {
 	Username *string `json:"username"`
@@ -41,11 +33,11 @@ var Addresses = &struct {
 }{}
 
 func init() {
-	retry := 0 
+	retry := 0
 	for {
-		Addresses.PublicIP  = system.GetPublicIPCurl()
+		Addresses.PublicIP = system.GetPublicIPCurl()
 		Addresses.PrivateIP = system.GetPrivateIP()
-		if  Addresses.PrivateIP != "" && Addresses.PublicIP != "" {
+		if Addresses.PrivateIP != "" && Addresses.PublicIP != "" {
 			break
 		} else if retry == 10 {
 			panic("server is not connected to the internet")
@@ -54,7 +46,6 @@ func init() {
 		retry = retry + 1
 	}
 }
-
 
 func InputProxyAccount() (account Account, err error) {
 	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
@@ -88,15 +79,13 @@ func InputProxyAccount() (account Account, err error) {
 	return account, nil
 }
 
-
-
 func SetupWorkerAccount(proxy Account) (
 	cred Account,
 	err error) {
 
 	b, _ := json.Marshal(Addresses)
 	req, err := http.NewRequest(
-		"POST", 
+		"POST",
 		fmt.Sprintf("https://%s/functions/%s/worker_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(b))
 	if err != nil {
@@ -125,7 +114,6 @@ func SetupWorkerAccount(proxy Account) (
 	return
 }
 
-
 type TurnCred struct {
 	Username string `json:"username"`
 	Password string `json:"credential"`
@@ -141,7 +129,7 @@ type TurnInfo struct {
 	Scope     string `json:"scope"`
 }
 
-func GetFreeUDPPort(min int,max int) (int, error) {
+func GetFreeUDPPort(min int, max int) (int, error) {
 	addr, err := net.ResolveUDPAddr("udp", "localhost:0")
 	if err != nil {
 		return 0, err
@@ -154,36 +142,34 @@ func GetFreeUDPPort(min int,max int) (int, error) {
 	defer l.Close()
 	port := l.LocalAddr().(*net.UDPAddr).Port
 	if port > max {
-		return 0,fmt.Errorf("invalid port %d",port)
+		return 0, fmt.Errorf("invalid port %d", port)
 	} else if port < min {
-		return GetFreeUDPPort(min,max)
+		return GetFreeUDPPort(min, max)
 	}
 	return port, nil
 }
 
-
-
 func SetupTurnAccount(proxy Account,
-					 min int, 
-					 max int) (
-					 cred string,
-					 turn TurnCred,
-					 info TurnInfo,
-					 err error) {
-	port,_ := GetFreeUDPPort(min,max)
+	min int,
+	max int) (
+	cred string,
+	turn TurnCred,
+	info TurnInfo,
+	err error) {
+	port, _ := GetFreeUDPPort(min, max)
 	info = TurnInfo{
-		PublicIP: Addresses.PublicIP,
+		PublicIP:  Addresses.PublicIP,
 		PrivateIP: Addresses.PrivateIP,
-		Port: port,
-		Scope: "ip",
+		Port:      port,
+		Scope:     "ip",
 	}
 
 	b, _ := json.Marshal(info)
-	req, err := http.NewRequest("POST", 
+	req, err := http.NewRequest("POST",
 		fmt.Sprintf("https://%s/functions/%s/turn_register",PROJECT,API_VERSION), 
 		bytes.NewBuffer(b))
 	if err != nil {
-		return 
+		return
 	}
 
 	req.Header.Set("username", *proxy.Username)
@@ -192,19 +178,19 @@ func SetupTurnAccount(proxy Account,
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 
+		return
 	}
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		body_str := string(body)
-        err = fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-        return
+		err = fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
+		return
 	}
 
 	turn_account := TurnResult{}
 	if err = json.Unmarshal(body, &turn_account); err != nil {
-		return 
+		return
 	}
 
 	turn = turn_account.Turn
@@ -213,16 +199,16 @@ func SetupTurnAccount(proxy Account,
 	return
 }
 
-func Ping(uid string)( err error)  {
-	body,_ := json.Marshal( struct {
+func Ping(uid string) (err error) {
+	body, _ := json.Marshal(struct {
 		AccountID string `json:"account_uid"`
 	}{
 		AccountID: uid,
 	})
 
-	req,err := http.NewRequest(
+	req, err := http.NewRequest(
 		"POST",
-		fmt.Sprintf("https://%s/rest/v1/rpc/ping_account",PROJECT),
+		fmt.Sprintf("https://%s/rest/v1/rpc/ping_account", PROJECT),
 		bytes.NewBuffer(body))
 	if err != nil {
 		return err
@@ -230,12 +216,12 @@ func Ping(uid string)( err error)  {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+ANON_KEY)
-	req.Header.Set("apikey",ANON_KEY)
-	resp,err := http.DefaultClient.Do(req)
+	req.Header.Set("apikey", ANON_KEY)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	} else if resp.StatusCode != 200 {
-		data,_ := io.ReadAll(resp.Body)
+		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf(string(data))
 	}
 

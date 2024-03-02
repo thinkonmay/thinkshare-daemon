@@ -21,7 +21,7 @@ initlibrary() {
     if (_init_virtual_display == 0 ||
         _deinit_virtual_display == 0 ||
         _add_virtual_display == 0 ||
-        _remove_virtual_display == 0) 
+        _remove_virtual_display == 0)
         return 1;
 
 
@@ -46,8 +46,10 @@ import "C"
 import (
 	"fmt"
 	"os"
-	"unsafe"
 	"os/exec"
+	"unsafe"
+
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 
@@ -68,9 +70,9 @@ func execute(dir string,name string, args ...string) {
     cmd.Dir = dir
     b,err := cmd.Output()
     if err != nil {
-        fmt.Println(dir + " failed : " + err.Error())
+        log.PushLog(dir + " failed : " + err.Error())
     } else {
-        fmt.Println(dir + " sucess : " + string(b))
+        log.PushLog(dir + " sucess : " + string(b))
     }
 }
 

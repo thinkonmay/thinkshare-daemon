@@ -33,6 +33,7 @@ type ProcessLog struct {
 type ChildProcess struct {
 	cmd *exec.Cmd
 	force_closed bool
+	start time.Time
 }
 type ChildProcesses struct {
 	mutex sync.Mutex
@@ -63,28 +64,43 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 	}
 
 	id := ProcessID(time.Now().UnixMilli())
-	procs.procs[id] = &ChildProcess{
+	proc := &ChildProcess{
 		cmd:      cmd,
+		start: time.Now(),
 	}
 
 	log.PushLog("process %s, process id %d booting up", cmd.Args[0], int(id))
-	procs.handleProcess(id,hidewnd)
+	procs.procs[id] = proc
+	err := procs.handleProcess(id,hidewnd)
+	if err != nil {
+		return InvalidProcID,err
+	}
+
+	restarted := false
 	go func ()  {
 		for {
 			procs.WaitID(id);
+			restarted = true
 			if procs.procs[id].force_closed {
 				log.PushLog("process id %d closed",id)
 				return
 			}
 
 			log.PushLog("process id %d closed, revoking",id)
-			procs.procs[id] = &ChildProcess{
-				cmd:      exec.Command(cmd.Args[0],cmd.Args[1:]...),
-				force_closed: false,
-			}
+			procs.procs[id].cmd = exec.Command(cmd.Args[0],cmd.Args[1:]...)
 			procs.handleProcess(id,hidewnd)
+			time.Sleep(time.Second)
 		}
 	}()
+
+	time.Sleep(10 * time.Second)
+	if restarted {
+		procs.procs[id].force_closed = true
+		return InvalidProcID,fmt.Errorf("process closed before 10s")
+	}
+
+
+	procs.procs[id].force_closed = true
 	return id,nil
 }
 
@@ -153,10 +169,10 @@ func (procs *ChildProcesses)filterprocess(ID ProcessID) (*ChildProcess,error) {
 
 
 
-func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) {
+func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) error {
 	proc := procs.procs[id]
 	if proc == nil {
-		return
+		return fmt.Errorf("no such process")
 	}
 
 
@@ -168,12 +184,12 @@ func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) {
 	proc.cmd.SysProcAttr = &syscall.SysProcAttr{ HideWindow: hidewnd, }
 	err := proc.cmd.Start()
 	if err != nil {
-		log.PushLog("error init process %s", err.Error())
-		return
+		return fmt.Errorf("error init process %s", err.Error())
 	}
 
 	go procs.copyAndCapture(id,"stdout" ,stdoutIn)
 	go procs.copyAndCapture(id,"stderr" ,stderrIn)
+	return nil
 }
 
 

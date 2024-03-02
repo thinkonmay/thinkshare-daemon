@@ -51,6 +51,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 				daemon.persist.Log(name, child_log.LogType, child_log.Log)
 				str := fmt.Sprintf("%s : %s", name, child_log.Log)
 				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
+				fmt.Printf("%s\n",str)
 			}
 		}()
 		go func() {
@@ -59,6 +60,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 				daemon.persist.Log("daemon.exe", "infor", out)
 				str := fmt.Sprintf("daemon.exe : %s", out)
 				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
+				fmt.Printf("%s\n",str)
 			}
 		}()
 	} else {
@@ -93,12 +95,15 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	go func() {
 		for {
 			ss := daemon.persist.RecvSession()
+			log.PushLog("new session")
 			process,err := daemon.handleHub(ss)
 			if err != nil {
+				log.PushLog("session %d failed",ss.Id)
 				daemon.persist.FailedSession(ss)
 				continue
 			}
 
+			log.PushLog("session creation successful")
 			daemon.session = append(daemon.session, 
 				internalWorkerSession{
 					*ss, process,
