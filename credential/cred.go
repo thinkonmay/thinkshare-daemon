@@ -1,15 +1,11 @@
 package credential
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
-	"os"
 	"time"
 
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
@@ -18,7 +14,7 @@ const (
 	ProxySecretFile = "./secret/proxy.json"
 
 	API_VERSION = "v1"
-	PROJECT 	= "supabase.thinkmay.net"
+	PROJECT     = "supabase.thinkmay.net"
 	ANON_KEY    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNjk0MDE5NjAwLAogICJleHAiOiAxODUxODcyNDAwCn0.EpUhNso-BMFvAJLjYbomIddyFfN--u-zCf0Swj9Ac6E"
 )
 
@@ -33,100 +29,16 @@ var Addresses = &struct {
 }{}
 
 func init() {
-	retry := 0
 	for {
 		Addresses.PublicIP = system.GetPublicIPCurl()
 		Addresses.PrivateIP = system.GetPrivateIP()
 		if Addresses.PrivateIP != "" && Addresses.PublicIP != "" {
 			break
-		} else if retry == 10 {
-			panic("server is not connected to the internet")
 		}
+
+		log.PushLog("server is not connected to the internet")
 		time.Sleep(10 * time.Second)
-		retry = retry + 1
 	}
-}
-
-func InputProxyAccount() (account Account, err error) {
-	secret_f, err := os.OpenFile(ProxySecretFile, os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return Account{}, err
-	}
-
-	bytes, _ := io.ReadAll(secret_f)
-	err = json.Unmarshal(bytes, &account)
-	if err == nil {
-		secret_f.Close()
-		return account, nil
-	}
-
-	fmt.Println("paste your proxy credential here (which have been copied to your clipboard)")
-	fmt.Println("- to register proxy account, go to https://thinkmay.net/ , open terminal application and run proxy register")
-	fmt.Printf("credential : ")
-
-	text := "{}"
-	fmt.Scanln(&text)
-	json.Unmarshal([]byte(text), &account)
-
-	defer func() {
-		defer secret_f.Close()
-		bytes, _ := json.MarshalIndent(account, "", "	")
-
-		secret_f.Truncate(0)
-		secret_f.WriteAt(bytes, 0)
-	}()
-
-	return account, nil
-}
-
-func SetupWorkerAccount(proxy Account) (
-	cred Account,
-	err error) {
-
-	b, _ := json.Marshal(Addresses)
-	req, err := http.NewRequest(
-		"POST",
-		fmt.Sprintf("https://%s/functions/%s/worker_register",PROJECT,API_VERSION), 
-		bytes.NewBuffer(b))
-	if err != nil {
-		return Account{}, err
-	}
-
-	req.Header.Set("username", *proxy.Username)
-	req.Header.Set("password", *proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return Account{}, err
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		body_str := string(body)
-		return Account{}, fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-	}
-
-	if err := json.Unmarshal(body, &cred); err != nil {
-		return Account{}, err
-	}
-
-	return
-}
-
-type TurnCred struct {
-	Username string `json:"username"`
-	Password string `json:"credential"`
-}
-type TurnResult struct {
-	AccountID string   `json:"account_id"`
-	Turn      TurnCred `json:"credential"`
-}
-type TurnInfo struct {
-	PublicIP  string `json:"public_ip"`
-	PrivateIP string `json:"private_ip"`
-	Port      int    `json:"turn_port"`
-	Scope     string `json:"scope"`
 }
 
 func GetFreeUDPPort(min int, max int) (int, error) {
@@ -147,83 +59,4 @@ func GetFreeUDPPort(min int, max int) (int, error) {
 		return GetFreeUDPPort(min, max)
 	}
 	return port, nil
-}
-
-func SetupTurnAccount(proxy Account,
-	min int,
-	max int) (
-	cred string,
-	turn TurnCred,
-	info TurnInfo,
-	err error) {
-	port, _ := GetFreeUDPPort(min, max)
-	info = TurnInfo{
-		PublicIP:  Addresses.PublicIP,
-		PrivateIP: Addresses.PrivateIP,
-		Port:      port,
-		Scope:     "ip",
-	}
-
-	b, _ := json.Marshal(info)
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("https://%s/functions/%s/turn_register",PROJECT,API_VERSION), 
-		bytes.NewBuffer(b))
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("username", *proxy.Username)
-	req.Header.Set("password", *proxy.Password)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ANON_KEY))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return
-	}
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		body_str := string(body)
-		err = fmt.Errorf("response code %d: %s", resp.StatusCode, body_str)
-		return
-	}
-
-	turn_account := TurnResult{}
-	if err = json.Unmarshal(body, &turn_account); err != nil {
-		return
-	}
-
-	turn = turn_account.Turn
-	cred = turn_account.AccountID
-
-	return
-}
-
-func Ping(uid string) (err error) {
-	body, _ := json.Marshal(struct {
-		AccountID string `json:"account_uid"`
-	}{
-		AccountID: uid,
-	})
-
-	req, err := http.NewRequest(
-		"POST",
-		fmt.Sprintf("https://%s/rest/v1/rpc/ping_account", PROJECT),
-		bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+ANON_KEY)
-	req.Header.Set("apikey", ANON_KEY)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	} else if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf(string(data))
-	}
-
-	return
 }

@@ -2,8 +2,6 @@ package daemon
 
 import (
 	"encoding/base64"
-	"fmt"
-	"os"
 	"os/exec"
 	"sync"
 
@@ -16,7 +14,6 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
-
 type internalWorkerSession struct {
 	packet.WorkerSession
 
@@ -25,62 +22,26 @@ type internalWorkerSession struct {
 
 type Daemon struct {
 	childprocess *childprocess.ChildProcesses
-	log 		 *os.File
 	persist      persistent.Persistent
 
 	mutex *sync.Mutex
 
 	session []internalWorkerSession
+	log int
 }
 
 func NewDaemon(persistent persistent.Persistent) *Daemon {
 	daemon := &Daemon{
-		persist:      persistent,
-		childprocess: childprocess.NewChildProcessSystem(),
-
 		mutex:   &sync.Mutex{},
 		session: []internalWorkerSession{},
+		persist:      persistent,
+		childprocess: childprocess.NewChildProcessSystem(func(proc,log string) {
+			persistent.Log(proc, "childprocess", log)
+		}),
+		log: log.TakeLog(func(log string) {
+			persistent.Log("daemon.exe", "infor", log)
+		}),
 	}
-
-	var err error
-	if daemon.log,err = os.OpenFile("./thinkmay.log",os.O_RDWR|os.O_CREATE, 0755); err == nil {
-		go func() {
-			for {
-				child_log := <-daemon.childprocess.LogChan
-				name := fmt.Sprintf("childprocess %d", child_log.ID)
-				daemon.persist.Log(name, child_log.LogType, child_log.Log)
-				str := fmt.Sprintf("%s : %s", name, child_log.Log)
-				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
-				fmt.Printf("%s\n",str)
-			}
-		}()
-		go func() {
-			for {
-				out := log.TakeLog()
-				daemon.persist.Log("daemon.exe", "infor", out)
-				str := fmt.Sprintf("daemon.exe : %s", out)
-				daemon.log.Write([]byte(fmt.Sprintf("%s\n",str)))
-				fmt.Printf("%s\n",str)
-			}
-		}()
-	} else {
-		go func() {
-			for {
-				child_log := <-daemon.childprocess.LogChan
-				name := fmt.Sprintf("childprocess %d", child_log.ID)
-				daemon.persist.Log(name, child_log.LogType, child_log.Log)
-				fmt.Printf("%s : %s\n", name, child_log.Log)
-			}
-		}()
-		go func() {
-			for {
-				out := log.TakeLog()
-				daemon.persist.Log("daemon.exe", "infor", out)
-				fmt.Printf("daemon.exe : %s\n", out)
-			}
-		}()
-	}
-
 
 	go func() {
 		infor, err := system.GetInfor()
@@ -96,15 +57,15 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		for {
 			ss := daemon.persist.RecvSession()
 			log.PushLog("new session")
-			process,err := daemon.handleHub(ss)
+			process, err := daemon.handleHub(ss)
 			if err != nil {
-				log.PushLog("session %d failed",ss.Id)
+				log.PushLog("session %d failed", ss.Id)
 				daemon.persist.FailedSession(ss)
 				continue
 			}
 
 			log.PushLog("session creation successful")
-			daemon.session = append(daemon.session, 
+			daemon.session = append(daemon.session,
 				internalWorkerSession{
 					*ss, process,
 				})
@@ -114,7 +75,7 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		for {
 			ss := daemon.persist.ClosedSession()
 			queue := []internalWorkerSession{}
-			for _,ws := range daemon.session {
+			for _, ws := range daemon.session {
 				if int(ws.Id) == ss {
 					daemon.childprocess.CloseID(ws.childprocess)
 				} else {
@@ -128,16 +89,12 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 	return daemon
 }
 
-
-func (daemon *Daemon) Close() () {
+func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
-	if daemon.log != nil {
-		daemon.log.Close()
-	}
+	log.RemoveCallback(daemon.log)
 }
 
-
-func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.ProcessID,error) {
+func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.ProcessID, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
@@ -148,21 +105,20 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.Pro
 
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
-		return childprocess.NullProcID,err
+		return childprocess.NullProcID, err
 	}
 
-	media.StartVirtualDisplay(int(current.ScreenWidth),int(current.ScreenHeight))
+	media.StartVirtualDisplay(int(current.ScreenWidth), int(current.ScreenHeight))
 	cmd := []string{
 		"--auth", authHash,
 		"--grpc", signalingHash,
 		"--webrtc", webrtcHash,
 	}
 
-
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
-		return childprocess.NullProcID,err
+		return childprocess.NullProcID, err
 	}
 
-	return id,nil
+	return id, nil
 }

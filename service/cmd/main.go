@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
-	"strconv"
-	"strings"
+	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
@@ -14,49 +17,79 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
+
+type StartRequest struct {
+	credential.Account
+	Turn *struct{
+		Username string `json:"username"`
+		Password string `json:"password"`
+		MinPort int `json:"min_port"`
+		MaxPort int `json:"max_port"`
+	}
+}
+
+func recv() *StartRequest {
+	wait := make(chan *StartRequest)
+	srv := &http.Server{Addr: ":60000"}
+	defer srv.Shutdown(context.Background())
+    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		b,err := io.ReadAll(r.Body)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		start := StartRequest{}
+		err = json.Unmarshal(b,&start)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+		
+		wait<-&start
+    })
+
+    go func() { for {
+		err := srv.ListenAndServe();
+		if err == http.ErrServerClosed {
+			return
+		} 
+
+		log.PushLog(err.Error())
+		time.Sleep(time.Second)
+	} }()
+
+
+	return <-wait
+}
+
 func Start(stop chan bool) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
-	proxy_cred, err := credential.InputProxyAccount()
-	if err != nil {
-		fmt.Printf("failed to find proxy account: %s", err.Error())
-		return
+	if log_file,err := os.OpenFile("./thinkmay.log",os.O_RDWR|os.O_CREATE, 0755); err == nil {
+		i := log.TakeLog(func(log string) {
+			str := fmt.Sprintf("daemon.exe : %s", log)
+			log_file.Write([]byte(fmt.Sprintf("%s\n",str)))
+			fmt.Println(str)
+		})
+		defer log.RemoveCallback(i)
+		defer log_file.Close()
 	}
-	log.PushLog("proxy account found, continue")
 
-	if ports, found := os.LookupEnv("BUILTIN_TURN"); found {
-		portrange := strings.Split(ports, "-")
-		if len(portrange) != 2 {
-			fmt.Println("invalid port range")
-		}
 
-		min, err := strconv.ParseInt(portrange[0], 10, 32)
-		if err != nil {
-			fmt.Println("invalid port range")
-			min = 60000
-		}
-		max, err := strconv.ParseInt(portrange[1], 10, 32)
-		if err != nil {
-			fmt.Println("invalid port range")
-			max = 65535
-		}
-
-		turn.Open(proxy_cred, int(min), int(max))
+	req := recv()
+	if req.Turn != nil {
+		turn.Open(req.Turn.Username,req.Turn.Password, req.Turn.MaxPort, req.Turn.MinPort)
 		defer turn.Close()
 	}
 
-	worker_cred, err := credential.SetupWorkerAccount(proxy_cred)
-	if err != nil {
-		log.PushLog("failed to setup worker account: %s", err.Error())
-		return
-	}
-
+	log.PushLog("starting worker daemon")
 	grpc, err := websocket.InitGRPCClient(
 		credential.PROJECT,
 		credential.API_VERSION,
 		credential.ANON_KEY,
-		worker_cred)
+		credential.Account{ req.Username,req.Password, })
 	if err != nil {
 		log.PushLog("failed to setup grpc: %s", err.Error())
 		return

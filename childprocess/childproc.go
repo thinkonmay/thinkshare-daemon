@@ -40,20 +40,18 @@ type ChildProcesses struct {
 	procs map[ProcessID]*ChildProcess
 
 
-	LogChan chan ProcessLog
+	logger func (process,log string)  
 }
 
-func NewChildProcessSystem() *ChildProcesses {
+func NewChildProcessSystem(fun func(process,log string)) *ChildProcesses {
 	ret := ChildProcesses{
-		LogChan: make(chan ProcessLog,1024),
+		logger: fun,
 		procs: make(map[ProcessID]*ChildProcess),
 		mutex: sync.Mutex{},
 	}
 
 	return &ret
 }
-
-
 
 func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (ProcessID,error) {
 	procs.mutex.Lock()
@@ -187,38 +185,30 @@ func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) error {
 		return fmt.Errorf("error init process %s", err.Error())
 	}
 
-	go procs.copyAndCapture(id,"stdout" ,stdoutIn)
-	go procs.copyAndCapture(id,"stderr" ,stderrIn)
+	go procs.copyAndCapture(processname,"stdout" ,stdoutIn)
+	go procs.copyAndCapture(processname,"stderr" ,stderrIn)
 	return nil
 }
 
 
-func (procs *ChildProcesses) copyAndCapture(id ProcessID, logtype string, r io.Reader) {
-	buf := make([]byte, 1024)
+func (procs *ChildProcesses) copyAndCapture(process, logtype string, r io.Reader) {
 	for {
-		n, err := r.Read(buf[:])
+		buf, err := io.ReadAll(r)
 		if err != nil {
 			return
 		}
 
-		if n < 1 {
-			continue
-		}
-
-		lines := strings.Split(string(buf[:n]),"\n")
+		sublines := []string{}
+		lines := strings.Split(string(buf),"\n")
 		for _,line := range lines {
-			sublines := strings.Split(line,"\r")
-			for _,subline := range sublines {
-				if len(subline) == 0 {
-					continue
-				}
-
-				procs.LogChan <- ProcessLog{
-					Log: subline,
-					LogType: logtype,
-					ID: id,
-				}
+			sublines = strings.Split(line,"\r")
+		}
+		for _,subline := range sublines {
+			if len(subline) == 0 {
+				continue
 			}
+
+			procs.logger(process,subline)
 		}
 	}
 }

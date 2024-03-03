@@ -2,19 +2,17 @@ package turn
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"strconv"
 	"time"
 
 	"github.com/pion/stun/v2"
 	"github.com/pion/turn/v3"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/credential"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 const (
-	threadNum = 4
 	realm     = "thinkmay.net"
 )
 
@@ -22,42 +20,23 @@ var (
 	s *turn.Server
 )
 
-func Open(proxy_cred credential.Account,
-	min_port int,
-	max_port int) {
-	uid, turn_cred, info, err := credential.SetupTurnAccount(proxy_cred,
+func Open(username,password string,min_port, max_port int) {
+	port, err := credential.GetFreeUDPPort(min_port, max_port)
+	if err != nil {
+		log.PushLog("failed to setup turn account: %s", err.Error())
+		return
+	}
+
+	s, err = SetupTurn(
+		username,password,
+		credential.Addresses.PublicIP,
+		port,
 		min_port,
 		max_port)
 	if err != nil {
 		log.PushLog("failed to setup turn account: %s", err.Error())
 		return
 	}
-
-	s, err = SetupTurn(info.PublicIP,
-		turn_cred.Username,
-		turn_cred.Password,
-		info.Port,
-		min_port,
-		max_port)
-	if err != nil {
-		log.PushLog("failed to setup turn account: %s", err.Error())
-		return
-	}
-
-	if err != nil {
-		log.PushLog("failed to setup turn account: %s", err.Error())
-		return
-	}
-
-	go func() {
-		for {
-			err := credential.Ping(uid)
-			if err != nil {
-				fmt.Println(err.Error())
-			}
-			time.Sleep(10 * time.Second)
-		}
-	}()
 }
 
 func Close() {
@@ -96,9 +75,10 @@ func (s *stunLogger) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 	return
 }
 
-func SetupTurn(publicip string,
+func SetupTurn(
 	username string,
 	password string,
+	publicip string,
 	port int,
 	min int,
 	max int) (*turn.Server, error) {
