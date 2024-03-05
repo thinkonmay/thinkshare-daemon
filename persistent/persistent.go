@@ -9,4 +9,5 @@ type Persistent interface {
 	RecvSession() *packet.WorkerSession
 	ClosedSession() int
 	FailedSession(log *packet.WorkerSession)
+	Stop()
 }

@@ -18,7 +18,7 @@ func (id ProcessID)Valid()bool{
 }
 
 const (
-	InvalidProcID = -1
+	InvalidProcID = ProcessID(-1)
 	NullProcID = -2
 )
 

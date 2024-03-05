@@ -16,7 +16,6 @@ import (
 
 type internalWorkerSession struct {
 	packet.WorkerSession
-
 	childprocess childprocess.ProcessID
 }
 
@@ -27,15 +26,28 @@ type Daemon struct {
 	mutex *sync.Mutex
 
 	session []internalWorkerSession
-	log int
+	log     int
 }
 
-func NewDaemon(persistent persistent.Persistent) *Daemon {
+type DaemonOption struct {
+	Sunshine *struct{
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"sunshine"`
+
+	Thinkmay *struct{
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"thinkmay"`
+}
+
+func WebDaemon(persistent persistent.Persistent,
+				options DaemonOption) *Daemon {
 	daemon := &Daemon{
 		mutex:   &sync.Mutex{},
 		session: []internalWorkerSession{},
-		persist:      persistent,
-		childprocess: childprocess.NewChildProcessSystem(func(proc,log string) {
+		persist: persistent,
+		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			persistent.Log(proc, "childprocess", log)
 		}),
 		log: log.TakeLog(func(log string) {
@@ -57,9 +69,17 @@ func NewDaemon(persistent persistent.Persistent) *Daemon {
 		for {
 			ss := daemon.persist.RecvSession()
 			log.PushLog("new session")
-			process, err := daemon.handleHub(ss)
+			process := childprocess.InvalidProcID
+			var err error
+
+			if ss.Thinkmay != nil {
+				process, err = daemon.handleHub(ss.Thinkmay)
+			}
+			if ss.Sunshine != nil {
+				process, err = daemon.handleSunshine(ss.Sunshine)
+			}
 			if err != nil {
-				log.PushLog("session %d failed", ss.Id)
+				log.PushLog("session failed")
 				daemon.persist.FailedSession(ss)
 				continue
 			}
@@ -94,7 +114,7 @@ func (daemon *Daemon) Close() {
 	log.RemoveCallback(daemon.log)
 }
 
-func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.ProcessID, error) {
+func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) (childprocess.ProcessID, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
@@ -111,8 +131,31 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) (childprocess.Pro
 	media.StartVirtualDisplay(int(current.ScreenWidth), int(current.ScreenHeight))
 	cmd := []string{
 		"--auth", authHash,
-		"--grpc", signalingHash,
+		"--signaling", signalingHash,
 		"--webrtc", webrtcHash,
+	}
+
+	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	if err != nil {
+		return childprocess.NullProcID, err
+	}
+
+	return id, nil
+}
+
+
+func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) (childprocess.ProcessID, error) {
+	daemon.mutex.Lock()
+	defer daemon.mutex.Unlock()
+
+	hub_path, err := path.FindProcessPath("", "sunshine.exe")
+	if err != nil {
+		return childprocess.NullProcID, err
+	}
+
+	cmd := []string{
+		"--username", current.Username,
+		"--password", current.Password,
 	}
 
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)

@@ -27,7 +27,7 @@ type GRPCclient struct {
 	done bool
 }
 
-func InitGRPCClient(host string,
+func InitWebsocketClient(host string,
 	version string,
 	anon_key string,
 	account credential.Account,
@@ -96,14 +96,14 @@ func (ret *GRPCclient) wrapper(url string, fun func(conn *websocket.Conn) error)
 		dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 		dial_ctx, _ := context.WithTimeout(context.TODO(), 10*time.Second)
 		conn, _, err := dialer.DialContext(dial_ctx,
-			fmt.Sprintf("wss://%s/functions/%s/%s",ret.host,ret.version,url),
+			fmt.Sprintf("wss://%s/functions/%s/%s", ret.host, ret.version, url),
 			http.Header{
 				"username": []string{ret.username},
 				"password": []string{ret.password},
 			})
 
 		if err != nil {
-			log.PushLog("failed to dial %s : %s", url , err.Error())
+			log.PushLog("failed to dial %s : %s", url, err.Error())
 			time.Sleep(100 * time.Millisecond)
 			return nil
 		}
@@ -138,7 +138,9 @@ func (client *GRPCclient) Stop() {
 }
 
 func (grpc *GRPCclient) Log(source string, level string, log string) {
-	if len(grpc.logger) >= 8000 { return }
+	if len(grpc.logger) >= 8000 {
+		return
+	}
 	grpc.logger <- &packet.WorkerLog{
 		Timestamp: time.Now().Format(time.RFC3339),
 		Log:       log,
