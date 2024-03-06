@@ -16,7 +16,9 @@ import (
 
 type internalWorkerSession struct {
 	packet.WorkerSession
-	childprocess childprocess.ProcessID
+	childprocess []childprocess.ProcessID
+	
+	display *int
 }
 
 type Daemon struct {
@@ -68,11 +70,15 @@ func WebDaemon(persistent persistent.Persistent,
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		log.PushLog("new session")
-		process := childprocess.InvalidProcID
+		process := []childprocess.ProcessID{}
 		var err error
+		var index *int 
+		i := 0
+
 
 		if ss.Thinkmay != nil {
-			process, err = daemon.handleHub(ss.Thinkmay)
+			process,i, err = daemon.handleHub(ss.Thinkmay)
+			index = &i
 		}
 		if ss.Sunshine != nil {
 			process, err = daemon.handleSunshine(ss.Sunshine)
@@ -85,7 +91,7 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("session creation successful")
 		daemon.session = append(daemon.session,
 			internalWorkerSession{
-				*ss, process,
+				*ss, process,index,
 			})
 
 		return nil
@@ -97,7 +103,10 @@ func WebDaemon(persistent persistent.Persistent,
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
 				if int(ws.Id) == ss {
-					daemon.childprocess.CloseID(ws.childprocess)
+					media.RemoveVirtualDisplay(*ws.display)
+					for _, pi := range ws.childprocess {
+						daemon.childprocess.CloseID(pi)
+					}
 				} else {
 					queue = append(queue, ws)
 				}
@@ -114,43 +123,55 @@ func (daemon *Daemon) Close() {
 	log.RemoveCallback(daemon.log)
 }
 
-func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) (childprocess.ProcessID, error) {
+func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess.ProcessID, int, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
-	authHash, signalingHash, webrtcHash :=
-		string(base64.StdEncoding.EncodeToString([]byte(current.AuthConfig))),
-		string(base64.StdEncoding.EncodeToString([]byte(current.SignalingConfig))),
-		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig)))
+	display,index := media.StartVirtualDisplay(int(current.ScreenWidth), int(current.ScreenHeight))
+	webrtcHash,displayHash :=
+		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig))),
+		string(base64.StdEncoding.EncodeToString([]byte(display)))
 
-	hub_path, err := path.FindProcessPath("", "hub.exe")
+	hub_path, err := path.FindProcessPath("", "video.exe")
 	if err != nil {
-		return childprocess.NullProcID, err
+		return nil,0, err
 	}
 
-	media.StartVirtualDisplay(int(current.ScreenWidth), int(current.ScreenHeight))
 	cmd := []string{
-		"--auth", authHash,
-		"--signaling", signalingHash,
 		"--webrtc", webrtcHash,
+		"--display", displayHash,
 	}
 
-	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	audio, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
-		return childprocess.NullProcID, err
+		return nil,0, err
 	}
 
-	return id, nil
+	hub_path, err = path.FindProcessPath("", "video.exe")
+	if err != nil {
+		return nil,0, err
+	}
+	cmd = []string{
+		"--webrtc", webrtcHash,
+		"--display", displayHash,
+	}
+
+	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	if err != nil {
+		return nil,0, err
+	}
+
+	return []childprocess.ProcessID{audio,video},index, nil
 }
 
 
-func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) (childprocess.ProcessID, error) {
+func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) ([]childprocess.ProcessID, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
 	hub_path, err := path.FindProcessPath("", "sunshine.exe")
 	if err != nil {
-		return childprocess.NullProcID, err
+		return nil, err
 	}
 
 	cmd := []string{
@@ -160,8 +181,8 @@ func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) (childproc
 
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
-		return childprocess.NullProcID, err
+		return nil, err
 	}
 
-	return id, nil
+	return []childprocess.ProcessID{id}, nil
 }

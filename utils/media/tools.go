@@ -4,10 +4,11 @@ package media
 #include <Windows.h>
 typedef int (*FUNC)	();
 typedef int (*FUNC2)	(int width, int height, char* byte, int* size);
+typedef int (*FUNC3)	(int index);
 
 static FUNC _init_virtual_display;
 static FUNC _deinit_virtual_display;
-static FUNC _remove_virtual_display;
+static FUNC3 _remove_virtual_display;
 static FUNC2 _add_virtual_display;
 
 int
@@ -15,7 +16,7 @@ initlibrary() {
 	void* hModule 	= LoadLibrary(".\\libdisplay.dll");
 	_init_virtual_display 	= (FUNC)	GetProcAddress( hModule,"init_virtual_display");
 	_deinit_virtual_display = (FUNC)	GetProcAddress( hModule,"deinit_virtual_display");
-	_remove_virtual_display	= (FUNC)	GetProcAddress( hModule,"remove_virtual_display");
+	_remove_virtual_display	= (FUNC3)	GetProcAddress( hModule,"remove_virtual_display");
 	_add_virtual_display 	= (FUNC2)	GetProcAddress( hModule,"add_virtual_display");
 
     if (_init_virtual_display == 0 ||
@@ -37,8 +38,8 @@ _deinit_virtual_display();
 int add_virtual_display(int width, int height, void* byte, int* size) {
 _add_virtual_display(width,height,byte,size);
 }
-int remove_virtual_display() {
-_remove_virtual_display();
+int remove_virtual_display(int index) {
+_remove_virtual_display(index);
 }
 
 */
@@ -87,15 +88,15 @@ func DeactivateVirtualDriver() {
     C.deinit_virtual_display()
 }
 
-func StartVirtualDisplay(width,height int) string {
+func StartVirtualDisplay(width,height int) (string,int) {
     buff := make([]byte, 1024)
     var size C.int = 0;
-    C.add_virtual_display(C.int(width),C.int(height),
+    display := C.add_virtual_display(C.int(width),C.int(height),
                           unsafe.Pointer(&buff[0]),
                           &size)
-    return string(buff[:size])
+    return string(buff[:size]),int(display)
 }
 
-func RemoveVirtualDisplay() {
-    C.remove_virtual_display()
+func RemoveVirtualDisplay(index int) {
+    C.remove_virtual_display(C.int(index))
 }

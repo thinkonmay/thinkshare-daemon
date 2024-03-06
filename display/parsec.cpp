@@ -12,7 +12,7 @@ using namespace parsec_vdd;
 
 bool running = false;
 HANDLE vdd = NULL;
-std::vector<int> displays;
+auto displays = new std::vector<int>();
 int __cdecl init_virtual_display() {
     // Check driver status.
     DeviceStatus status = QueryDeviceStatus(&VDD_CLASS_GUID, VDD_HARDWARE_ID);
@@ -45,13 +45,13 @@ int __cdecl init_virtual_display() {
 
 
 int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
-	if (displays.size() >= VDD_MAX_DISPLAYS) {
+	if (displays->size() >= VDD_MAX_DISPLAYS) {
 		return 1;
 	}
 
 	auto pre = Displays();
 	int index = VddAddDisplay(vdd);
-	displays.push_back(index);
+	displays->push_back(index);
 	std::this_thread::sleep_for(5s);
 	auto after = Displays();
 
@@ -74,29 +74,32 @@ int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
         } 
     }
 
-	return failed ? 1 : 0;
+	return failed ? index : -1;
 
 }
 
-int __cdecl remove_virtual_display() {
-	if (displays.size() > 0) {
-		int index = displays.back();
-		VddRemoveDisplay(vdd, index);
-		displays.pop_back();
-		return 0;
-	}
+int __cdecl remove_virtual_display(int index) {
+    auto replace = new std::vector<int>();
+    for (size_t i = 0; i < displays->size(); i++) {
+        if (displays->at(i) == index) 
+		    VddRemoveDisplay(vdd, index);
+        else 
+            replace->push_back(displays->at(i));
+    }
+    
 
-	return 1;
+    displays = replace;
 }
 
 int __cdecl deinit_virtual_display() {
     // Remove all before exiting.
-    for (int index : displays) {
+    for (int index : *displays) {
         VddRemoveDisplay(vdd, index);
     }
 
     // Close the device handle.
     CloseDeviceHandle(vdd);
+    running = false;
 	return 0;
 }
 
