@@ -13,6 +13,8 @@ import (
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
+	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
+	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
@@ -88,6 +90,15 @@ func Start(stop chan bool) {
 		return
 	}
 	defer grpc.Stop()
+
+
+
+	srv := &http.Server{Addr: ":60000"}
+	signaling.InitSignallingServer(
+		ws.InitSignallingWs("/handshake/client"),
+		ws.InitSignallingWs("/handshake/server"))
+	go srv.ListenAndServe()
+	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
 	dm := daemon.WebDaemon(grpc, daemon.DaemonOption{})

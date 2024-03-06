@@ -11,7 +11,7 @@ type Tenant interface {
 	Exit()
 }
 
-type OnTenantFunc func(token string, tent Tenant) error
+type OnTenantFunc func(tent Tenant) error
 
 type ProtocolHandler interface {
 	OnTenant(fun OnTenantFunc)

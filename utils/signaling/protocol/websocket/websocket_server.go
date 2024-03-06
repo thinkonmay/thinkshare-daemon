@@ -3,7 +3,6 @@ package ws
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -29,13 +28,8 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 		return
 	}
 
-	params := strings.Split(r.URL.RawQuery, "=")
-	if len(params) == 1 {
-		return
-	}
-
 	tenant := NewWsTenant(c)
-	err = wsserver.fun(params[1], tenant)
+	err = wsserver.fun(tenant)
 	if err != nil {
 		tenant.Exit()
 	}
@@ -48,9 +42,8 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 	}
 }
 
-func InitSignallingWs(port int) *WebSocketServer {
+func InitSignallingWs(path string) *WebSocketServer {
 	wsserver := &WebSocketServer{}
-	http.HandleFunc("/api/handshake", wsserver.HandleWebsocketSignaling)
-	go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), nil)
+	http.HandleFunc(path, wsserver.HandleWebsocketSignaling)
 	return wsserver
 }
