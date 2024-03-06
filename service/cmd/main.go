@@ -10,10 +10,7 @@ import (
 	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
-	"github.com/thinkonmay/thinkshare-daemon/credential"
-	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
-	"github.com/thinkonmay/thinkshare-daemon/persistent/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
@@ -85,25 +82,7 @@ func Start(stop chan bool) {
 		defer turn.Close()
 	}
 
-	grpc, err := func() (p persistent.Persistent, err error) {
-		if req.Thinkmay != nil {
-			p, err = websocket.InitWebsocketClient(
-				credential.PROJECT,
-				credential.API_VERSION,
-				credential.ANON_KEY,
-				credential.Account{&req.Thinkmay.Username, &req.Thinkmay.Password})
-		} else if req.Sunshine != nil {
-			p, err = httpp.InitHttppServer(
-				credential.PROJECT,
-				credential.API_VERSION,
-				credential.ANON_KEY,
-				credential.Account{&req.Sunshine.Username, &req.Thinkmay.Password})
-		} else {
-			err = fmt.Errorf("no available configuration")
-		}
-
-		return
-	}()
+	grpc, err := httpp.InitHttppServer(req.Thinkmay.AccountID)
 	if err != nil {
 		log.PushLog("failed to setup grpc: %s", err.Error())
 		return

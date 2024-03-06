@@ -36,8 +36,7 @@ type DaemonOption struct {
 	} `json:"sunshine"`
 
 	Thinkmay *struct{
-		Username string `json:"username"`
-		Password string `json:"password"`
+		AccountID string `json:"account_id"`
 	} `json:"thinkmay"`
 }
 
@@ -56,41 +55,42 @@ func WebDaemon(persistent persistent.Persistent,
 	}
 
 	go func() {
-		infor, err := system.GetInfor()
-		if err != nil {
-			log.PushLog("error get sysinfor : %s", err.Error())
-			return
-		}
-
-		daemon.persist.Infor(infor)
-	}()
-
-	go func() {
 		for {
-			ss := daemon.persist.RecvSession()
-			log.PushLog("new session")
-			process := childprocess.InvalidProcID
-			var err error
-
-			if ss.Thinkmay != nil {
-				process, err = daemon.handleHub(ss.Thinkmay)
-			}
-			if ss.Sunshine != nil {
-				process, err = daemon.handleSunshine(ss.Sunshine)
-			}
+			infor, err := system.GetInfor()
 			if err != nil {
-				log.PushLog("session failed")
-				daemon.persist.FailedSession(ss)
-				continue
+				log.PushLog("error get sysinfor : %s", err.Error())
+				return
 			}
 
-			log.PushLog("session creation successful")
-			daemon.session = append(daemon.session,
-				internalWorkerSession{
-					*ss, process,
-				})
+			daemon.persist.Infor(infor)
 		}
 	}()
+
+	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
+		log.PushLog("new session")
+		process := childprocess.InvalidProcID
+		var err error
+
+		if ss.Thinkmay != nil {
+			process, err = daemon.handleHub(ss.Thinkmay)
+		}
+		if ss.Sunshine != nil {
+			process, err = daemon.handleSunshine(ss.Sunshine)
+		}
+		if err != nil {
+			log.PushLog("session failed")
+			return err
+		}
+
+		log.PushLog("session creation successful")
+		daemon.session = append(daemon.session,
+			internalWorkerSession{
+				*ss, process,
+			})
+
+		return nil
+	})
+
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
