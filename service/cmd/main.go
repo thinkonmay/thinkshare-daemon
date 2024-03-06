@@ -91,12 +91,11 @@ func Start(stop chan bool) {
 	}
 	defer grpc.Stop()
 
-
-
-	srv := &http.Server{Addr: ":60000"}
 	signaling.InitSignallingServer(
 		ws.InitSignallingWs("/handshake/client"),
 		ws.InitSignallingWs("/handshake/server"))
+
+	srv := &http.Server{Addr: ":60000"}
 	go srv.ListenAndServe()
 	defer srv.Close()
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 type GRPCclient struct {
@@ -73,14 +72,6 @@ func InitHttppServer(account_id string) (ret *GRPCclient, err error) {
 			return []byte("ok"), nil
 		})
 
-	port := 60000
-	srv := &http.Server{Addr: fmt.Sprintf(":%d", port)}
-	go func() {
-		for {
-			log.PushLog("listening on port %d", port)
-			srv.ListenAndServe()
-		}
-	}()
 	return ret, nil
 }
 
