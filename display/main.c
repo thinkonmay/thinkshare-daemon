@@ -3,10 +3,11 @@
 #include <stdio.h>
 typedef int (*FUNC)	();
 typedef int (*FUNC2)	(int width, int height, char* byte, int* size);
+typedef int (*FUNC3)	(int );
 
 static FUNC _init_virtual_display;
 static FUNC _deinit_virtual_display;
-static FUNC _remove_virtual_display;
+static FUNC3 _remove_virtual_display;
 static FUNC2 _add_virtual_display;
 
 int
@@ -14,7 +15,7 @@ initlibrary() {
 	HMODULE hModule 	= LoadLibraryA(".\\libdisplay.dll");
 	_init_virtual_display 	= (FUNC)	GetProcAddress( hModule,"init_virtual_display");
 	_deinit_virtual_display = (FUNC)	GetProcAddress( hModule,"deinit_virtual_display");
-	_remove_virtual_display	= (FUNC)	GetProcAddress( hModule,"remove_virtual_display");
+	_remove_virtual_display	= (FUNC3)	GetProcAddress( hModule,"remove_virtual_display");
 	_add_virtual_display 	= (FUNC2)	GetProcAddress( hModule,"add_virtual_display");
 
     if (_init_virtual_display == 0 ||
@@ -37,7 +38,13 @@ int main() {
 
     char name[1024] = {0};
     int size =0;
-    _add_virtual_display(3840,2160,name,&size);
+    auto id = _add_virtual_display(3840,2160,name,&size);
     printf("%s\n",name);
+    _getch();
+    _remove_virtual_display(id);
+    printf("removed virtual display\n");
+    _getch();
+    _deinit_virtual_display();
+    printf("removed virtual display\n");
     _getch();
 }

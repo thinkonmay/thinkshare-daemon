@@ -4,6 +4,7 @@
 #include <string>
 #include <chrono>
 #include <vector>
+#include <iterator> 
 #include "parsec.h"
 #include "export.h"
 
@@ -12,7 +13,7 @@ using namespace parsec_vdd;
 
 bool running = false;
 HANDLE vdd = NULL;
-auto displays = new std::vector<int>();
+std::vector<int> displays;
 int __cdecl init_virtual_display() {
     // Check driver status.
     DeviceStatus status = QueryDeviceStatus(&VDD_CLASS_GUID, VDD_HARDWARE_ID);
@@ -45,13 +46,13 @@ int __cdecl init_virtual_display() {
 
 
 int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
-	if (displays->size() >= VDD_MAX_DISPLAYS) {
+	if (displays.size() >= VDD_MAX_DISPLAYS) {
 		return 1;
 	}
 
 	auto pre = Displays();
 	int index = VddAddDisplay(vdd);
-	displays->push_back(index);
+	displays.push_back(index);
 	std::this_thread::sleep_for(5s);
 	auto after = Displays();
 
@@ -74,26 +75,30 @@ int __cdecl add_virtual_display(int width, int height, char* byte, int* size) {
         } 
     }
 
-	return failed ? index : -1;
+	return failed ? -1 : index;
 
 }
 
 int __cdecl remove_virtual_display(int index) {
-    auto replace = new std::vector<int>();
-    for (size_t i = 0; i < displays->size(); i++) {
-        if (displays->at(i) == index) 
-		    VddRemoveDisplay(vdd, index);
-        else 
-            replace->push_back(displays->at(i));
-    }
-    
+    std::vector<int> old;
+    for (size_t i = 0; i < displays.size(); i++) 
+        old.push_back(displays.at(i));
 
-    displays = replace;
+
+    displays.clear();
+    for (size_t i = 0; i < old.size(); i++) {
+        if (old.at(i) == index)
+		    VddRemoveDisplay(vdd, index);
+        else
+            displays.push_back(old.at(i));
+    }
+
+    return 1;
 }
 
 int __cdecl deinit_virtual_display() {
     // Remove all before exiting.
-    for (int index : *displays) {
+    for (int index : displays) {
         VddRemoveDisplay(vdd, index);
     }
 
