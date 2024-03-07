@@ -138,16 +138,12 @@ func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess
 		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig))),
 		string(base64.StdEncoding.EncodeToString([]byte(display)))
 
-	hub_path, err := path.FindProcessPath("", "video.exe")
+	hub_path, err := path.FindProcessPath("", "audio.exe")
 	if err != nil {
 		return nil,0, err
 	}
 
-	cmd := []string{
-		"--webrtc", webrtcHash,
-		"--display", displayHash,
-	}
-
+	cmd := []string{ "--webrtc", webrtcHash, }
 	audio, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
 		return nil,0, err

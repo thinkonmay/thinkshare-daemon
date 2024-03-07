@@ -10,6 +10,7 @@ import (
 	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon/credential"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
@@ -25,6 +26,7 @@ type StartRequest struct {
 		Password string `json:"password"`
 		MinPort  int    `json:"min_port"`
 		MaxPort  int    `json:"max_port"`
+		port     int    
 	}
 }
 
@@ -47,6 +49,19 @@ func recv() *StartRequest {
 			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
+		}
+
+		if start.Turn != nil {
+			port, err := credential.GetFreeUDPPort(start.Turn.MinPort, start.Turn.MaxPort)
+			if err != nil {
+				log.PushLog("failed to setup turn account: %s", err.Error())
+				return
+			}
+
+			w.Write([]byte(fmt.Sprintf("{\"turn_port\": %d}",port)))
+			start.Turn.port = port
+		} else {
+			w.Write([]byte("{}"))
 		}
 
 		wait <- &start
@@ -85,7 +100,11 @@ func Start(stop chan bool) {
 	req := recv()
 	log.PushLog("received /initialize signal")
 	if req.Turn != nil {
-		turn.Open(req.Turn.Username, req.Turn.Password, req.Turn.MaxPort, req.Turn.MinPort)
+		turn.Open(req.Turn.Username, 
+				  req.Turn.Password, 
+				  req.Turn.MaxPort, 
+				  req.Turn.MinPort,
+				  req.Turn.port)
 		defer turn.Close()
 	}
 
@@ -98,7 +117,7 @@ func Start(stop chan bool) {
 
 	signaling.InitSignallingServer(
 		ws.InitSignallingWs("/handshake/client",func(r *http.Request) bool {return true}),
-		ws.InitSignallingWs("/handshake/server",func(r *http.Request) bool {return r.Host == "localhost" || r.Host == "127.0.0.1"}),
+		ws.InitSignallingWs("/handshake/server",func(r *http.Request) bool {return true}),
 	)
 
 	srv := &http.Server{Addr: ":60000"}

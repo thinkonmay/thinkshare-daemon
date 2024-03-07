@@ -39,7 +39,6 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 	for {
 		time.Sleep(100 * time.Millisecond)
 		if tenant.IsExited() {
-			w.WriteHeader(200)
 			return
 		}
 	}

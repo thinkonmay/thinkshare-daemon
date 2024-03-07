@@ -20,13 +20,8 @@ var (
 	s *turn.Server
 )
 
-func Open(username,password string,min_port, max_port int) {
-	port, err := credential.GetFreeUDPPort(min_port, max_port)
-	if err != nil {
-		log.PushLog("failed to setup turn account: %s", err.Error())
-		return
-	}
-
+func Open(username,password string,min_port, max_port, port int) {
+	var err error
 	s, err = SetupTurn(
 		username,password,
 		credential.Addresses.PublicIP,

@@ -12,6 +12,10 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
+var (
+	port = 60000
+)
+
 func TestService(t *testing.T) {
 	b, _ := json.Marshal(StartRequest{
 		daemon.DaemonOption{
@@ -22,10 +26,21 @@ func TestService(t *testing.T) {
 			},
 			Sunshine: nil,
 		},
-		nil,
+		&struct {
+			Username string "json:\"username\""
+			Password string "json:\"password\""
+			MinPort  int    "json:\"min_port\""
+			MaxPort  int    "json:\"max_port\""
+			port int
+		}{
+			Username: "abc",
+			Password: "bcd",
+			MinPort:  60000,
+			MaxPort:  65535,
+		},
 	})
 
-	resp, err := http.Post("http://localhost:60000/initialize", "application/json", strings.NewReader(string(b)))
+	resp, err := http.Post("http://192.168.1.11:60000/initialize", "application/json", strings.NewReader(string(b)))
 	if err != nil {
 		t.Error(err)
 		return
@@ -37,11 +52,19 @@ func TestService(t *testing.T) {
 		return
 	}
 
-	fmt.Println(string(b))
+	data := map[string]int{}
+	err = json.Unmarshal(b,&data)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	port = data["turn_port"]
+	fmt.Printf("%d\n",port)
 }
 
 func TestLog(t *testing.T) {
-	resp, err := http.Get("http://localhost:60000/log")
+	resp, err := http.Get("http://192.168.1.11:60000/log")
 	if err != nil {
 		t.Error(err)
 		return
@@ -57,7 +80,7 @@ func TestLog(t *testing.T) {
 }
 
 func TestInfo(t *testing.T) {
-	resp, err := http.Get("http://localhost:60000/info")
+	resp, err := http.Get("http://192.168.1.11:60000/info")
 	if err != nil {
 		t.Error(err)
 		return
@@ -73,17 +96,30 @@ func TestInfo(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	str, _ := json.Marshal(map[string][]map[string]interface{}{
+		"iceServers": 
+		{ 
+			{
+				"urls": fmt.Sprintf("stun:192.168.1.11:%d", port),
+			}, 
+			{
+				"urls": fmt.Sprintf("turn:192.168.1.11:%d", port),
+				"username": "abc",
+				"credential": "bcd",
+			},
+		},
+	})
 	b, _ := json.Marshal(packet.WorkerSession{
 		Id:        0,
 		Timestamp: "now",
 		Sunshine:  nil,
 		Thinkmay: &packet.ThinkmaySession{
 			AuthConfig:   "",
-			WebrtcConfig: "",
+			WebrtcConfig: string(str),
 		},
 	})
 
-	resp, err := http.Post("http://localhost:60000/new", "application/json", strings.NewReader(string(b)))
+	resp, err := http.Post("http://192.168.1.11:60000/new", "application/json", strings.NewReader(string(b)))
 	if err != nil {
 		t.Error(err)
 		return
@@ -105,7 +141,7 @@ func TestClose(t *testing.T) {
 		Id: 0,
 	})
 
-	resp, err := http.Post("http://localhost:60000/closed", "application/json", strings.NewReader(string(b)))
+	resp, err := http.Post("http://192.168.1.11:60000/closed", "application/json", strings.NewReader(string(b)))
 	if err != nil {
 		t.Error(err)
 		return
