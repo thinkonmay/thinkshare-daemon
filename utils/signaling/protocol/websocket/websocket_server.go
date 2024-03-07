@@ -1,7 +1,6 @@
 package ws
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -10,7 +9,8 @@ import (
 )
 
 type WebSocketServer struct {
-	fun protocol.OnTenantFunc
+	fun  protocol.OnTenantFunc
+	auth func(*http.Request) bool
 }
 
 func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
@@ -18,13 +18,15 @@ func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
 }
 
 func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+	upgrader := websocket.Upgrader{}
+	if !wsserver.auth(r) {
+		w.WriteHeader(401)
+		return
 	}
 
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Printf("%s\n", err.Error())
+		w.WriteHeader(503)
 		return
 	}
 
@@ -35,15 +37,19 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 	}
 
 	for {
+		time.Sleep(100 * time.Millisecond)
 		if tenant.IsExited() {
+			w.WriteHeader(200)
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-func InitSignallingWs(path string) *WebSocketServer {
-	wsserver := &WebSocketServer{}
+func InitSignallingWs(path string, auth func(*http.Request) bool) *WebSocketServer {
+	wsserver := &WebSocketServer{
+		fun:  func(tent protocol.Tenant) error { return nil },
+		auth: auth,
+	}
 	http.HandleFunc(path, wsserver.HandleWebsocketSignaling)
 	return wsserver
 }

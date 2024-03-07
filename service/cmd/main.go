@@ -31,8 +31,9 @@ type StartRequest struct {
 func recv() *StartRequest {
 	wait := make(chan *StartRequest)
 	srv := &http.Server{Addr: ":60000"}
+	defer func() { http.DefaultServeMux = http.NewServeMux() }()
 	defer srv.Shutdown(context.Background())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/initialize", func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.Write([]byte(err.Error()))
@@ -92,8 +93,9 @@ func Start(stop chan bool) {
 	defer grpc.Stop()
 
 	signaling.InitSignallingServer(
-		ws.InitSignallingWs("/handshake/client"),
-		ws.InitSignallingWs("/handshake/server"))
+		ws.InitSignallingWs("/handshake/client",func(r *http.Request) bool {return true}),
+		ws.InitSignallingWs("/handshake/server",func(r *http.Request) bool {return r.Host == "localhost" || r.Host == "127.0.0.1"}),
+	)
 
 	srv := &http.Server{Addr: ":60000"}
 	go srv.ListenAndServe()
