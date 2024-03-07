@@ -36,6 +36,7 @@ func recv() *StartRequest {
 	http.HandleFunc("/initialize", func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
+			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
 		}
@@ -43,6 +44,7 @@ func recv() *StartRequest {
 		start := StartRequest{}
 		err = json.Unmarshal(b, &start)
 		if err != nil {
+			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
 		}
@@ -62,11 +64,12 @@ func recv() *StartRequest {
 		}
 	}()
 
+	log.PushLog("waiting for initialization at /initialize")
 	return <-wait
 }
 
 func Start(stop chan bool) {
-	media.ActivateVirtualDriver()
+	go media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
 	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
@@ -80,6 +83,7 @@ func Start(stop chan bool) {
 	}
 
 	req := recv()
+	log.PushLog("received /initialize signal")
 	if req.Turn != nil {
 		turn.Open(req.Turn.Username, req.Turn.Password, req.Turn.MaxPort, req.Turn.MinPort)
 		defer turn.Close()

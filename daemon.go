@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os/exec"
 	"sync"
 
@@ -69,13 +70,12 @@ func WebDaemon(persistent persistent.Persistent,
 	}()
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
-		log.PushLog("new session")
 		process := []childprocess.ProcessID{}
-		var err error
 		var index *int 
 		i := 0
 
 
+		err := fmt.Errorf("no session configured")
 		if ss.Thinkmay != nil {
 			process,i, err = daemon.handleHub(ss.Thinkmay)
 			index = &i
@@ -100,6 +100,7 @@ func WebDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
+			log.PushLog("terminating session %d",ss)
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
 				if int(ws.Id) == ss {
@@ -111,7 +112,12 @@ func WebDaemon(persistent persistent.Persistent,
 					queue = append(queue, ws)
 				}
 			}
-			daemon.session = queue
+
+			if len(daemon.session) == len(queue) {
+				log.PushLog("no session terminated, total session : %d",len(daemon.session))
+			} else {
+				daemon.session = queue
+			}
 		}
 	}()
 

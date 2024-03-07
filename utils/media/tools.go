@@ -55,11 +55,6 @@ import (
 
 
 
-func init() {
-    if C.initlibrary() == 1 {
-		panic(fmt.Errorf("failed to load libdisplay.dll"))
-	}
-}
 
 var (
     virtual_displays []*os.Process = []*os.Process{}
@@ -77,7 +72,16 @@ func execute(dir string,name string, args ...string) {
     }
 }
 
+
+var initialized = false
 func ActivateVirtualDriver() {
+    if !initialized {
+        initialized = true
+        if C.initlibrary() == 1 {
+            panic(fmt.Errorf("failed to load libdisplay.dll"))
+        }
+    }
+
     log.PushLog("Activating virtual driver")
     execute("./audio",         "./VBCABLE_Setup_x64.exe","-i","-h")
     execute("./display",       "powershell.exe",".\\instruction.ps1")

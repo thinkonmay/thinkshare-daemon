@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 type GRPCclient struct {
@@ -76,8 +77,9 @@ func InitHttppServer(account_id string) (ret *GRPCclient, err error) {
 }
 
 func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, error)) {
+	log.PushLog("registering url handler on %s",url)
 	http.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("incoming")
+		log.PushLog("incoming request %s",r.URL.Path)
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(503)
