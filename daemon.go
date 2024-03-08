@@ -50,6 +50,7 @@ func WebDaemon(persistent persistent.Persistent,
 		session: []internalWorkerSession{},
 		persist: persistent,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
+			fmt.Println(proc + " : " + log)
 			persistent.Log(proc, "childprocess", log)
 		}),
 		log: log.TakeLog(func(log string) {
@@ -138,22 +139,11 @@ func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess
 		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig))),
 		string(base64.StdEncoding.EncodeToString([]byte(display)))
 
-	hub_path, err := path.FindProcessPath("", "audio.exe")
+	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
 		return nil,0, err
 	}
-
-	cmd := []string{ "--webrtc", webrtcHash, }
-	audio, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
-	if err != nil {
-		return nil,0, err
-	}
-
-	hub_path, err = path.FindProcessPath("", "video.exe")
-	if err != nil {
-		return nil,0, err
-	}
-	cmd = []string{
+	cmd := []string{
 		"--webrtc", webrtcHash,
 		"--display", displayHash,
 	}
@@ -163,7 +153,7 @@ func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess
 		return nil,0, err
 	}
 
-	return []childprocess.ProcessID{audio,video},index, nil
+	return []childprocess.ProcessID{video},index, nil
 }
 
 

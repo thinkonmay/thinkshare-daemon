@@ -184,23 +184,27 @@ func (procs *ChildProcesses) handleProcess(id ProcessID, hidewnd bool) error {
 
 
 func (procs *ChildProcesses) copyAndCapture(process, logtype string, r io.Reader) {
+	buf := make([]byte, 1024)
 	for {
-		buf, err := io.ReadAll(r)
+		n, err := r.Read(buf[:])
 		if err != nil {
 			return
 		}
 
-		sublines := []string{}
-		lines := strings.Split(string(buf),"\n")
-		for _,line := range lines {
-			sublines = strings.Split(line,"\r")
+		if n < 1 {
+			continue
 		}
-		for _,subline := range sublines {
-			if len(subline) == 0 {
-				continue
-			}
 
-			procs.logger(process,subline)
+		lines := strings.Split(string(buf[:n]),"\n")
+		for _,line := range lines {
+			sublines := strings.Split(line,"\r")
+			for _,subline := range sublines {
+				if len(subline) == 0 {
+					continue
+				}
+
+				procs.logger(process,subline)
+			}
 		}
 	}
 }

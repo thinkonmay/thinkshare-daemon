@@ -14,3 +14,4 @@ task_result.yaml
 .vscode/
 thinkmay.log
 *.dll
+test.exe
