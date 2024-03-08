@@ -1,83 +1,126 @@
 package signaling
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
 type Signalling struct {
-	client_waitLine chan protocol.Tenant
-	server_waitLine chan protocol.Tenant
+	client_waitLine map[string]chan protocol.Tenant
+	server_waitLine map[string]chan protocol.Tenant
 }
 
 func InitSignallingServer(client protocol.ProtocolHandler, server protocol.ProtocolHandler) *Signalling {
 	signaling := Signalling{
-		client_waitLine: make(chan protocol.Tenant, 8),
-		server_waitLine: make(chan protocol.Tenant, 8),
+		client_waitLine: map[string]chan protocol.Tenant{
+			"video": make(chan protocol.Tenant, 8),
+			"audio": make(chan protocol.Tenant, 8),
+		},
+		server_waitLine: map[string]chan protocol.Tenant{
+			"video": make(chan protocol.Tenant, 8),
+			"audio": make(chan protocol.Tenant, 8),
+		},
 	}
 	go func() {
 		for {
 			client := []protocol.Tenant{}
 			server := []protocol.Tenant{}
-			for {
-				if len(signaling.client_waitLine) == 0 {
-					break
-				}
-				wait := <-signaling.client_waitLine
-				if !wait.IsExited() {
-					for {
-						if !wait.Peek() {
-							break
-						}
-						wait.Receive()
+			for _, v := range signaling.server_waitLine {
+				for {
+					if len(v) == 0 {
+						break
 					}
-					client = append(client, wait)
-				}
-			}
-
-			for {
-				if len(signaling.server_waitLine) == 0 {
-					break
-				}
-				wait := <-signaling.server_waitLine
-				if !wait.IsExited() {
-					for {
-						if !wait.Peek() {
-							break
+					wait := <-v
+					if !wait.IsExited() {
+						for {
+							if !wait.Peek() {
+								break
+							}
+							wait.Receive()
 						}
-						wait.Receive()
+						server = append(server, wait)
 					}
-					server = append(server, wait)
+				}
+			}			
+			for _, v := range signaling.client_waitLine {
+				for {
+					if len(v) == 0 {
+						break
+					}
+					wait := <-v
+					if !wait.IsExited() {
+						for {
+							if !wait.Peek() {
+								break
+							}
+							wait.Receive()
+						}
+						client = append(client, wait)
+					}
 				}
 			}
 
 			for _, t := range client {
-				signaling.client_waitLine <- t
+				signaling.client_waitLine[t.Token] <- t
 			}
 			for _, t := range server {
-				signaling.server_waitLine <- t
+				signaling.server_waitLine[t.Token] <- t
 			}
 			time.Sleep(time.Second)
 		}
 	}()
 
 	server.OnTenant(func(tent protocol.Tenant) error {
-		if len(signaling.client_waitLine) == 0 {
-			signaling.server_waitLine <- tent
+		keys := make([]string, 0, len(signaling.server_waitLine))
+		for k := range signaling.server_waitLine {
+			keys = append(keys, k)
+		}
+
+		found := false
+		for _, v := range keys {
+			if v == tent.Token {
+				found = true
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("invalid key %s",tent.Token)
+		}
+
+		if len(signaling.client_waitLine[tent.Token]) == 0 {
+			signaling.server_waitLine[tent.Token] <- tent
 			return nil
 		} else {
-			pair := &Pair{<-signaling.client_waitLine, tent}
+			pair := &Pair{<-signaling.client_waitLine[tent.Token], tent}
 			pair.handlePair()
 		}
 
 		return nil
 	})
 	client.OnTenant(func(tent protocol.Tenant) error {
-		if len(signaling.server_waitLine) == 0 {
-			signaling.client_waitLine <- tent
+		keys := make([]string, 0, len(signaling.client_waitLine))
+		for k := range signaling.client_waitLine {
+			keys = append(keys, k)
+		}
+
+		found := false
+		for _, v := range keys {
+			if v == tent.Token {
+				found = true
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("invalid key %s",tent.Token)
+		}
+		
+
+		if len(signaling.server_waitLine[tent.Token]) == 0 {
+			signaling.client_waitLine[tent.Token] <- tent
 		} else {
-			pair := Pair{<-signaling.server_waitLine, tent}
+			pair := Pair{<-signaling.server_waitLine[tent.Token], tent}
 			pair.handlePair()
 		}
 
@@ -85,4 +128,7 @@ func InitSignallingServer(client protocol.ProtocolHandler, server protocol.Proto
 	})
 
 	return &signaling
+}
+
+func (signaling *Signalling)AddSignalingChannel(token string) {
 }

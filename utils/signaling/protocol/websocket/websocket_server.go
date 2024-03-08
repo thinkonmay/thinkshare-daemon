@@ -5,12 +5,14 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
 type WebSocketServer struct {
 	fun  protocol.OnTenantFunc
 	auth func(*http.Request) bool
+	path string
 }
 
 func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
@@ -18,7 +20,9 @@ func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
 }
 
 func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {return true},
+	}
 	if !wsserver.auth(r) {
 		w.WriteHeader(401)
 		return
@@ -26,12 +30,12 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		w.WriteHeader(503)
+		log.PushLog(err.Error())
 		return
 	}
 
 	tenant := NewWsTenant(c)
-	err = wsserver.fun(tenant)
+	err = wsserver.fun(protocol.Tenant{ tenant,r.URL.Query().Get("token"), })
 	if err != nil {
 		tenant.Exit()
 	}
@@ -46,8 +50,9 @@ func (wsserver *WebSocketServer) HandleWebsocketSignaling(w http.ResponseWriter,
 
 func InitSignallingWs(path string, auth func(*http.Request) bool) *WebSocketServer {
 	wsserver := &WebSocketServer{
-		fun:  func(tent protocol.Tenant) error { return nil },
+		fun:  func(protocol.Tenant) error { return nil },
 		auth: auth,
+		path: path,
 	}
 	http.HandleFunc(path, wsserver.HandleWebsocketSignaling)
 	return wsserver

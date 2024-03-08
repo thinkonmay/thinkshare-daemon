@@ -79,6 +79,8 @@ func InitHttppServer(account_id string) (ret *GRPCclient, err error) {
 func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, error)) {
 	log.PushLog("registering url handler on %s",url)
 	http.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
 		log.PushLog("incoming request %s",r.URL.Path)
 		b, err := io.ReadAll(r.Body)
 		if err != nil {

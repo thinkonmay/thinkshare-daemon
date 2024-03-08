@@ -2,13 +2,19 @@ package protocol
 
 import "github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
 
-type Tenant interface {
+type ITenant interface {
 	Send(*packet.SignalingMessage)
 	Receive() *packet.SignalingMessage
 	Peek() bool
 
 	IsExited() bool
 	Exit()
+}
+
+
+type Tenant struct {
+	ITenant
+	Token string
 }
 
 type OnTenantFunc func(tent Tenant) error

@@ -27,7 +27,7 @@ type StartRequest struct {
 		MinPort  int    `json:"min_port"`
 		MaxPort  int    `json:"max_port"`
 		port     int    
-	}
+	} `json:"turn"`
 }
 
 func recv() *StartRequest {
@@ -36,6 +36,8 @@ func recv() *StartRequest {
 	defer func() { http.DefaultServeMux = http.NewServeMux() }()
 	defer srv.Shutdown(context.Background())
 	http.HandleFunc("/initialize", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(503)

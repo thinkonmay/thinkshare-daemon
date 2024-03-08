@@ -74,11 +74,9 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 		return InvalidProcID,err
 	}
 
-	restarted := false
 	go func ()  {
 		for {
 			procs.WaitID(id);
-			restarted = true
 			if procs.procs[id].force_closed {
 				log.PushLog("process id %d closed",id)
 				return
@@ -90,12 +88,6 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 			time.Sleep(time.Second)
 		}
 	}()
-
-	time.Sleep(10 * time.Second)
-	if restarted {
-		procs.procs[id].force_closed = true
-		return InvalidProcID,fmt.Errorf("process closed before 10s")
-	}
 
 
 	procs.procs[id].force_closed = true
