@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
@@ -15,7 +14,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
-	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
+	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
@@ -26,7 +25,7 @@ type StartRequest struct {
 		Password string `json:"password"`
 		MinPort  int    `json:"min_port"`
 		MaxPort  int    `json:"max_port"`
-		port     int    
+		port     int
 	} `json:"turn"`
 }
 
@@ -60,7 +59,7 @@ func recv() *StartRequest {
 				return
 			}
 
-			w.Write([]byte(fmt.Sprintf("{\"turn_port\": %d}",port)))
+			w.Write([]byte(fmt.Sprintf("{\"turn_port\": %d}", port)))
 			start.Turn.port = port
 		} else {
 			w.Write([]byte("{}"))
@@ -89,24 +88,14 @@ func Start(stop chan bool) {
 	go media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
-	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
-		i := log.TakeLog(func(log string) {
-			str := fmt.Sprintf("daemon.exe : %s", log)
-			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
-			fmt.Println(str)
-		})
-		defer log.RemoveCallback(i)
-		defer log_file.Close()
-	}
-
 	req := recv()
 	log.PushLog("received /initialize signal")
 	if req.Turn != nil {
-		turn.Open(req.Turn.Username, 
-				  req.Turn.Password, 
-				  req.Turn.MaxPort, 
-				  req.Turn.MinPort,
-				  req.Turn.port)
+		turn.Open(req.Turn.Username,
+			req.Turn.Password,
+			req.Turn.MaxPort,
+			req.Turn.MinPort,
+			req.Turn.port)
 		defer turn.Close()
 	}
 
@@ -118,8 +107,8 @@ func Start(stop chan bool) {
 	defer grpc.Stop()
 
 	signaling.InitSignallingServer(
-		ws.InitSignallingWs("/handshake/client",func(r *http.Request) bool {return true}),
-		ws.InitSignallingWs("/handshake/server",func(r *http.Request) bool {return true}),
+		ws.InitSignallingWs("/handshake/client", func(r *http.Request) bool { return true }),
+		ws.InitSignallingWs("/handshake/server", func(r *http.Request) bool { return true }),
 	)
 
 	srv := &http.Server{Addr: ":60000"}

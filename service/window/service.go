@@ -2,16 +2,17 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/judwhite/go-svc"
 	"github.com/thinkonmay/thinkshare-daemon/service/cmd"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	win "golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
-	win "golang.org/x/sys/windows/svc"
 )
 
 
@@ -26,6 +27,16 @@ type program struct {
 }
 
 func main() {
+	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
+		i := log.TakeLog(func(log string) {
+			str := fmt.Sprintf("daemon.exe : %s", log)
+			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
+			fmt.Println(str)
+		})
+		defer log.RemoveCallback(i)
+		defer log_file.Close()
+	}
+
 	prg := &program{
 		exit: make(chan bool,2),
 	}
@@ -51,12 +62,17 @@ func main() {
 				panic(err)
 			}
 			return
+		} else if os.Args[1] == "display" {
+			media.ActivateVirtualDriver()
+			media.StartVirtualDisplay(1920,1080)
+			defer media.DeactivateVirtualDriver()
+			<-make(chan bool)
 		}
 	}
 
 	// Call svc.Run to start your program/service.
 	if err := svc.Run(prg); err != nil {
-		log.Fatal(err)
+		log.PushLog(err.Error())
 	}
 }
 
@@ -79,7 +95,7 @@ func (p *program) Stop() error {
 
 
 	p.exit<-true
-	log.Println("Stopped.")
+	log.PushLog("Stopped.")
 	return nil
 }
 

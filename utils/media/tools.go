@@ -82,13 +82,14 @@ func ActivateVirtualDriver() {
         }
     }
 
-    log.PushLog("Activating virtual driver")
+    log.PushLog("activating virtual driver")
     execute("./audio",         "./VBCABLE_Setup_x64.exe","-i","-h")
     execute("./display",       "powershell.exe",".\\instruction.ps1")
     C.init_virtual_display()
 }
 
 func DeactivateVirtualDriver() {
+    log.PushLog("deactivate virtual driver")
     C.deinit_virtual_display()
 }
 
@@ -98,9 +99,11 @@ func StartVirtualDisplay(width,height int) (string,int) {
     display := C.add_virtual_display(C.int(width),C.int(height),
                           unsafe.Pointer(&buff[0]),
                           &size)
+    log.PushLog("started virtual display %d",display)
     return string(buff[:size]),int(display)
 }
 
 func RemoveVirtualDisplay(index int) {
+    log.PushLog("remove virtual display %d",index)
     C.remove_virtual_display(C.int(index))
 }
