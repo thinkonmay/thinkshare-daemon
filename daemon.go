@@ -40,15 +40,6 @@ type DaemonOption struct {
 		MaxPort  int    `json:"max_port"`
 		Port     int
 	} `json:"turn"`
-
-	Sunshine *struct{
-		Username string `json:"username"`
-		Password string `json:"password"`
-	} `json:"sunshine"`
-
-	Thinkmay *struct{
-		AccountID string `json:"account_id"`
-	} `json:"thinkmay"`
 }
 
 func WebDaemon(persistent persistent.Persistent,

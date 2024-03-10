@@ -12,8 +12,6 @@ import (
 )
 
 type GRPCclient struct {
-	account_id string
-
 	logger []*packet.WorkerLog
 	infor  chan *packet.WorkerInfor
 
@@ -24,10 +22,9 @@ type GRPCclient struct {
 	done bool
 }
 
-func InitHttppServer(account_id string) (ret *GRPCclient, err error) {
+func InitHttppServer() (ret *GRPCclient, err error) {
 	ret = &GRPCclient{
 		done:       false,
-		account_id: account_id,
 
 		logger: []*packet.WorkerLog{},
 		infor:  make(chan *packet.WorkerInfor),

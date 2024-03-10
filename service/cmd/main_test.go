@@ -19,24 +19,18 @@ var (
 func TestService(t *testing.T) {
 	b, _ := json.Marshal(StartRequest{
 		daemon.DaemonOption{
-			Thinkmay: &struct {
-				AccountID string "json:\"account_id\""
+			Turn: &struct {
+				Username string "json:\"username\""
+				Password string "json:\"password\""
+				MinPort  int    "json:\"min_port\""
+				MaxPort  int    "json:\"max_port\""
+				Port int
 			}{
-				AccountID: "hello",
+				Username: "abc",
+				Password: "bcd",
+				MinPort:  60000,
+				MaxPort:  65535,
 			},
-			Sunshine: nil,
-		},
-		&struct {
-			Username string "json:\"username\""
-			Password string "json:\"password\""
-			MinPort  int    "json:\"min_port\""
-			MaxPort  int    "json:\"max_port\""
-			port int
-		}{
-			Username: "abc",
-			Password: "bcd",
-			MinPort:  60000,
-			MaxPort:  65535,
 		},
 	})
 

@@ -92,7 +92,8 @@ func Start(stop chan bool) {
 		defer turn.Close()
 	}
 
-	grpc, err := httpp.InitHttppServer(req.Thinkmay.AccountID)
+
+	grpc, err := httpp.InitHttppServer()
 	if err != nil {
 		log.PushLog("failed to setup grpc: %s", err.Error())
 		return

@@ -1,8 +1,5 @@
 .vscode/launch.json
-cmd.exe
-daemon.exe
-main.exe
-cli.exe
+*.exe
 
 log.txt
 build/
@@ -14,4 +11,3 @@ task_result.yaml
 .vscode/
 thinkmay.log
 *.dll
-test.exe

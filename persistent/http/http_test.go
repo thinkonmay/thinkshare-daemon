@@ -12,7 +12,7 @@ import (
 )
 
 func TestHttp(t *testing.T) {
-	server,err := InitHttppServer("hi")
+	server,err := InitHttppServer()
 	if err != nil {
 		t.Error(err)
 	}

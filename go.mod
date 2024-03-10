@@ -2,7 +2,6 @@ module github.com/thinkonmay/thinkshare-daemon
 
 go 1.22
 
-
 require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/jaypipes/ghw v0.9.0
@@ -16,6 +15,7 @@ require (
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/hugolgst/rich-go v0.0.0-20230917173849-4a4fb1d3c362 // indirect
 	github.com/pion/dtls/v2 v2.2.7 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
@@ -25,6 +25,7 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )
 
 require (
