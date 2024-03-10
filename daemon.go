@@ -33,6 +33,14 @@ type Daemon struct {
 }
 
 type DaemonOption struct {
+	Turn *struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		MinPort  int    `json:"min_port"`
+		MaxPort  int    `json:"max_port"`
+		Port     int
+	} `json:"turn"`
+
 	Sunshine *struct{
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -66,9 +74,27 @@ func WebDaemon(persistent persistent.Persistent,
 				return
 			}
 
+			if options.Turn != nil {
+				port := int32(options.Turn.Port)
+				infor.TurnPort = &port
+			} else {
+				infor.TurnPort = nil
+			}
 			daemon.persist.Infor(infor)
 		}
 	}()
+	daemon.persist.Sessions(func() []packet.WorkerSession {
+		sessions := []packet.WorkerSession{}
+		for _, iws := range daemon.session {
+			sessions = append(sessions, packet.WorkerSession{
+				Id: iws.Id,
+				Timestamp: iws.Timestamp,
+				Thinkmay: iws.Thinkmay,
+				Sunshine: iws.Sunshine,
+			})
+		}
+		return sessions
+	})
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
@@ -104,8 +130,10 @@ func WebDaemon(persistent persistent.Persistent,
 			log.PushLog("terminating session %d",ss)
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
-				if int(ws.Id) == ss {
+				if ws.display != nil {
 					media.RemoveVirtualDisplay(*ws.display)
+				}
+				if int(ws.Id) == ss {
 					for _, pi := range ws.childprocess {
 						daemon.childprocess.CloseID(pi)
 					}

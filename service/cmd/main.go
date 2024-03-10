@@ -20,13 +20,6 @@ import (
 
 type StartRequest struct {
 	daemon.DaemonOption
-	Turn *struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		MinPort  int    `json:"min_port"`
-		MaxPort  int    `json:"max_port"`
-		port     int
-	} `json:"turn"`
 }
 
 func recv() *StartRequest {
@@ -60,7 +53,7 @@ func recv() *StartRequest {
 			}
 
 			w.Write([]byte(fmt.Sprintf("{\"turn_port\": %d}", port)))
-			start.Turn.port = port
+			start.Turn.Port = port
 		} else {
 			w.Write([]byte("{}"))
 		}
@@ -85,7 +78,7 @@ func recv() *StartRequest {
 }
 
 func Start(stop chan bool) {
-	go media.ActivateVirtualDriver()
+	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
 	req := recv()
@@ -95,7 +88,7 @@ func Start(stop chan bool) {
 			req.Turn.Password,
 			req.Turn.MaxPort,
 			req.Turn.MinPort,
-			req.Turn.port)
+			req.Turn.Port)
 		defer turn.Close()
 	}
 

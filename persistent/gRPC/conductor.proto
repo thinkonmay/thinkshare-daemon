@@ -36,6 +36,7 @@ message WorkerInfor{
 	string   PrivateIP  = 7;
 
 	repeated string GPUs    = 8;
+	optional int32 TurnPort = 9;
 }
 
 message WorkerLog{ 
