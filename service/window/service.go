@@ -97,6 +97,7 @@ func (p *program) Stop() error {
 
 	p.exit <- true
 	log.PushLog("Stopped.")
+	time.Sleep(3 * time.Second)
 	return nil
 }
 

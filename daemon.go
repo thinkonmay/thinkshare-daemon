@@ -94,11 +94,12 @@ func WebDaemon(persistent persistent.Persistent,
 				int(ss.Display.ScreenWidth),
 				int(ss.Display.ScreenHeight),
 			)
-			ss.Display.DisplayName, ss.Display.DisplayIndex = name, int32(index)
+			val := int32(index)
+			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
 		} else {
 			ss.Display = &packet.DisplaySession{
-				DisplayName:  media.Displays()[0],
-				DisplayIndex: -1,
+				DisplayName:  &media.Displays()[0],
+				DisplayIndex: nil,
 			}
 		}
 		if ss.Thinkmay != nil {
@@ -127,8 +128,8 @@ func WebDaemon(persistent persistent.Persistent,
 			log.PushLog("terminating session %d", ss)
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
-				if ws.Display.DisplayIndex != -1 {
-					media.RemoveVirtualDisplay(int(ws.Display.DisplayIndex))
+				if ws.Display.DisplayIndex != nil {
+					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
 				}
 				if int(ws.Id) == ss {
 					for _, pi := range ws.childprocess {
@@ -161,7 +162,7 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 
 	webrtcHash, displayHash :=
 		string(base64.StdEncoding.EncodeToString([]byte(current.Thinkmay.WebrtcConfig))),
-		string(base64.StdEncoding.EncodeToString([]byte(current.Display.DisplayName)))
+		string(base64.StdEncoding.EncodeToString([]byte(*current.Display.DisplayName)))
 
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {

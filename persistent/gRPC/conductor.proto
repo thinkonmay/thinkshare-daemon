@@ -11,8 +11,8 @@ message WorkerSession{
 }
 
 message DisplaySession{ 
-	int32 DisplayIndex = 2; // do sync
-	string DisplayName = 3; // do sync
+	optional int32 DisplayIndex = 2; // do sync
+	optional string DisplayName = 3; // do sync
 	int32 ScreenWidth = 6;
 	int32 ScreenHeight = 7;
 }
