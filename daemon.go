@@ -18,8 +18,6 @@ import (
 type internalWorkerSession struct {
 	packet.WorkerSession
 	childprocess []childprocess.ProcessID
-	
-	display *int
 }
 
 type Daemon struct {
@@ -43,7 +41,7 @@ type DaemonOption struct {
 }
 
 func WebDaemon(persistent persistent.Persistent,
-				options DaemonOption) *Daemon {
+	options DaemonOption) *Daemon {
 	daemon := &Daemon{
 		mutex:   &sync.Mutex{},
 		session: []internalWorkerSession{},
@@ -78,10 +76,10 @@ func WebDaemon(persistent persistent.Persistent,
 		sessions := []packet.WorkerSession{}
 		for _, iws := range daemon.session {
 			sessions = append(sessions, packet.WorkerSession{
-				Id: iws.Id,
+				Id:        iws.Id,
 				Timestamp: iws.Timestamp,
-				Thinkmay: iws.Thinkmay,
-				Sunshine: iws.Sunshine,
+				Thinkmay:  iws.Thinkmay,
+				Sunshine:  iws.Sunshine,
 			})
 		}
 		return sessions
@@ -89,17 +87,25 @@ func WebDaemon(persistent persistent.Persistent,
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
-		var index *int 
-		i := 0
-
 
 		err := fmt.Errorf("no session configured")
+		if ss.Display != nil {
+			name, index := media.StartVirtualDisplay(
+				int(ss.Display.ScreenWidth),
+				int(ss.Display.ScreenHeight),
+			)
+			ss.Display.DisplayName, ss.Display.DisplayIndex = name, int32(index)
+		} else {
+			ss.Display = &packet.DisplaySession{
+				DisplayName:  media.Displays()[0],
+				DisplayIndex: -1,
+			}
+		}
 		if ss.Thinkmay != nil {
-			process,i, err = daemon.handleHub(ss.Thinkmay)
-			index = &i
+			process, err = daemon.handleHub(ss)
 		}
 		if ss.Sunshine != nil {
-			process, err = daemon.handleSunshine(ss.Sunshine)
+			process, err = daemon.handleSunshine(ss)
 		}
 		if err != nil {
 			log.PushLog("session failed")
@@ -109,7 +115,7 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("session creation successful")
 		daemon.session = append(daemon.session,
 			internalWorkerSession{
-				*ss, process,index,
+				*ss, process,
 			})
 
 		return nil
@@ -118,11 +124,11 @@ func WebDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
-			log.PushLog("terminating session %d",ss)
+			log.PushLog("terminating session %d", ss)
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
-				if ws.display != nil {
-					media.RemoveVirtualDisplay(*ws.display)
+				if ws.Display.DisplayIndex != -1 {
+					media.RemoveVirtualDisplay(int(ws.Display.DisplayIndex))
 				}
 				if int(ws.Id) == ss {
 					for _, pi := range ws.childprocess {
@@ -134,7 +140,7 @@ func WebDaemon(persistent persistent.Persistent,
 			}
 
 			if len(daemon.session) == len(queue) {
-				log.PushLog("no session terminated, total session : %d",len(daemon.session))
+				log.PushLog("no session terminated, total session : %d", len(daemon.session))
 			} else {
 				daemon.session = queue
 			}
@@ -149,18 +155,17 @@ func (daemon *Daemon) Close() {
 	log.RemoveCallback(daemon.log)
 }
 
-func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess.ProcessID, int, error) {
+func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
-	display,index := media.StartVirtualDisplay(int(current.ScreenWidth), int(current.ScreenHeight))
-	webrtcHash,displayHash :=
-		string(base64.StdEncoding.EncodeToString([]byte(current.WebrtcConfig))),
-		string(base64.StdEncoding.EncodeToString([]byte(display)))
+	webrtcHash, displayHash :=
+		string(base64.StdEncoding.EncodeToString([]byte(current.Thinkmay.WebrtcConfig))),
+		string(base64.StdEncoding.EncodeToString([]byte(current.Display.DisplayName)))
 
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
-		return nil,0, err
+		return nil, err
 	}
 	cmd := []string{
 		"--webrtc", webrtcHash,
@@ -169,14 +174,13 @@ func (daemon *Daemon) handleHub(current *packet.ThinkmaySession) ([]childprocess
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
 	if err != nil {
-		return nil,0, err
+		return nil, err
 	}
 
-	return []childprocess.ProcessID{video},index, nil
+	return []childprocess.ProcessID{video}, nil
 }
 
-
-func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) ([]childprocess.ProcessID, error) {
+func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
 	daemon.mutex.Lock()
 	defer daemon.mutex.Unlock()
 
@@ -186,8 +190,8 @@ func (daemon *Daemon) handleSunshine(current *packet.SunshineSession) ([]childpr
 	}
 
 	cmd := []string{
-		"--username", current.Username,
-		"--password", current.Password,
+		"--username", current.Sunshine.Username,
+		"--password", current.Sunshine.Password,
 	}
 
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)

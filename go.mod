@@ -20,6 +20,7 @@ require (
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/transport/v3 v3.0.1 // indirect
+	github.com/winlabs/gowin32 v0.0.0-20221003142512-0d265587d3c9 // indirect
 	golang.org/x/crypto v0.19.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/text v0.14.0 // indirect

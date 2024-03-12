@@ -51,6 +51,7 @@ import (
 	"unsafe"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/winlabs/gowin32"
 )
 
 
@@ -84,13 +85,14 @@ func ActivateVirtualDriver() {
 
     log.PushLog("activating virtual driver")
     execute("./audio",         "./VBCABLE_Setup_x64.exe","-i","-h")
-    execute("./display",       "powershell.exe",".\\instruction.ps1")
+    execute("./display",       "powershell.exe",".\\install.ps1")
     C.init_virtual_display()
 }
 
 func DeactivateVirtualDriver() {
     log.PushLog("deactivate virtual driver")
     C.deinit_virtual_display()
+    execute("./display",       "powershell.exe",".\\remove.ps1")
 }
 
 func StartVirtualDisplay(width,height int) (string,int) {
@@ -106,4 +108,23 @@ func StartVirtualDisplay(width,height int) (string,int) {
 func RemoveVirtualDisplay(index int) {
     log.PushLog("remove virtual display %d",index)
     C.remove_virtual_display(C.int(index))
+}
+
+
+func convert(in [32]uint16) string {
+    bytes := []byte{}
+    for _, v := range in {
+        bytes = append(bytes, byte(v))
+    }
+    return string(bytes)
+}
+
+func Displays() []string {
+    names := []string{}
+    for _, dd := range gowin32.GetAllDisplayDevices() {
+        if (dd.StateFlags & gowin32.DisplayDeviceActive) > 0 {
+            names = append(names, dd.DeviceName)
+        }
+    }
+    return names
 }

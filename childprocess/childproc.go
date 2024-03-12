@@ -90,7 +90,6 @@ func (procs *ChildProcesses) NewChildProcess(cmd *exec.Cmd, hidewnd bool) (Proce
 	}()
 
 
-	procs.procs[id].force_closed = true
 	return id,nil
 }
 

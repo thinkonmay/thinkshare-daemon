@@ -8,8 +8,8 @@ import (
 
 	"github.com/judwhite/go-svc"
 	"github.com/thinkonmay/thinkshare-daemon/service/cmd"
-	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	win "golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -27,23 +27,14 @@ type program struct {
 }
 
 func main() {
-	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
-		i := log.TakeLog(func(log string) {
-			str := fmt.Sprintf("daemon.exe : %s", log)
-			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
-			fmt.Println(str)
-		})
-		defer log.RemoveCallback(i)
-		defer log_file.Close()
-	}
-
 	prg := &program{
-		exit: make(chan bool,2),
+		exit: make(chan bool, 2),
 	}
 
 	if len(os.Args) == 2 {
+		var err error
 		if os.Args[1] == "start" {
-			err := installService(name,desc)
+			err = installService(name, desc)
 			if err != nil {
 				panic(err)
 			}
@@ -53,7 +44,7 @@ func main() {
 			}
 			return
 		} else if os.Args[1] == "stop" {
-			err := controlService(name, win.Stop, win.Stopped)
+			err = controlService(name, win.Stop, win.Stopped)
 			if err != nil {
 				panic(err)
 			}
@@ -64,7 +55,7 @@ func main() {
 			return
 		} else if os.Args[1] == "display" {
 			media.ActivateVirtualDriver()
-			_,id := media.StartVirtualDisplay(1920,1080)
+			_, id := media.StartVirtualDisplay(1920, 1080)
 			defer media.RemoveVirtualDisplay(id)
 			<-make(chan bool)
 		}
@@ -77,7 +68,18 @@ func main() {
 }
 
 func (p *program) Init(env svc.Environment) error {
-	return nil
+	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
+		i := log.TakeLog(func(log string) {
+			str := fmt.Sprintf("daemon.exe : %s", log)
+			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
+			fmt.Println(str)
+		})
+		defer log.RemoveCallback(i)
+		defer log_file.Close()
+		return nil
+	} else {
+		return err
+	}
 }
 
 func (p *program) Start() error {
@@ -93,12 +95,10 @@ func (p *program) Stop() error {
 	// This method may block, but it's a good idea to finish quickly or your process may be killed by
 	// Windows during a shutdown/reboot. As a general rule you shouldn't rely on graceful shutdown.
 
-
-	p.exit<-true
+	p.exit <- true
 	log.PushLog("Stopped.")
 	return nil
 }
-
 
 func exePath() (string, error) {
 	prog := os.Args[0]
@@ -222,4 +222,3 @@ func controlService(name string, c win.Cmd, to win.State) error {
 	}
 	return nil
 }
-
