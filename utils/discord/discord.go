@@ -2,7 +2,6 @@ package discord
 
 import (
 	"time"
-
 	"github.com/hugolgst/rich-go/client"
 )
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/judwhite/go-svc"
 	"github.com/thinkonmay/thinkshare-daemon/service/cmd"
+	"github.com/thinkonmay/thinkshare-daemon/utils/discord"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	win "golang.org/x/sys/windows/svc"
@@ -31,6 +32,21 @@ func main() {
 		exit: make(chan bool, 2),
 	}
 
+	if len(os.Args) == 3 {
+		var err error
+		if os.Args[1] == "discord" {
+			app_id := os.Args[2]
+			err = discord.Init(app_id)
+			if err != nil {
+				panic(err)
+			}
+			err = discord.StartSession()
+			if err != nil {
+				panic(err)
+			}
+			return
+		}
+	}
 	if len(os.Args) == 2 {
 		var err error
 		if os.Args[1] == "start" {
