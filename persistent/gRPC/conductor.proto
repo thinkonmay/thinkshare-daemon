@@ -5,9 +5,18 @@ option go_package = "./packet";
 message WorkerSession{ 
 	int32  id = 1;
 	string timestamp = 2;
-	DisplaySession  display = 3;
-	ThinkmaySession thinkmay = 4;
-	SunshineSession sunshine = 5;
+	optional DisplaySession  display = 3;
+	optional ThinkmaySession thinkmay = 4;
+	optional SunshineSession sunshine = 5;
+	optional TurnSession turn = 6;
+}
+
+message TurnSession{ 
+	int32 minPort = 1; // do sync
+	int32 maxPort = 2; // do sync
+	int32 port = 3; // do sync
+	string username = 4; // do sync
+	string password = 5; // do sync
 }
 
 message DisplaySession{ 

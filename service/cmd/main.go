@@ -84,12 +84,16 @@ func Start(stop chan bool) {
 	req := recv()
 	log.PushLog("received /initialize signal")
 	if req.Turn != nil {
-		turn.Open(req.Turn.Username,
+		s,err := turn.Open(req.Turn.Username,
 			req.Turn.Password,
 			req.Turn.MaxPort,
 			req.Turn.MinPort,
 			req.Turn.Port)
-		defer turn.Close()
+		if err != nil {
+			log.PushLog("failed start TURN server %s",err.Error())
+		} else {
+			defer s.Close()
+		}
 	}
 
 

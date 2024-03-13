@@ -13,11 +13,13 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
+	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
 type internalWorkerSession struct {
 	packet.WorkerSession
 	childprocess []childprocess.ProcessID
+	turn_server         *turn.TurnServer
 }
 
 type Daemon struct {
@@ -87,6 +89,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
+		var t *turn.TurnServer = nil
 
 		err := fmt.Errorf("no session configured")
 		if ss.Display != nil {
@@ -102,6 +105,15 @@ func WebDaemon(persistent persistent.Persistent,
 				DisplayIndex: nil,
 			}
 		}
+		if ss.Turn != nil {
+			t, err = turn.Open(
+				ss.Turn.Username, 
+				ss.Turn.Password, 
+				int(ss.Turn.MinPort), 
+				int(ss.Turn.MaxPort), 
+				int(ss.Turn.Port),
+			)
+		}
 		if ss.Thinkmay != nil {
 			process, err = daemon.handleHub(ss)
 		}
@@ -116,7 +128,7 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("session creation successful")
 		daemon.session = append(daemon.session,
 			internalWorkerSession{
-				*ss, process,
+				*ss, process, t,
 			})
 
 		return nil
@@ -130,6 +142,9 @@ func WebDaemon(persistent persistent.Persistent,
 			for _, ws := range daemon.session {
 				if ws.Display.DisplayIndex != nil {
 					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+				}
+				if ws.turn_server != nil {
+					ws.turn_server.Close()
 				}
 				if int(ws.Id) == ss {
 					for _, pi := range ws.childprocess {

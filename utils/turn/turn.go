@@ -16,13 +16,12 @@ const (
 	realm     = "thinkmay.net"
 )
 
-var (
+type TurnServer struct {
 	s *turn.Server
-)
+}
 
-func Open(username,password string,min_port, max_port, port int) {
-	var err error
-	s, err = SetupTurn(
+func Open(username,password string,min_port, max_port, port int) (*TurnServer,error) {
+	s, err := SetupTurn(
 		username,password,
 		credential.Addresses.PublicIP,
 		port,
@@ -30,12 +29,14 @@ func Open(username,password string,min_port, max_port, port int) {
 		max_port)
 	if err != nil {
 		log.PushLog("failed to setup turn account: %s", err.Error())
-		return
+		return nil,err
 	}
+
+	return &TurnServer{s},nil
 }
 
-func Close() {
-	s.Close()
+func (t *TurnServer)Close() {
+	t.s.Close()
 }
 
 // stunLogger wraps a PacketConn and prints incoming/outgoing STUN packets
@@ -51,7 +52,7 @@ func (s *stunLogger) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 			return
 		}
 
-		log.PushLog("[%s] Outbound STUN to %s: %s \n", time.Now().Format(time.RFC850), addr.String(), msg.String())
+		log.PushLog("[%s] Outbound STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
 	}
 
 	return
@@ -64,7 +65,7 @@ func (s *stunLogger) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 			return
 		}
 
-		log.PushLog("[%s] Inbound  STUN to %s: %s \n", time.Now().Format(time.RFC850), addr.String(), msg.String())
+		log.PushLog("[%s] Inbound  STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
 	}
 
 	return
@@ -92,13 +93,13 @@ func SetupTurn(
 	usersMap := map[string][]byte{}
 	usersMap[username] = turn.GenerateAuthKey(username, realm, password)
 
-	s, err := turn.NewServer(turn.ServerConfig{
+	return turn.NewServer(turn.ServerConfig{
 		Realm: realm,
 		// Set AuthHandler callback
 		// This is called every time a user tries to authenticate with the TURN server
 		// Return the key for that user, or false when no user is found
 		AuthHandler: func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
-			log.PushLog("[%s] Incoming TURN: Request from %s\n", time.Now().Format(time.RFC850), srcAddr.String())
+			log.PushLog("[%s] Incoming TURN: Request from %s", time.Now().Format(time.RFC850), srcAddr.String())
 			if key, ok := usersMap[username]; ok {
 				return key, true
 			}
@@ -117,6 +118,4 @@ func SetupTurn(
 			},
 		},
 	})
-
-	return s, err
 }
