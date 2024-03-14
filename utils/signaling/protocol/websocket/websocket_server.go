@@ -95,7 +95,6 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 			return
 		}
 
-		log.PushLog("Receive signaling message %v", data)
 		for _, sm := range data {
 			tenant.Incoming <- &sm
 		}
@@ -109,7 +108,6 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 			data = append(data, *out)
 		}
 
-		log.PushLog("Send signaling message %v", data)
 		b, err = json.Marshal(data)
 		if err != nil {
 			w.WriteHeader(400)
