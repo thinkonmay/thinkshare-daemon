@@ -2,7 +2,6 @@ package signaling
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
@@ -30,52 +29,6 @@ func InitSignallingServer(client protocol.ProtocolHandler, server protocol.Proto
 			},
 		},
 	}
-	go func() {
-		for {
-			client := []protocol.Tenant{}
-			server := []protocol.Tenant{}
-			for _, v := range signaling.waitLine {
-				for {
-					if len(v.client) == 0 {
-						break
-					}
-					wait := <-v.client
-					if !wait.IsExited() {
-						for {
-							if !wait.Peek() {
-								break
-							}
-							wait.Receive()
-						}
-						client = append(client, wait)
-					}
-				}
-				for {
-					if len(v.server) == 0 {
-						break
-					}
-					wait := <-v.server
-					if !wait.IsExited() {
-						for {
-							if !wait.Peek() {
-								break
-							}
-							wait.Receive()
-						}
-						server = append(server, wait)
-					}
-				}
-			}
-
-			for _, t := range client {
-				signaling.waitLine[t.Token].client <- t
-			}
-			for _, t := range server {
-				signaling.waitLine[t.Token].server <- t
-			}
-			time.Sleep(time.Second)
-		}
-	}()
 
 	find_token := func(token string) bool {
 		keys := make([]string, 0, len(signaling.waitLine))

@@ -84,13 +84,13 @@ func Start(stop chan bool) {
 	req := recv()
 	log.PushLog("received /initialize signal")
 	if req.Turn != nil {
-		s,err := turn.Open(req.Turn.Username,
+		s, err := turn.Open(req.Turn.Username,
 			req.Turn.Password,
 			req.Turn.MaxPort,
 			req.Turn.MinPort,
 			req.Turn.Port)
 		if err != nil {
-			log.PushLog("failed start TURN server %s",err.Error())
+			log.PushLog("failed start TURN server %s", err.Error())
 		} else {
 			defer s.Close()
 		}
@@ -105,8 +105,8 @@ func Start(stop chan bool) {
 	defer grpc.Stop()
 
 	signaling.InitSignallingServer(
-		ws.InitSignallingWs("/handshake/client", func(r *http.Request) bool { return true }),
-		ws.InitSignallingWs("/handshake/server", func(r *http.Request) bool { return true }),
+		ws.InitSignallingHttp("/handshake/client", func(r *http.Request) bool { return true }),
+		ws.InitSignallingHttp("/handshake/server", func(r *http.Request) bool { return true }),
 	)
 
 	srv := &http.Server{Addr: ":60000"}

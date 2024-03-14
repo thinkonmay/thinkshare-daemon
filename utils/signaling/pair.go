@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
@@ -14,7 +15,7 @@ type Pair struct {
 }
 
 func (pair *Pair) handlePair() {
-	fmt.Println("new pair")
+	log.PushLog("new pair")
 	pair.B.Send(&packet.SignalingMessage{
 		Type: packet.SignalingType_tSTART,
 		Sdp:  nil,
@@ -25,8 +26,8 @@ func (pair *Pair) handlePair() {
 		Sdp:  nil,
 		Ice:  nil,
 	})
-	fmt.Println("trigger done")
 
+	log.PushLog("trigger done")
 	stop := make(chan bool, 2)
 	go func() {
 		for {
@@ -56,7 +57,7 @@ func (pair *Pair) handlePair() {
 	}()
 	go func() {
 		<-stop
-		fmt.Println("pair exited")
+		log.PushLog("pair exited")
 		if !pair.A.IsExited() {
 			pair.A.Exit()
 		}
