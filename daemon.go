@@ -208,6 +208,7 @@ func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childproc
 	cmd := []string{
 		"--username", current.Sunshine.Username,
 		"--password", current.Sunshine.Password,
+		"--port", current.Sunshine.Port,
 	}
 
 	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)

@@ -32,6 +32,7 @@ message ThinkmaySession{
 }
 
 message SunshineSession{ 
+	string port = 2; // do sync
 	string username = 3; // do sync
 	string password = 4; // do sync
 }
