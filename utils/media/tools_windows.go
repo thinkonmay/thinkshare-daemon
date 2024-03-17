@@ -111,7 +111,7 @@ func StartVirtualDisplay(width,height int) (string,int,error) {
                           unsafe.Pointer(&buff[0]),
                           &size)
     log.PushLog("started virtual display %d",display)
-    return string(buff[:size]),int(display)
+    return string(buff[:size]),int(display),nil
 }
 
 func RemoveVirtualDisplay(index int) {
