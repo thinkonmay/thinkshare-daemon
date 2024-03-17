@@ -1,14 +1,5 @@
 package libvirt
 
-import (
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-
-	"github.com/google/uuid"
-)
-
 type VirtDaemon struct {
 	libvirt *Libvirt
 }
@@ -96,11 +87,6 @@ func (daemon *VirtDaemon) AttachDisk(vm string, Volumes []Volume) error {
 	)
 }
 
-type Volume struct {
-	Path    string  `yaml:"path"`
-	Backing *Volume `yaml:"backing"`
-}
-
 func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
 	driver := "ide"
 	if server.VDriver {
@@ -160,30 +146,6 @@ func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
 	)
 }
 
-func (daemon *VirtDaemon) GrowChain(chain Volume, size int) (Volume, error) {
-	_, err := os.Stat(chain.Path)
-	if err != nil {
-		return Volume{}, err
-	}
-
-	
-	now := uuid.NewString()
-	dir := filepath.Dir(chain.Path)
-	path := fmt.Sprintf("%s/%s.qcow2",dir,now)
-	_,err = exec.Command("/usr/bin/qemu-img","create", "-f", "qcow2", "-F", "qcow2", "-o",
-	    fmt.Sprintf("backing_file=%s",chain.Path), path,
-	    fmt.Sprintf("%dG",size)).Output()
-	if err != nil {
-		return Volume{}, err
-	}
-
-
-	return Volume{
-		Path: path,
-		Backing: &chain,
-	},nil
-}
-
 func (daemon *VirtDaemon) DeleteVM(name string) error {
 	err := daemon.libvirt.DeleteVM(name)
 	if err != nil {
@@ -192,37 +154,8 @@ func (daemon *VirtDaemon) DeleteVM(name string) error {
 	return nil
 }
 
-func (daemon *VirtDaemon) StatusVM(name string) (any, error) {
-	doms, err := daemon.libvirt.ListDomains()
-	if err != nil {
-		return nil, err
-	}
-	for _, d := range doms {
-		if *d.Name == name {
-			return struct{ Status string }{Status: *d.Status}, nil
-		}
-	}
-
-	return struct{ Status string }{Status: "StatusDeleted"}, nil
-}
-
 func (daemon *VirtDaemon) ListVMs() ([]Domain, error) {
-	doms, err := daemon.libvirt.ListDomains()
-	if err != nil {
-		return nil, err
-	}
-
-	result := []Domain{}
-	for _, d := range doms {
-		if d.Status == nil {
-			unknown := "unknown"
-			d.Status = &unknown
-		}
-
-		result = append(result, d)
-	}
-
-	return result, nil
+	return daemon.libvirt.ListDomains()
 }
 
 func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
@@ -238,9 +171,7 @@ func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
 	result := []GPU{}
 	for _, g := range gpus {
 		for _, d := range domains {
-			if d.Status == nil {
-				continue
-			} else if *d.Status == "StatusShutdown" {
+			if !d.Running {
 				continue
 			}
 

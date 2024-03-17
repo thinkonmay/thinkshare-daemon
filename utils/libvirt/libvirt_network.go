@@ -47,7 +47,7 @@ func isIPv4(address string) bool {
 	return strings.Count(address, ":") < 2
 }
 
-func NewLibvirtNetwork() (Network, error) {
+func NewLibvirtNetwork(iface string) (Network, error) {
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 2*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial libvirt: %v", err)
@@ -66,7 +66,7 @@ func NewLibvirtNetwork() (Network, error) {
 		return ret, nil
 	}
 
-	iface := ""
+	found := false
 	ifis, _ := net.Interfaces()
 	for _, i2 := range ifis {
 		if !strings.Contains(i2.Flags.String(), "running") ||
@@ -77,17 +77,13 @@ func NewLibvirtNetwork() (Network, error) {
 			continue
 		}
 
-		addr, _ := i2.Addrs()
-		for _, a := range addr {
-			if !isIPv4(a.String()) {
-				continue
-			}
-
-			iface = i2.Name
+		if iface == i2.Name {
+			found = true
+			break
 		}
 	}
 
-	if iface == "" {
+	if !found {
 		return nil, fmt.Errorf("no network interface was found")
 	}
 
@@ -146,8 +142,7 @@ func (ovs *LibvirtNetwork) getIPMac() (map[string]string, error) {
 	return ipmacs, nil
 }
 
-func (network *LibvirtNetwork) FindDomainIPs(dom Domain) []string {
-	ips := []string{}
+func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress,error) {
 	macs := []string{}
 	for _, i2 := range dom.Interfaces {
 		macs = append(macs, *i2.Mac.Address)
@@ -155,16 +150,19 @@ func (network *LibvirtNetwork) FindDomainIPs(dom Domain) []string {
 
 	database, err := network.getIPMac()
 	if err != nil {
-		return []string{}
+		return DomainAddress{},err
 	}
 
 	for k, v := range database {
 		for _, v2 := range macs {
-			if v2 == k {
-				ips = append(ips, v)
+			if v2 == k && isIPv4(v) {
+				return DomainAddress{
+					Mac: &k,
+					Ip: &v,
+				},nil
 			}
 		}
 	}
 
-	return ips
+	return DomainAddress{Mac: nil,Ip: nil},nil
 }
