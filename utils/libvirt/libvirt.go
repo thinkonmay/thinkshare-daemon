@@ -52,20 +52,12 @@ func (lv *Libvirt) ListDomains() ([]Domain, error) {
 			return []Domain{}, err
 		}
 
-		active, err := lv.conn.DomainIsActive(d)
+		running, err := lv.conn.DomainIsActive(d)
 		if err != nil {
 			return []Domain{}, err
 		}
 
-		if active == 1 {
-			status := "StatusRunning"
-			dom.Status = &status
-		} else {
-			status := "StatusShutdown"
-			dom.Status = &status
-
-		}
-
+		dom.Running = running == 1
 		ret = append(ret, dom)
 	}
 
@@ -164,7 +156,6 @@ func (lv *Libvirt) CreateVM(id string,
 		return err
 	}
 
-	fmt.Println(xml)
 	_, err = lv.conn.DomainCreateXML(xml, libvirt.DomainStartValidate)
 	if err != nil {
 		return fmt.Errorf("error starting VM: %s", err.Error())

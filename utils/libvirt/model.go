@@ -296,13 +296,12 @@ type Clock struct {
 }
 
 type Domain struct {
+	Running bool `xml:"-"`
 	XMLName xml.Name `xml:"domain" yaml:"domain,inline"`
 	Type    *string  `xml:"type,attr"`
 
-	Name      *string   `xml:"name"`
-	Uuid      *string   `xml:"uuid"`
-	PrivateIP *[]string // not mapped
-	Status    *string   // not mapped
+	Name    *string `xml:"name"`
+	Uuid    *string `xml:"uuid"`
 
 	NumaTune      *NumaTune `xml:"numatune"`
 	Memory        Memory    `xml:"memory"`
@@ -435,11 +434,11 @@ type StoragePool struct {
 }
 
 type VMLaunchModel struct {
-	ID            string   `yaml:"id"`
-	VCPU          int      `yaml:"vcpus"`
-	RAM           int      `yaml:"ram"`
-	GPU           []GPU    `yaml:"gpu"`
-	BackingVolume []Volume `yaml:"volumes"`
-	Interfaces    []Interface  `yaml:"volumes"`
-	VDriver       bool     `yaml:"vdriver"`
+	ID            string      `yaml:"id"`
+	VCPU          int         `yaml:"vcpus"`
+	RAM           int         `yaml:"ram"`
+	GPU           []GPU       `yaml:"gpu"`
+	BackingVolume []Volume    `yaml:"volumes"`
+	Interfaces    []Interface `yaml:"volumes"`
+	VDriver       bool        `yaml:"vdriver"`
 }

@@ -3,6 +3,7 @@ package libvirt
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/digitalocean/go-openvswitch/ovs"
 	"github.com/google/uuid"
@@ -16,15 +17,25 @@ type OpenVSwitch struct {
 }
 
 func NewOVS(iface string) (Network, error) {
+	found := false
 	ifis, _ := net.Interfaces()
-	throw := true
 	for _, i2 := range ifis {
-		if i2.Name == iface {
-			throw = false
+		if !strings.Contains(i2.Flags.String(), "running") ||
+			strings.Contains(i2.Flags.String(), "loopback") ||
+			strings.Contains(i2.Name, "br") ||
+			strings.Contains(i2.Name, "ovs") ||
+			strings.Contains(i2.Name, "vnet") {
+			continue
+		}
+
+		if iface == i2.Name {
+			found = true
+			break
 		}
 	}
-	if throw {
-		return nil, fmt.Errorf("not iface was found %s", iface)
+
+	if !found {
+		return nil, fmt.Errorf("no network interface was found")
 	}
 
 	svc := ovs.New()
@@ -80,4 +91,22 @@ func (ovs *OpenVSwitch) CreateInterface(driver string) (*Interface, error) {
 			Type: &driver,
 		},
 	}, nil
+}
+
+
+func (network *OpenVSwitch) FindDomainIPs(dom Domain) (DomainAddress,error) {
+	macs := []string{}
+	for _, i2 := range dom.Interfaces {
+		if i2.Mac == nil {
+			continue
+		} else if i2.Mac.Address == nil {
+			continue
+		}
+
+		macs = append(macs, *i2.Mac.Address)
+	}
+	if len(macs) == 0 {
+		return DomainAddress{Mac: nil,Ip: nil},nil
+	}
+	return DomainAddress{Mac: &macs[0],Ip: nil},nil
 }
