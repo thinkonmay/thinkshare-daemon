@@ -8,6 +8,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/google/uuid"
 	mlspb "github.com/thinkonmay/thinkshare-daemon/utils/filerpc/protobuf"
 	"google.golang.org/grpc"
 )
@@ -51,7 +52,7 @@ func (ms *MLSServer) Upload(stream mlspb.MLSService_UploadServer) (err error) {
 	}
 
 	size := md.fileSize
-	tempFile := path.Join(ms.documentDir, fmt.Sprintf("%s.%d.temp", md.fileName, time.Now().UnixMilli()))
+	tempFile := path.Join(ms.documentDir, fmt.Sprintf("%s.%s.temp", md.fileName, uuid.NewString()))
 	destFile := path.Join(ms.documentDir, md.fileName)
 
 	fmt.Printf("Begin receiving file %s\n", tempFile)

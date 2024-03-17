@@ -32,7 +32,7 @@ func NewClient(file *os.File, addr string) error {
 	var conn *grpc.ClientConn
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		panic(fmt.Errorf("grpc Dial fail: %s/n", err))
+		return (fmt.Errorf("grpc Dial fail: %s/n", err))
 	}
 
 	defer conn.Close()

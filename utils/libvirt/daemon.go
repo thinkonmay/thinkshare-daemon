@@ -2,18 +2,26 @@ package libvirt
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 
-	"gopkg.in/yaml.v3"
+	"github.com/google/uuid"
 )
 
 type VirtDaemon struct {
-	libvirt    *Libvirt
+	libvirt *Libvirt
 }
 
-func NewVirtDaemon() *VirtDaemon {
-	return &VirtDaemon{
-		libvirt:    NewLibvirt(),
+func NewVirtDaemon() (*VirtDaemon, error) {
+	libvirt, err := NewLibvirt()
+	if err != nil {
+		return nil, err
 	}
+
+	return &VirtDaemon{
+		libvirt,
+	}, nil
 }
 
 func backingChain(vols *Volume) *BackingStore {
@@ -37,21 +45,10 @@ func backingChain(vols *Volume) *BackingStore {
 	}
 }
 
-
-func (daemon *VirtDaemon) AttachDisk(body []byte) (any, error) {
-	server := struct {
-		ID      string      `yaml:"id"`
-		Volumes []Volume    `yaml:"volumes"`
-	}{}
-
-	err := yaml.Unmarshal(body, &server)
-	if err != nil {
-		return nil, err
-	}
-
+func (daemon *VirtDaemon) AttachDisk(vm string, Volumes []Volume) error {
 	driver := "virtio"
 	volumes := []Disk{}
-	for i,v := range server.Volumes {
+	for i, v := range Volumes {
 		dev := ""
 		switch i {
 		case 0:
@@ -63,7 +60,6 @@ func (daemon *VirtDaemon) AttachDisk(body []byte) (any, error) {
 		case 3:
 			dev = "vde"
 		}
-
 
 		volumes = append(volumes, Disk{
 			Driver: &struct {
@@ -94,13 +90,10 @@ func (daemon *VirtDaemon) AttachDisk(body []byte) (any, error) {
 		})
 	}
 
-
-	err = daemon.libvirt.AttachDisk(
-		server.ID,
+	return daemon.libvirt.AttachDisk(
+		vm,
 		volumes,
 	)
-
-	return "SUCCESS", err
 }
 
 type Volume struct {
@@ -108,30 +101,14 @@ type Volume struct {
 	Backing *Volume `yaml:"backing"`
 }
 
-func (daemon *VirtDaemon) DeployVM(body []byte) (any, error) {
-	server := struct {
-		ID      string      `yaml:"id"`
-		VCPU    int         `yaml:"vcpus"`
-		RAM     int         `yaml:"ram"`
-		GPU     []GPU `yaml:"gpu"`
-		Volumes []Volume    `yaml:"volumes"`
-		VDriver bool		`yaml:"vdriver"`
-		HideVM  bool		`yaml:"hidevm"`
-		Pincpu  bool		`yaml:"pincpu"`
-	}{}
-
-	err := yaml.Unmarshal(body, &server)
-	if err != nil {
-		return nil, err
-	}
-
+func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
 	driver := "ide"
 	if server.VDriver {
 		driver = "virtio"
 	}
 
 	volumes := []Disk{}
-	for i, v := range server.Volumes {
+	for i, v := range server.BackingVolume {
 		dev := ""
 		switch i {
 		case 0:
@@ -173,100 +150,95 @@ func (daemon *VirtDaemon) DeployVM(body []byte) (any, error) {
 		})
 	}
 
-	name, err := daemon.libvirt.CreateVM(
+	return daemon.libvirt.CreateVM(
 		server.ID,
 		server.VCPU,
 		server.RAM,
 		server.GPU,
 		volumes,
+		server.Interfaces,
 	)
-
-	return struct {
-		Name string
-	}{
-		Name: name,
-	}, err
 }
 
-func (daemon *VirtDaemon) DeleteVM(body []byte) (any, error) {
-	server := struct {
-		Name string `yaml:"name"`
-	}{}
-
-	err := yaml.Unmarshal(body, &server)
+func (daemon *VirtDaemon) GrowChain(chain Volume, size int) (Volume, error) {
+	_, err := os.Stat(chain.Path)
 	if err != nil {
-		return nil, err
+		return Volume{}, err
 	}
 
-	err = daemon.libvirt.DeleteVM(server.Name)
+	
+	now := uuid.NewString()
+	dir := filepath.Dir(chain.Path)
+	path := fmt.Sprintf("%s/%s.qcow2",dir,now)
+	_,err = exec.Command("/usr/bin/qemu-img","create", "-f", "qcow2", "-F", "qcow2", "-o",
+	    fmt.Sprintf("backing_file=%s",chain.Path), path,
+	    fmt.Sprintf("%dG",size)).Output()
 	if err != nil {
-		return nil, err
+		return Volume{}, err
 	}
-	return fmt.Sprintf("VM %s deleted", server.Name), nil
+
+
+	return Volume{
+		Path: path,
+		Backing: &chain,
+	},nil
 }
 
-func (daemon *VirtDaemon) StatusVM(body []byte) (any, error) {
-	server := struct {
-		Name string `yaml:"name"`
-	}{}
+func (daemon *VirtDaemon) DeleteVM(name string) error {
+	err := daemon.libvirt.DeleteVM(name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
-	err := yaml.Unmarshal(body, &server)
+func (daemon *VirtDaemon) StatusVM(name string) (any, error) {
+	doms, err := daemon.libvirt.ListDomains()
 	if err != nil {
 		return nil, err
 	}
-
-	doms := daemon.libvirt.ListDomains()
 	for _, d := range doms {
-		if *d.Name == string(server.Name) {
-			return struct { Status string }{ Status: *d.Status, }, nil
+		if *d.Name == name {
+			return struct{ Status string }{Status: *d.Status}, nil
 		}
 	}
 
-	return struct { Status string }{ Status: "StatusDeleted", }, nil
+	return struct{ Status string }{Status: "StatusDeleted"}, nil
 }
 
-func (daemon *VirtDaemon) ListVMs(data []byte) (any, error) {
-	doms := daemon.libvirt.ListDomains()
+func (daemon *VirtDaemon) ListVMs() ([]Domain, error) {
+	doms, err := daemon.libvirt.ListDomains()
+	if err != nil {
+		return nil, err
+	}
 
-	result := map[string][]Domain{}
-
+	result := []Domain{}
 	for _, d := range doms {
 		if d.Status == nil {
 			unknown := "unknown"
 			d.Status = &unknown
 		}
 
-		if result[*d.Status] == nil {
-			result[*d.Status] = []Domain{d}
-		} else {
-			result[*d.Status] = append(result[*d.Status], d)
-		}
-	}
-
-	for i, d := range result["StatusRunning"] {
-		ips := daemon.libvirt.ListDomainIPs(d)
-		result["StatusRunning"][i].PrivateIP = &ips
+		result = append(result, d)
 	}
 
 	return result, nil
 }
 
-func (daemon *VirtDaemon) ListGPUs(data []byte) (any, error) {
-	domains := daemon.libvirt.ListDomains()
-	gpus := daemon.libvirt.ListGPUs()
-
-	result := struct {
-		Active    []GPU `yaml:"active"`
-		Available []GPU `yaml:"open"`
-	}{
-		Active:    []GPU{},
-		Available: []GPU{},
+func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
+	domains, err := daemon.libvirt.ListDomains()
+	if err != nil {
+		return nil, err
+	}
+	gpus, err := daemon.libvirt.ListGPUs()
+	if err != nil {
+		return nil, err
 	}
 
+	result := []GPU{}
 	for _, g := range gpus {
-		add := true
 		for _, d := range domains {
-			if (d.Status == nil) {
+			if d.Status == nil {
 				continue
 			} else if *d.Status == "StatusShutdown" {
 				continue
@@ -279,16 +251,13 @@ func (daemon *VirtDaemon) ListGPUs(data []byte) (any, error) {
 						hd.SourceAddress.Function == v.Function &&
 						hd.SourceAddress.Slot == v.Slot {
 						g.VM = d.Name
-						add = false
+						g.Active = true
 					}
 				}
 			}
 		}
 
-		if add {
-			result.Available = append(result.Available, g)
-		}
-		result.Active = append(result.Active, g)
+		result = append(result, g)
 	}
 
 	return result, nil

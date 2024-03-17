@@ -8,7 +8,7 @@ import (
 
 func TestDisplay(t *testing.T) {
 
-	fmt.Printf("%v",Display())
+	fmt.Printf("%v",Displays())
 	// ActivateVirtualDriver()
 	// name,id := StartVirtualDisplay(1920,1080)
 	// fmt.Println(name)

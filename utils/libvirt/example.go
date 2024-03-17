@@ -24,7 +24,6 @@ os:
         arch: x86_64
         machine: pc-i440fx-focal
         value: hvm
-# hideVM
     smbios:
         mode: host
 features:
@@ -32,7 +31,6 @@ features:
     apic: {}
     vmport:
         state: "off"
-# hideVM
     kvm:
         hidden: 
             state: on
@@ -43,7 +41,6 @@ cpu:
         socket: 1
         cores: 16
         thread: 1
-# hideVM
     feature:
         policy: disable
         name: hypervisor
@@ -174,17 +171,9 @@ interfaces:
         network: network
       model:
         type: virtio
-#     bandwidth:
-#       inbound:
-#           average: 1000
-#           peak: 1000
-#           floor: 1000
-#           burst: 1000
-#       outbound:
-#           average: 1000
-#           peak: 1000
-#           burst: 1000
-input: null
+input: 
+    - type: tablet
+      bus: usb
 graphic:
     type: spice
     autoport: "yes"

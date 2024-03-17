@@ -93,10 +93,13 @@ func WebDaemon(persistent persistent.Persistent,
 
 		err := fmt.Errorf("no session configured")
 		if ss.Display != nil {
-			name, index := media.StartVirtualDisplay(
+			name, index,err := media.StartVirtualDisplay(
 				int(ss.Display.ScreenWidth),
 				int(ss.Display.ScreenHeight),
 			)
+			if err == nil {
+				return err
+			}
 			val := int32(index)
 			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
 		} else {
@@ -188,7 +191,7 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		"--display", displayHash,
 	}
 
-	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +214,7 @@ func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childproc
 		"--port", current.Sunshine.Port,
 	}
 
-	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...), true)
+	id, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
 	if err != nil {
 		return nil, err
 	}

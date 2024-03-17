@@ -71,7 +71,11 @@ func main() {
 			return
 		} else if os.Args[1] == "display" {
 			media.ActivateVirtualDriver()
-			_, id := media.StartVirtualDisplay(1920, 1080)
+			_, id,err := media.StartVirtualDisplay(1920, 1080)
+			if err != nil {
+				panic(err)
+			}
+
 			defer media.RemoveVirtualDisplay(id)
 			<-make(chan bool)
 		}

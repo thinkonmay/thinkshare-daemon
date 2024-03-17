@@ -2,7 +2,6 @@ package libvirt
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -15,32 +14,29 @@ import (
 type Libvirt struct {
 	Version string
 	conn    *libvirt.Libvirt
-
-	network Network
 }
 
-func NewLibvirt() *Libvirt {
+func NewLibvirt() (*Libvirt, error) {
 	ret := &Libvirt{}
 
-	ret.network = NewLibvirtNetwork()
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 2*time.Second)
 	if err != nil {
-		log.Fatalf("failed to dial libvirt: %v", err)
+		return nil, fmt.Errorf("failed to dial libvirt: %v", err)
 	}
 
 	ret.conn = libvirt.NewWithDialer(dialers.NewAlreadyConnected(c))
 	if err := ret.conn.Connect(); err != nil {
-		log.Fatalf("failed to connect: %v", err)
+		return nil, fmt.Errorf("failed to connect: %v", err)
 	}
 
-	return ret
+	return ret, nil
 }
 
-func (lv *Libvirt) ListDomains() []Domain {
+func (lv *Libvirt) ListDomains() ([]Domain, error) {
 	flags := libvirt.ConnectListDomainsActive | libvirt.ConnectListDomainsInactive
 	domains, _, err := lv.conn.ConnectListAllDomains(1, flags)
 	if err != nil {
-		log.Fatalf("failed to retrieve domains: %v", err)
+		return []Domain{}, fmt.Errorf("failed to retrieve domains: %v", err)
 	}
 
 	ret := []Domain{}
@@ -53,12 +49,12 @@ func (lv *Libvirt) ListDomains() []Domain {
 		dom := Domain{}
 		err = dom.Parse([]byte(desc))
 		if err != nil {
-			panic(err)
+			return []Domain{}, err
 		}
 
 		active, err := lv.conn.DomainIsActive(d)
 		if err != nil {
-			panic(err)
+			return []Domain{}, err
 		}
 
 		if active == 1 {
@@ -73,12 +69,15 @@ func (lv *Libvirt) ListDomains() []Domain {
 		ret = append(ret, dom)
 	}
 
-	return ret
+	return ret, nil
 
 }
 
-func (lv *Libvirt) ListGPUs() []GPU {
-	dev, _, _ := lv.conn.ConnectListAllNodeDevices(1, 0)
+func (lv *Libvirt) ListGPUs() ([]GPU, error) {
+	dev, _, err := lv.conn.ConnectListAllNodeDevices(1, 0)
+	if err != nil {
+		return []GPU{}, err
+	}
 
 	ret := []GPU{}
 	for _, nd := range dev {
@@ -90,7 +89,7 @@ func (lv *Libvirt) ListGPUs() []GPU {
 		gpu := GPU{}
 		err = gpu.Parse([]byte(desc))
 		if err != nil {
-			panic(err)
+			return []GPU{}, err
 		}
 
 		vendor := strings.ToLower(gpu.Capability.Vendor.Val)
@@ -105,11 +104,7 @@ func (lv *Libvirt) ListGPUs() []GPU {
 		ret = append(ret, gpu)
 	}
 
-	return ret
-}
-
-func (lv *Libvirt) ListDomainIPs(dom Domain) []string { // TODO
-	return lv.network.FindDomainIPs(dom)
+	return ret, nil
 }
 
 func (lv *Libvirt) CreateVM(id string,
@@ -117,11 +112,12 @@ func (lv *Libvirt) CreateVM(id string,
 	ram int,
 	gpus []GPU,
 	vols []Disk,
-) (string, error) {
+	ifaces []Interface,
+) error {
 	dom := Domain{}
 	err := yaml.Unmarshal([]byte(libvirtVM), &dom)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	dom.Name = &id
@@ -133,6 +129,7 @@ func (lv *Libvirt) CreateVM(id string,
 	dom.Cpu.Topology.Socket = 1
 	dom.Cpu.Topology.Thread = 2
 	dom.Cpu.Topology.Cores = vcpus / 2
+	dom.Interfaces = ifaces
 
 	dom.Hostdevs = []HostDev{}
 	dom.Vcpupin = []Vcpupin{}
@@ -158,22 +155,21 @@ func (lv *Libvirt) CreateVM(id string,
 		}
 	}
 
-	driver := "e1000e"
-	driver = "virtio"
-
-	iface, err := lv.network.CreateInterface(driver)
-	dom.Interfaces = []Interface{*iface}
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	xml := dom.ToString()
-	fmt.Println(xml)
-	result, err := lv.conn.DomainCreateXML(xml, libvirt.DomainStartValidate)
+	xml, err := dom.ToString()
 	if err != nil {
-		return "", fmt.Errorf("error starting VM: %s", err.Error())
+		return err
+	}
+
+	fmt.Println(xml)
+	_, err = lv.conn.DomainCreateXML(xml, libvirt.DomainStartValidate)
+	if err != nil {
+		return fmt.Errorf("error starting VM: %s", err.Error())
 	} else {
-		return string(result.Name), nil
+		return nil
 	}
 }
 

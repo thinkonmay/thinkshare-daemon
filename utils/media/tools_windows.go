@@ -1,3 +1,4 @@
+//go:build windows
 package media
 
 /*
@@ -75,11 +76,15 @@ func execute(dir string,name string, args ...string) {
 
 
 var initialized = false
+var failed = true
+
 func ActivateVirtualDriver() {
     if !initialized {
         initialized = true
         if C.initlibrary() == 1 {
-            panic(fmt.Errorf("failed to load libdisplay.dll"))
+            log.PushLog("failed to load libdisplay.dll")
+        } else {
+            failed = false
         }
     }
 
@@ -95,7 +100,11 @@ func DeactivateVirtualDriver() {
     execute("./display",       "powershell.exe",".\\remove.ps1")
 }
 
-func StartVirtualDisplay(width,height int) (string,int) {
+func StartVirtualDisplay(width,height int) (string,int,error) {
+    if failed {
+        return "",0,fmt.Errorf("libdisplay.dll failed to setup")
+    }
+
     buff := make([]byte, 1024)
     var size C.int = 0;
     display := C.add_virtual_display(C.int(width),C.int(height),
@@ -106,6 +115,10 @@ func StartVirtualDisplay(width,height int) (string,int) {
 }
 
 func RemoveVirtualDisplay(index int) {
+    if failed {
+        return 
+    }
+
     log.PushLog("remove virtual display %d",index)
     C.remove_virtual_display(C.int(index))
 }

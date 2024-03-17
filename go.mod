@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/fatedier/frp v0.55.1
-	github.com/gorilla/websocket v1.5.0
+	github.com/google/uuid v1.6.0
 	github.com/hugolgst/rich-go v0.0.0-20230917173849-4a4fb1d3c362
 	github.com/jaypipes/ghw v0.9.0
 	github.com/pion/stun v0.6.1
@@ -76,6 +76,7 @@ require (
 require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20240229222500-83343b985513
+	github.com/digitalocean/go-openvswitch v0.0.0-20240130171624-c0f7d42efe24
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/jaypipes/pcidb v1.0.0 // indirect
