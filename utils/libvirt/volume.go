@@ -13,6 +13,15 @@ type Volume struct {
 	Path    string  `yaml:"path"`
 	Backing *Volume `yaml:"backing"`
 }
+
+func NewVolume(path string) Volume {
+	abs,_ := filepath.Abs(path)
+	return Volume{
+		Path: abs,
+		Backing: nil,
+	}
+}
+
 func (chain *Volume) PushChain(size int) (error) {
 	_, err := os.Stat(chain.Path)
 	if err != nil {
@@ -36,7 +45,8 @@ func (chain *Volume) PushChain(size int) (error) {
 }
 
 func (volume *Volume) PopChain() (error) {
+	current := volume.Path
 	volume.Path = volume.Backing.Path
 	volume.Backing = volume.Backing.Backing
-	return os.Remove(volume.Path)
+	return os.Remove(current)
 }

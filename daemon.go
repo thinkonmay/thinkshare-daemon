@@ -2,9 +2,13 @@ package daemon
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
@@ -26,6 +30,7 @@ type Daemon struct {
 	vms          []*packet.WorkerInfor
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
+	close_vm     chan string
 
 	mutex *sync.Mutex
 
@@ -45,11 +50,19 @@ type DaemonOption struct {
 
 func WebDaemon(persistent persistent.Persistent,
 	options DaemonOption) *Daemon {
+	infor, err := system.GetInfor()
+	if err != nil {
+		log.PushLog("failed to get info %s",err.Error())
+		time.Sleep(time.Second)
+		return WebDaemon(persistent,options)
+	}
+
 	daemon := &Daemon{
-		mutex:   &sync.Mutex{},
-		session: []internalWorkerSession{},
-		vms: []*packet.WorkerInfor{},
-		persist: persistent,
+		close_vm: make(chan string, 2),
+		mutex:    &sync.Mutex{},
+		session:  []internalWorkerSession{},
+		vms:      []*packet.WorkerInfor{},
+		persist:  persistent,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
 			persistent.Log(proc, "childprocess", log)
@@ -59,9 +72,9 @@ func WebDaemon(persistent persistent.Persistent,
 		}),
 	}
 
+
 	go func() {
 		for {
-			infor, err := system.GetInfor()
 			if err != nil {
 				log.PushLog("error get sysinfor : %s", err.Error())
 				return
@@ -82,15 +95,45 @@ func WebDaemon(persistent persistent.Persistent,
 		sessions := []packet.WorkerSession{}
 		for _, iws := range daemon.session {
 			sessions = append(sessions, packet.WorkerSession{
-				Id:        iws.Id,
-				Thinkmay:  iws.Thinkmay,
-				Sunshine:  iws.Sunshine,
+				Id:       iws.Id,
+				Target:   infor,
+				Thinkmay: iws.Thinkmay,
+				Sunshine: iws.Sunshine,
 			})
 		}
+
+		for _, vm := range daemon.vms {
+			resp, err := http.Get(fmt.Sprintf("http://%s:60000/sessions", *vm.PrivateIP))
+			if err != nil {
+				continue
+			}
+
+			ss := packet.WorkerSession{}
+			b, _ := io.ReadAll(resp.Body)
+			err = json.Unmarshal(b, &ss)
+			if err != nil {
+				continue
+			}
+
+			sessions = append(sessions, ss)
+		}
+
 		return sessions
 	})
 
 	go HandleVirtdaemon(daemon)
+	go func() {
+		for {
+			worker := daemon.persist.ClosedWorker()
+			if worker.PrivateIP == infor.PrivateIP &&
+				worker.Hostname == infor.Hostname {
+				daemon.Close()
+				break
+			}
+
+			daemon.close_vm <- *worker.PrivateIP
+		}
+	}()
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
@@ -175,6 +218,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
+	daemon.close_vm<-"all"
 	log.RemoveCallback(daemon.log)
 }
 

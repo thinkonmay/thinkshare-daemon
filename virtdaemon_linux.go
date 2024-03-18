@@ -14,7 +14,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-var disk_part = "/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2"
+var disk_part = "./31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2"
 
 func HandleVirtdaemon(daemon *Daemon) {
 	virt, err := libvirt.NewVirtDaemon()
@@ -30,7 +30,58 @@ func HandleVirtdaemon(daemon *Daemon) {
 	}
 	defer network.Close()
 
+	models := []libvirt.VMLaunchModel{}
+	removeVM := func(vm libvirt.Domain) {
+		virt.DeleteVM(*vm.Name)
+		for _, model := range models {
+			if model.ID == *vm.Name {
+				for _, v := range model.BackingVolume {
+					v.PopChain()
+				}
+			}
+		}
+	}
+
+	stop := false
+	go func() {
+		for {
+			ip := <-daemon.close_vm
+
+			vms, err := virt.ListVMs()
+			if err != nil {
+				daemon.close_vm <- ip
+				continue
+			}
+
+			for _, vm := range vms {
+				if !vm.Running {
+					continue
+				}
+
+				add, err := network.FindDomainIPs(vm)
+				if err != nil {
+					daemon.close_vm <- ip
+				} else if add.Ip == nil {
+					continue
+				} else if ip == "all" {
+					removeVM(vm)
+				} else if *add.Ip == ip {
+					removeVM(vm)
+				}
+			}
+
+			if ip == "all" {
+				stop = true
+				break
+			}
+		}
+	}()
+
 	for {
+		if stop {
+			break
+		}
+
 		vms, err := virt.ListVMs()
 		if err != nil {
 			log.PushLog("failed to query gpus %s", err.Error())
@@ -59,9 +110,9 @@ func HandleVirtdaemon(daemon *Daemon) {
 				continue
 			}
 
-			b,_ := io.ReadAll(resp.Body)
+			b, _ := io.ReadAll(resp.Body)
 			inf := packet.WorkerInfor{}
-			err = json.Unmarshal(b,&inf)
+			err = json.Unmarshal(b, &inf)
 			if err != nil {
 				log.PushLog("failed to query gpus %s", err.Error())
 				continue
@@ -88,7 +139,7 @@ func HandleVirtdaemon(daemon *Daemon) {
 				continue
 			}
 
-			chain := libvirt.Volume{disk_part, nil}
+			chain := libvirt.NewVolume(disk_part)
 			err = chain.PushChain(40)
 			if err != nil {
 				log.PushLog("failed to query gpus %s", err.Error())
@@ -96,7 +147,7 @@ func HandleVirtdaemon(daemon *Daemon) {
 			}
 
 			id := uuid.NewString()
-			dom, err := virt.DeployVM(libvirt.VMLaunchModel{
+			model := libvirt.VMLaunchModel{
 				ID:            id,
 				VCPU:          8,
 				RAM:           8,
@@ -104,8 +155,10 @@ func HandleVirtdaemon(daemon *Daemon) {
 				BackingVolume: []libvirt.Volume{chain},
 				Interfaces:    []libvirt.Interface{*iface},
 				VDriver:       true,
-			})
+			}
 
+			models = append(models, model)
+			dom, err := virt.DeployVM(model)
 			if err != nil {
 				log.PushLog("failed to query gpus %s", err.Error())
 				continue
@@ -132,7 +185,6 @@ func HandleVirtdaemon(daemon *Daemon) {
 				log.PushLog("deployed a new worker %s", *addr.Ip)
 				break
 			}
-
 		}
 
 		time.Sleep(time.Second * 20)

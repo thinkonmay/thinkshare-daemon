@@ -93,6 +93,7 @@ func NewLibvirtNetwork(iface string) (Network, error) {
 }
 
 func (ovs *LibvirtNetwork) Close() {
+	ovs.conn.Disconnect()
 
 }
 

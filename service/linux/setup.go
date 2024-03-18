@@ -11,8 +11,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-
-func main(){
+func main() {
 	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
 		i := log.TakeLog(func(log string) {
 			str := fmt.Sprintf("daemon.exe : %s", log)
@@ -23,14 +22,13 @@ func main(){
 		defer log_file.Close()
 	}
 
-
 	end := make(chan bool)
-	cmd.Start(end)
+	go cmd.Start(end)
 
 	chann := make(chan os.Signal, 16)
 	signal.Notify(chann, syscall.SIGTERM, os.Interrupt)
 	<-chann
-	end<-true
+	end <- true
 
 	log.PushLog("Stopped.")
 	time.Sleep(3 * time.Second)
