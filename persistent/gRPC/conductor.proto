@@ -43,12 +43,15 @@ message WorkerInfor{
 	string   RAM        = 4;
 	string   BIOS       = 5;
 
-	string   PublicIP   = 6;
-	string   PrivateIP  = 7;
+	optional string   PublicIP   = 6;
+	optional int32 	  TurnPort = 11;
+	optional string   PrivateIP  = 7;
+	optional string   MacAddr  = 8;
 
-	repeated string GPUs    = 8;
-	optional int32 TurnPort = 9;
+	repeated string GPUs    = 9;
+	repeated WorkerInfor VMs    = 10;
 }
+
 
 message WorkerLog{ 
 	string timestamp = 1;
