@@ -32,17 +32,16 @@ func main() {
 		exit: make(chan bool, 2),
 	}
 
-	if len(os.Args) == 3 {
+	if len(os.Args) == 4 {
 		var err error
 		if os.Args[1] == "discord" {
-			app_id := os.Args[2]
-			err = discord.Init(app_id)
-			if err != nil {
-				panic(err)
-			}
-			err = discord.StartSession()
-			if err != nil {
-				panic(err)
+			app_id   := os.Args[2]
+			activity := os.Args[3]
+			if app_id != "" && app_id != "undefined" && activity != "" && activity != "undefined" {
+				err = discord.StartSession(app_id, activity)
+				if err != nil {
+					panic(err)
+				}
 			}
 			return
 		}
