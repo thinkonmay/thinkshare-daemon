@@ -23,6 +23,7 @@ type internalWorkerSession struct {
 }
 
 type Daemon struct {
+	vms          []*packet.WorkerInfor
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
 
@@ -47,6 +48,7 @@ func WebDaemon(persistent persistent.Persistent,
 	daemon := &Daemon{
 		mutex:   &sync.Mutex{},
 		session: []internalWorkerSession{},
+		vms: []*packet.WorkerInfor{},
 		persist: persistent,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
@@ -71,6 +73,8 @@ func WebDaemon(persistent persistent.Persistent,
 			} else {
 				infor.TurnPort = nil
 			}
+
+			infor.VMs = daemon.vms
 			daemon.persist.Infor(infor)
 		}
 	}()
@@ -87,6 +91,7 @@ func WebDaemon(persistent persistent.Persistent,
 		return sessions
 	})
 
+	go HandleVirtdaemon(daemon)
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil

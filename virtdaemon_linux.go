@@ -1,7 +1,9 @@
 package daemon
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -14,8 +16,8 @@ import (
 
 var disk_part = "/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2"
 
-func HandleVirtdaemon() {
-	daemon, err := libvirt.NewVirtDaemon()
+func HandleVirtdaemon(daemon *Daemon) {
+	virt, err := libvirt.NewVirtDaemon()
 	if err != nil {
 		log.PushLog("failed to create virtdaemon %s", err.Error())
 		return
@@ -29,7 +31,48 @@ func HandleVirtdaemon() {
 	defer network.Close()
 
 	for {
-		gpus, err := daemon.ListGPUs()
+		vms, err := virt.ListVMs()
+		if err != nil {
+			log.PushLog("failed to query gpus %s", err.Error())
+			continue
+		}
+
+		doms := []*packet.WorkerInfor{}
+		for _, vm := range vms {
+			if !vm.Running {
+				continue
+			}
+
+			addr, err := network.FindDomainIPs(vm)
+			if err != nil {
+				log.PushLog("failed to query gpus %s", err.Error())
+				continue
+			} else if addr.Ip == nil {
+				continue
+			}
+
+			client := http.Client{Timeout: time.Second}
+			resp, err := client.Post(fmt.Sprintf("http://%s:60000/info", *addr.Ip), "application/json", strings.NewReader("{}"))
+			if err != nil {
+				continue
+			} else if resp.StatusCode != 200 {
+				continue
+			}
+
+			b,_ := io.ReadAll(resp.Body)
+			inf := packet.WorkerInfor{}
+			err = json.Unmarshal(b,&inf)
+			if err != nil {
+				log.PushLog("failed to query gpus %s", err.Error())
+				continue
+			}
+
+			doms = append(doms, &inf)
+		}
+
+		daemon.vms = doms
+
+		gpus, err := virt.ListGPUs()
 		if err != nil {
 			log.PushLog("failed to query gpus %s", err.Error())
 			continue
@@ -53,7 +96,7 @@ func HandleVirtdaemon() {
 			}
 
 			id := uuid.NewString()
-			dom, err := daemon.DeployVM(libvirt.VMLaunchModel{
+			dom, err := virt.DeployVM(libvirt.VMLaunchModel{
 				ID:            id,
 				VCPU:          8,
 				RAM:           8,
@@ -78,7 +121,7 @@ func HandleVirtdaemon() {
 					continue
 				}
 
-				client := http.Client{ Timeout: time.Second, }
+				client := http.Client{Timeout: time.Second}
 				resp, err := client.Post(fmt.Sprintf("http://%s:60000/initialize", *addr.Ip), "application/json", strings.NewReader("{}"))
 				if err != nil {
 					continue
@@ -89,6 +132,7 @@ func HandleVirtdaemon() {
 				log.PushLog("deployed a new worker %s", *addr.Ip)
 				break
 			}
+
 		}
 
 		time.Sleep(time.Second * 20)
