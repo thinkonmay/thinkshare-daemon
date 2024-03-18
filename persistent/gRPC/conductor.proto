@@ -4,7 +4,7 @@ option go_package = "./packet";
 
 message WorkerSession{ 
 	int32  id = 1;
-	string timestamp = 2;
+	WorkerInfor target = 2;
 	optional DisplaySession  display = 3;
 	optional ThinkmaySession thinkmay = 4;
 	optional SunshineSession sunshine = 5;
@@ -12,29 +12,28 @@ message WorkerSession{
 }
 
 message TurnSession{ 
-	int32 minPort = 1; // do sync
-	int32 maxPort = 2; // do sync
-	int32 port = 3; // do sync
-	string username = 4; // do sync
-	string password = 5; // do sync
+	int32 minPort = 1; 
+	int32 maxPort = 2; 
+	int32 port = 3; 
+	string username = 4; 
+	string password = 5; 
 }
 
 message DisplaySession{ 
-	optional int32 DisplayIndex = 2; // do sync
-	optional string DisplayName = 3; // do sync
+	optional int32 DisplayIndex = 2; 
+	optional string DisplayName = 3; 
 	int32 ScreenWidth = 6;
 	int32 ScreenHeight = 7;
 }
 
 message ThinkmaySession{ 
-	string authConfig 		   	= 3; // do sync
-	string webrtcConfig    		= 5; // do sync
+	string webrtcConfig    		= 1; 
 }
 
 message SunshineSession{ 
-	string port = 2; // do sync
-	string username = 3; // do sync
-	string password = 4; // do sync
+	string port = 2; 
+	string username = 3; 
+	string password = 4; 
 }
 
 message WorkerInfor{ 

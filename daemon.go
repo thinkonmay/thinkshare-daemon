@@ -83,7 +83,6 @@ func WebDaemon(persistent persistent.Persistent,
 		for _, iws := range daemon.session {
 			sessions = append(sessions, packet.WorkerSession{
 				Id:        iws.Id,
-				Timestamp: iws.Timestamp,
 				Thinkmay:  iws.Thinkmay,
 				Sunshine:  iws.Sunshine,
 			})

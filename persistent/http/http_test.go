@@ -32,9 +32,7 @@ func TestHttp(t *testing.T) {
 
 	
 	buf,_ := json.Marshal(packet.WorkerSession{
-		Thinkmay: &packet.ThinkmaySession{
-			AuthConfig: "hi",
-		},
+		Thinkmay: &packet.ThinkmaySession{ },
 	})
 	resp,err := http.DefaultClient.Post("http://localhost:60000/new",
 		"application/json",
