@@ -4,39 +4,34 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"math/rand/v2"
+
 	"time"
 
 	"github.com/digitalocean/go-libvirt"
 	"github.com/digitalocean/go-libvirt/socket/dialers"
 )
 
-const (
-	network_name = "vlnet"
-	bridge_name  = "vlbr"
-)
-
 func newNetwork(card string) string {
+	rand := rand.IntN(63) + 1
+	ip := fmt.Sprintf("10.10.%d.1", rand)
+	endip := fmt.Sprintf("10.10.%d.254", rand)
+
 	return fmt.Sprintf(`
 	<network>
-		<name>%son%s</name>
+		<name>%s</name>
 		<forward dev="%s" mode="nat">
 			<interface dev="%s"/>
-			<nat>
-				<port start="1024" end="65535"/>
-			</nat>
 		</forward>
-		<bridge name="%son%s" stp="on" delay="0"/>
-		<domain name="network"/>
-		<ip address="192.168.100.1" netmask="255.255.255.0">
+		<bridge name="%sbr" stp="on" delay="0"/>
+		<ip address="%s" netmask="255.255.255.0">
 			<dhcp>
-				<range start="192.168.100.1" end="192.168.100.254"/>
+				<range start="%s" end="%s"/>
 			</dhcp>
 		</ip>
 	</network>
-	`, network_name, card,
-		card,
-		card,
-		bridge_name, card)
+	`, card, card, card, card, ip, ip, endip)
 }
 
 type LibvirtNetwork struct {
@@ -62,8 +57,10 @@ func NewLibvirtNetwork(iface string) (Network, error) {
 	}
 
 	nets, _, _ := ret.conn.ConnectListAllNetworks(1, libvirt.ConnectListNetworksActive)
-	if len(nets) > 0 {
-		return ret, nil
+	for _, net := range nets {
+		if net.Name == iface {
+			return ret, nil
+		}
 	}
 
 	found := false
@@ -95,7 +92,7 @@ func NewLibvirtNetwork(iface string) (Network, error) {
 	return ret, nil
 }
 
-func (ovs *LibvirtNetwork) Close(){
+func (ovs *LibvirtNetwork) Close() {
 
 }
 
@@ -142,7 +139,7 @@ func (ovs *LibvirtNetwork) getIPMac() (map[string]string, error) {
 	return ipmacs, nil
 }
 
-func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress,error) {
+func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress, error) {
 	macs := []string{}
 	for _, i2 := range dom.Interfaces {
 		macs = append(macs, *i2.Mac.Address)
@@ -150,7 +147,7 @@ func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress,error) {
 
 	database, err := network.getIPMac()
 	if err != nil {
-		return DomainAddress{},err
+		return DomainAddress{}, err
 	}
 
 	for k, v := range database {
@@ -158,11 +155,11 @@ func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress,error) {
 			if v2 == k && isIPv4(v) {
 				return DomainAddress{
 					Mac: &k,
-					Ip: &v,
-				},nil
+					Ip:  &v,
+				}, nil
 			}
 		}
 	}
 
-	return DomainAddress{Mac: nil,Ip: nil},nil
+	return DomainAddress{Mac: nil, Ip: nil}, nil
 }

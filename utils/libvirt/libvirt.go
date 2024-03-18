@@ -105,11 +105,11 @@ func (lv *Libvirt) CreateVM(id string,
 	gpus []GPU,
 	vols []Disk,
 	ifaces []Interface,
-) error {
+) (libvirt.Domain, error) {
 	dom := Domain{}
 	err := yaml.Unmarshal([]byte(libvirtVM), &dom)
 	if err != nil {
-		return err
+		return libvirt.Domain{},err
 	}
 
 	dom.Name = &id
@@ -148,20 +148,15 @@ func (lv *Libvirt) CreateVM(id string,
 	}
 
 	if err != nil {
-		return err
+		return libvirt.Domain{},err
 	}
 
 	xml, err := dom.ToString()
 	if err != nil {
-		return err
+		return libvirt.Domain{},err
 	}
 
-	_, err = lv.conn.DomainCreateXML(xml, libvirt.DomainStartValidate)
-	if err != nil {
-		return fmt.Errorf("error starting VM: %s", err.Error())
-	} else {
-		return nil
-	}
+	return lv.conn.DomainCreateXML(xml, libvirt.DomainStartValidate)
 }
 
 func (lv *Libvirt) AttachDisk(

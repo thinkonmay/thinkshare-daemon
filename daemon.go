@@ -19,7 +19,7 @@ import (
 type internalWorkerSession struct {
 	packet.WorkerSession
 	childprocess []childprocess.ProcessID
-	turn_server         *turn.TurnServer
+	turn_server  *turn.TurnServer
 }
 
 type Daemon struct {
@@ -93,7 +93,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 		err := fmt.Errorf("no session configured")
 		if ss.Display != nil {
-			name, index,err := media.StartVirtualDisplay(
+			name, index, err := media.StartVirtualDisplay(
 				int(ss.Display.ScreenWidth),
 				int(ss.Display.ScreenHeight),
 			)
@@ -110,10 +110,10 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 		if ss.Turn != nil {
 			t, err = turn.Open(
-				ss.Turn.Username, 
-				ss.Turn.Password, 
-				int(ss.Turn.MinPort), 
-				int(ss.Turn.MaxPort), 
+				ss.Turn.Username,
+				ss.Turn.Password,
+				int(ss.Turn.MinPort),
+				int(ss.Turn.MaxPort),
 				int(ss.Turn.Port),
 			)
 		}

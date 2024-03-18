@@ -49,6 +49,7 @@ func GetPublicIPCurl() (result string) {
 	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
 	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
 	if result == "" { result = getPublicIPSTUN() }
+	if result == "" { result = getPublicIPSTUN() }
 	return result
 }
 func getPublicIPCurl(url string) (string) {
@@ -124,16 +125,20 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
+
+	public := GetPublicIPCurl()
+	private := GetPrivateIP()
 	ret := &packet.WorkerInfor{
 		CPU:  cpus.Processors[0].Model,
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
 		BIOS: fmt.Sprintf("%v", bios),
 
 		GPUs:  make([]string, 0),
+		VMs: []*packet.WorkerInfor{},
 
 		// Get preferred outbound ip of this machine
-		PublicIP:  GetPublicIPCurl(),
-		PrivateIP: GetPrivateIP(),
+		PublicIP:  &public,
+		PrivateIP: &private,
 	}
 
 	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)", 

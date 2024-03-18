@@ -1,7 +1,7 @@
 package libvirt
 
 const (
-	driver_virtio = "virtio"
+	Virtio = "virtio"
 )
 
 type DomainAddress struct {
@@ -10,7 +10,7 @@ type DomainAddress struct {
 }
 
 type Network interface {
-	FindDomainIPs(dom Domain) (DomainAddress,error)
-	CreateInterface(driver string) (*Interface,error)
+	FindDomainIPs(dom Domain) (DomainAddress, error)
+	CreateInterface(driver string) (*Interface, error)
 	Close()
 }

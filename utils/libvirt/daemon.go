@@ -1,5 +1,7 @@
 package libvirt
 
+import "fmt"
+
 type VirtDaemon struct {
 	libvirt *Libvirt
 }
@@ -87,7 +89,7 @@ func (daemon *VirtDaemon) AttachDisk(vm string, Volumes []Volume) error {
 	)
 }
 
-func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
+func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) (Domain, error) {
 	driver := "ide"
 	if server.VDriver {
 		driver = "virtio"
@@ -136,7 +138,7 @@ func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
 		})
 	}
 
-	return daemon.libvirt.CreateVM(
+	dom,err :=  daemon.libvirt.CreateVM(
 		server.ID,
 		server.VCPU,
 		server.RAM,
@@ -144,6 +146,22 @@ func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) error {
 		volumes,
 		server.Interfaces,
 	)
+	if err != nil {
+		return Domain{}, err
+	}
+
+	doms,err := daemon.libvirt.ListDomains()
+	if err != nil {
+		return Domain{}, err
+	}
+
+	for _,d  := range doms {
+		if *d.Name == dom.Name {
+			return d,nil
+		}
+	}
+
+	return Domain{},fmt.Errorf("domain not found")
 }
 
 func (daemon *VirtDaemon) DeleteVM(name string) error {

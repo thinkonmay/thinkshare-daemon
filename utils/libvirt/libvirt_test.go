@@ -47,7 +47,7 @@ func TestLibvirt(t *testing.T) {
 
 	}
 
-	i, err := network.CreateInterface(driver_virtio)
+	i, err := network.CreateInterface(Virtio)
 	if err != nil {
 		t.Error(err)
 		return
@@ -61,21 +61,21 @@ func TestLibvirt(t *testing.T) {
 		return
 	}
 
-	chain := Volume{"/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2",nil}
+	chain := Volume{"/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2", nil}
 	err = chain.PushChain(40)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	chain2 := Volume{"/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2",nil}
+	chain2 := Volume{"/home/huyhoang/thinkshare-daemon/utils/libvirt/31134452-4554-4fc8-a0ea-2c88e62ed17f.qcow2", nil}
 	err = chain2.PushChain(40)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	err = d.DeployVM(VMLaunchModel{
+	_,err = d.DeployVM(VMLaunchModel{
 		ID:            "test",
 		VCPU:          8,
 		RAM:           8,
@@ -90,7 +90,7 @@ func TestLibvirt(t *testing.T) {
 		return
 	}
 
-	err = d.AttachDisk( "test",[]Volume{chain2})
+	err = d.AttachDisk("test", []Volume{chain2})
 
 	if err != nil {
 		t.Error(err)
