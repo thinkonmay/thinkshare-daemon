@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,9 +53,9 @@ func WebDaemon(persistent persistent.Persistent,
 	options DaemonOption) *Daemon {
 	infor, err := system.GetInfor()
 	if err != nil {
-		log.PushLog("failed to get info %s",err.Error())
+		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent,options)
+		return WebDaemon(persistent, options)
 	}
 
 	daemon := &Daemon{
@@ -71,7 +72,6 @@ func WebDaemon(persistent persistent.Persistent,
 			persistent.Log("daemon.exe", "infor", log)
 		}),
 	}
-
 
 	go func() {
 		for {
@@ -139,22 +139,6 @@ func WebDaemon(persistent persistent.Persistent,
 		var t *turn.TurnServer = nil
 
 		err := fmt.Errorf("no session configured")
-		if ss.Display != nil {
-			name, index, err := media.StartVirtualDisplay(
-				int(ss.Display.ScreenWidth),
-				int(ss.Display.ScreenHeight),
-			)
-			if err == nil {
-				return err
-			}
-			val := int32(index)
-			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
-		} else {
-			ss.Display = &packet.DisplaySession{
-				DisplayName:  &media.Displays()[0],
-				DisplayIndex: nil,
-			}
-		}
 		if ss.Turn != nil {
 			t, err = turn.Open(
 				ss.Turn.Username,
@@ -164,12 +148,52 @@ func WebDaemon(persistent persistent.Persistent,
 				int(ss.Turn.Port),
 			)
 		}
-		if ss.Thinkmay != nil {
-			process, err = daemon.handleHub(ss)
+
+		if ss.Target != nil &&
+			(*ss.Target.PrivateIP != *infor.PrivateIP ||
+			ss.Target.Hostname != infor.Hostname) {
+			for _, vm := range daemon.vms {
+				if *vm.PrivateIP == *ss.Target.PrivateIP {
+					b, _ := json.Marshal(ss)
+					resp, err := http.Post(
+						fmt.Sprintf("http://%s:60000/new", *vm.PrivateIP), 
+						"application/json", 
+						strings.NewReader(string(b)))
+					if err != nil {
+						return err
+					} else if resp.StatusCode != 200 {
+						b, _ := io.ReadAll(resp.Body)
+						return fmt.Errorf(string(b))
+					}
+
+					break
+				}
+			}
+		} else {
+			if ss.Display != nil {
+				name, index, err := media.StartVirtualDisplay(
+					int(ss.Display.ScreenWidth),
+					int(ss.Display.ScreenHeight),
+				)
+				if err == nil {
+					return err
+				}
+				val := int32(index)
+				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
+			} else {
+				ss.Display = &packet.DisplaySession{
+					DisplayName:  &media.Displays()[0],
+					DisplayIndex: nil,
+				}
+			}
+			if ss.Thinkmay != nil {
+				process, err = daemon.handleHub(ss)
+			}
+			if ss.Sunshine != nil {
+				process, err = daemon.handleSunshine(ss)
+			}
 		}
-		if ss.Sunshine != nil {
-			process, err = daemon.handleSunshine(ss)
-		}
+
 		if err != nil {
 			log.PushLog("session failed")
 			return err
@@ -218,7 +242,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
-	daemon.close_vm<-"all"
+	daemon.close_vm <- "all"
 	log.RemoveCallback(daemon.log)
 }
 

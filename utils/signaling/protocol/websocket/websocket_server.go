@@ -2,8 +2,10 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -24,8 +26,53 @@ type WebSocketServer struct {
 func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
 	server.fun = fun
 }
+func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Request) bool {
+	ip := r.URL.Query().Get("target")
+	if ip == "" {
+		return false
+	}
+
+	q := r.URL.Query()
+	q.Del("target")
+	clone := url.URL{
+		Scheme: "http",
+		Host: fmt.Sprintf("%s:60000", ip),
+		Path: r.URL.Path,
+		RawQuery: q.Encode(),
+	}
+	req, err := http.NewRequest(r.Method, clone.String(), r.Body)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(err.Error()))
+		return true
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		w.WriteHeader(500)
+		w.Write([]byte(err.Error()))
+		return true
+	}
+
+	for k, v := range resp.Header {
+		if len(v) == 0 {
+			continue
+		}
+		w.Header().Add(k, v[0])
+	}
+
+	b, _ := io.ReadAll(resp.Body)
+	w.Write(b)
+	return true
+}
 
 func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
+	if wsserver.HandleForward(w,r) {
+		return
+	}
+
 	if !wsserver.auth(r) {
 		w.WriteHeader(401)
 		return
@@ -128,10 +175,10 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 func InitSignallingHttp(path string, auth func(*http.Request) bool) *WebSocketServer {
 	wsserver := &WebSocketServer{
 		mapid: map[string]*HttpTenant{},
-		fun:  func(protocol.Tenant) error { return nil },
-		auth: auth,
-		path: path,
-		mut:  &sync.Mutex{},
+		fun:   func(protocol.Tenant) error { return nil },
+		auth:  auth,
+		path:  path,
+		mut:   &sync.Mutex{},
 	}
 	http.HandleFunc(path, wsserver.HandleHttpSignaling)
 	return wsserver
