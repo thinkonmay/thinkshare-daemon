@@ -14,6 +14,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
@@ -25,6 +26,7 @@ type internalWorkerSession struct {
 	packet.WorkerSession
 	childprocess []childprocess.ProcessID
 	turn_server  *turn.TurnServer
+	vm           *libvirt.VMLaunchModel
 }
 
 type Daemon struct {
@@ -32,15 +34,12 @@ type Daemon struct {
 	gpus         []string
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
-	close_vm     chan string
 
 	mutex *sync.Mutex
 
 	session []internalWorkerSession
 	log     int
 }
-
-
 
 func WebDaemon(persistent persistent.Persistent) *Daemon {
 	infor, err := system.GetInfor()
@@ -51,11 +50,10 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	}
 
 	daemon := &Daemon{
-		close_vm: make(chan string, 2),
-		mutex:    &sync.Mutex{},
-		session:  []internalWorkerSession{},
-		vms:      []*packet.WorkerInfor{},
-		persist:  persistent,
+		mutex:   &sync.Mutex{},
+		session: []internalWorkerSession{},
+		vms:     []*packet.WorkerInfor{},
+		persist: persistent,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
 			persistent.Log(proc, "childprocess", log)
@@ -111,6 +109,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
+		var m *libvirt.VMLaunchModel = nil
 
 		err := fmt.Errorf("no session configured")
 		if ss.Turn != nil {
@@ -125,13 +124,13 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 
 		if ss.Target != nil &&
 			(*ss.Target.PrivateIP != *infor.PrivateIP ||
-			ss.Target.Hostname != infor.Hostname) {
+				ss.Target.Hostname != infor.Hostname) {
 			for _, vm := range daemon.vms {
 				if *vm.PrivateIP == *ss.Target.PrivateIP {
 					b, _ := json.Marshal(ss)
 					resp, err := http.Post(
-						fmt.Sprintf("http://%s:60000/new", *vm.PrivateIP), 
-						"application/json", 
+						fmt.Sprintf("http://%s:60000/new", *vm.PrivateIP),
+						"application/json",
 						strings.NewReader(string(b)))
 					if err != nil {
 						return err
@@ -164,7 +163,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 				process, err = daemon.handleHub(ss)
 			}
 			if ss.Vm != nil {
-				process, err = DeployVM(ss.Vm.Gpu)
+				m, err = DeployVM(ss.Vm.GPU)
 			}
 			if ss.Sunshine != nil {
 				process, err = daemon.handleSunshine(ss)
@@ -179,7 +178,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 		log.PushLog("session creation successful")
 		daemon.session = append(daemon.session,
 			internalWorkerSession{
-				*ss, process, t,
+				*ss, process, t, m,
 			})
 
 		return nil
@@ -193,6 +192,9 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			for _, ws := range daemon.session {
 				if ws.Display.DisplayIndex != nil {
 					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+				}
+				if ws.Vm != nil {
+					ShutdownVM(*ws.vm)
 				}
 				if ws.turn_server != nil {
 					ws.turn_server.Close()
@@ -219,8 +221,21 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 
 func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
-	daemon.close_vm <- "all"
 	log.RemoveCallback(daemon.log)
+	for _, ws := range daemon.session {
+		if ws.Display.DisplayIndex != nil {
+			media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+		}
+		if ws.Vm != nil {
+			ShutdownVM(*ws.vm)
+		}
+		if ws.turn_server != nil {
+			ws.turn_server.Close()
+		}
+		for _, pi := range ws.childprocess {
+			daemon.childprocess.CloseID(pi)
+		}
+	}
 }
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {

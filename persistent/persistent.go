@@ -9,6 +9,5 @@ type Persistent interface {
 
 	RecvSession(func(*packet.WorkerSession) error)
 	ClosedSession() int
-	ClosedWorker() *packet.WorkerInfor
 	Stop()
 }
