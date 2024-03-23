@@ -167,7 +167,7 @@ func HandleVirtdaemon(daemon *Daemon) {
 			}
 
 			client := http.Client{Timeout: time.Second}
-			resp, err := client.Post(fmt.Sprintf("http://%s:60000/initialize", *addr.Ip), "application/json", strings.NewReader("{}"))
+			resp, err := client.Get(fmt.Sprintf("http://%s:60000/ping", *addr.Ip))
 			if err != nil {
 				continue
 			} else if resp.StatusCode != 200 {

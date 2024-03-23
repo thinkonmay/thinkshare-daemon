@@ -43,7 +43,6 @@ message WorkerInfor{
 	string   BIOS       = 5;
 
 	optional string   PublicIP   = 6;
-	optional int32 	  TurnPort = 11;
 	optional string   PrivateIP  = 7;
 	optional string   MacAddr  = 8;
 

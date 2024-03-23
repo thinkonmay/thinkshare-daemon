@@ -39,23 +39,14 @@ type Daemon struct {
 	log     int
 }
 
-type DaemonOption struct {
-	Turn *struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		MinPort  int    `json:"min_port"`
-		MaxPort  int    `json:"max_port"`
-		Port     int
-	} `json:"turn"`
-}
 
-func WebDaemon(persistent persistent.Persistent,
-	options DaemonOption) *Daemon {
+
+func WebDaemon(persistent persistent.Persistent) *Daemon {
 	infor, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent, options)
+		return WebDaemon(persistent)
 	}
 
 	daemon := &Daemon{
@@ -78,13 +69,6 @@ func WebDaemon(persistent persistent.Persistent,
 			if err != nil {
 				log.PushLog("error get sysinfor : %s", err.Error())
 				return
-			}
-
-			if options.Turn != nil {
-				port := int32(options.Turn.Port)
-				infor.TurnPort = &port
-			} else {
-				infor.TurnPort = nil
 			}
 
 			infor.VMs = daemon.vms

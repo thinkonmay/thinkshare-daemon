@@ -11,9 +11,6 @@ import (
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 )
 
-type StartRequest struct {
-	daemon.DaemonOption
-}
 
 func Start(stop chan bool) {
 	media.ActivateVirtualDriver()
@@ -36,7 +33,7 @@ func Start(stop chan bool) {
 	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
-	dm := daemon.WebDaemon(grpc, daemon.DaemonOption{})
+	dm := daemon.WebDaemon(grpc)
 	defer dm.Close()
 	<-stop
 }
