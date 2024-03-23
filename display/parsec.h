@@ -362,21 +362,16 @@ void SetResolution(char* display_name,
 			deviceIndex++, displayDevice, 0);
 		if ((displayDevice->StateFlags & DISPLAY_DEVICE_ACTIVE) && 
 			 !strcmp(display_name,displayDevice->DeviceName)) {
+            DEVMODEA dm = {};
+            if (!EnumDisplaySettingsA(displayDevice->DeviceName, ENUM_CURRENT_SETTINGS, &dm) ) 
+                continue;
 
-			DISPLAY_DEVICEA monitor = {0};
-			monitor.cb = sizeof(DISPLAY_DEVICEA);
-			EnumDisplayDevicesA(displayDevice->DeviceName, 
-				0, &monitor, 0);
-			
-			DEVMODEA dm = {};
-			if (!EnumDisplaySettingsA(displayDevice->DeviceName, ENUM_CURRENT_SETTINGS, &dm) ) 
-				continue;
-
-			dm.dmPelsWidth  = Width;
-			dm.dmPelsHeight = Height;
-			dm.dmDisplayFrequency = refreshRate;
-			ChangeDisplaySettingsExA(displayDevice->DeviceName, &dm,  \
-									NULL, (CDS_GLOBAL | CDS_UPDATEREGISTRY | CDS_RESET), NULL);
+                dm.dmPelsWidth  = Width;
+                dm.dmPelsHeight = Height;
+                dm.dmDisplayFrequency = refreshRate;
+                dm.dmFields = DM_DISPLAYFREQUENCY | DM_PELSWIDTH | DM_PELSHEIGHT;
+                ChangeDisplaySettingsExA(displayDevice->DeviceName, &dm,  \
+                                        NULL, (CDS_GLOBAL | CDS_UPDATEREGISTRY | CDS_NORESET), NULL);
 		}
 	} while (result);
 }

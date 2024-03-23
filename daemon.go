@@ -159,7 +159,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 					int(ss.Display.ScreenWidth),
 					int(ss.Display.ScreenHeight),
 				)
-				if err == nil {
+				if err != nil {
 					return err
 				}
 				val := int32(index)
