@@ -29,6 +29,7 @@ type internalWorkerSession struct {
 
 type Daemon struct {
 	vms          []*packet.WorkerInfor
+	gpus         []string
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
 	close_vm     chan string
@@ -72,6 +73,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			}
 
 			infor.VMs = daemon.vms
+			infor.GPUs = daemon.gpus
 			daemon.persist.Infor(infor)
 		}
 	}()
@@ -106,18 +108,6 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	})
 
 	go HandleVirtdaemon(daemon)
-	go func() {
-		for {
-			worker := daemon.persist.ClosedWorker()
-			if worker.PrivateIP == infor.PrivateIP &&
-				worker.Hostname == infor.Hostname {
-				daemon.Close()
-				break
-			}
-
-			daemon.close_vm <- *worker.PrivateIP
-		}
-	}()
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
@@ -172,6 +162,9 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			}
 			if ss.Thinkmay != nil {
 				process, err = daemon.handleHub(ss)
+			}
+			if ss.Vm != nil {
+				process, err = DeployVM(ss.Vm.Gpu)
 			}
 			if ss.Sunshine != nil {
 				process, err = daemon.handleSunshine(ss)
