@@ -9,11 +9,13 @@ message WorkerSession{
 	optional ThinkmaySession thinkmay = 4;
 	optional SunshineSession sunshine = 5;
 	optional TurnSession turn = 6;
-	optional VMSession vm = 6;
+	optional VMSession vm = 7;
 }
 
 message VMSession{ 
 	string GPU = 1;
+	string   CPU        = 2;
+	string   RAM        = 3;
 }
 
 message TurnSession{ 
