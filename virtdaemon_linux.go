@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,49 +21,6 @@ var (
 	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
 )
 
-func update_vms(daemon *Daemon) {
-	vms, err := virt.ListVMs()
-	if err != nil {
-		log.PushLog("failed to query gpus %s", err.Error())
-		return
-	}
-
-	doms := []*packet.WorkerInfor{}
-	for _, vm := range vms {
-		if !vm.Running {
-			continue
-		}
-
-		addr, err := network.FindDomainIPs(vm)
-		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
-			continue
-		} else if addr.Ip == nil {
-			continue
-		}
-
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Post(fmt.Sprintf("http://%s:60000/info", *addr.Ip), "application/json", strings.NewReader("{}"))
-		if err != nil {
-			continue
-		} else if resp.StatusCode != 200 {
-			continue
-		}
-
-		b, _ := io.ReadAll(resp.Body)
-		inf := packet.WorkerInfor{}
-		err = json.Unmarshal(b, &inf)
-		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
-			continue
-		}
-
-		doms = append(doms, &inf)
-	}
-
-	daemon.vms = doms
-}
-
 func update_gpu(daemon *Daemon) {
 	gpus, err := virt.ListGPUs()
 	if err != nil {
@@ -72,13 +28,14 @@ func update_gpu(daemon *Daemon) {
 		return
 	}
 
-	daemon.gpus = []string{}
+	gs := []string{}
 	for _, g := range gpus {
 		if g.Active {
 			return
 		}
-		daemon.gpus = append(daemon.gpus, g.Capability.Product.Val)
+		gs = append(gs, g.Capability.Product.Val)
 	}
+	daemon.info.GPUs = gs
 }
 
 func HandleVirtdaemon(daemon *Daemon) {
@@ -97,19 +54,16 @@ func HandleVirtdaemon(daemon *Daemon) {
 	defer network.Close()
 
 	for {
-		update_vms(daemon)
 		update_gpu(daemon)
 		time.Sleep(time.Second * 20)
 	}
 }
 
 func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
-	defer update_vms(daemon)
-
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	for _, candidate := range gpus {
 		if candidate.Active || candidate.Capability.Product.Val != g {
@@ -192,8 +146,6 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 }
 
 func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
-	defer update_vms(daemon)
-
 	removeVM := func(vm libvirt.Domain) {
 		virt.DeleteVM(*vm.Name)
 		for _, model := range models {
