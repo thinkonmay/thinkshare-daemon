@@ -63,13 +63,12 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			if err := json.Unmarshal([]byte(conn), msg); err != nil {
 				return nil, err
 			}
-			var err error
 			if resp, err := ret.recv_session(msg); err == nil {
 				b, _ := json.Marshal(resp)
-				return b, err
+				return b, nil
+			} else {
+				return nil, err
 			}
-
-			return nil, err
 		})
 	ret.wrapper("closed",
 		func(conn string) ([]byte, error) {
@@ -97,6 +96,7 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
+		log.PushLog("-- request: %s", string(b))
 		resp, err := fun(string(b))
 		if err != nil {
 			w.WriteHeader(503)
@@ -104,6 +104,7 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
+		log.PushLog("-- response: %s", string(resp))
 		w.WriteHeader(200)
 		w.Write(resp)
 	})

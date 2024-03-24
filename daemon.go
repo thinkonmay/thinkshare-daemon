@@ -158,7 +158,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 		}
 
 		if err != nil {
-			log.PushLog("session failed")
+			log.PushLog("session failed %s",err.Error())
 			return nil, err
 		}
 

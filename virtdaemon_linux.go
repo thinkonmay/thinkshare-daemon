@@ -14,7 +14,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-var disk_part = "/disk/HHDa/default.qcow2"
+var disk_part = "/home/huyhoang/seed/vol.qcow2"
 
 var (
 	virt    *libvirt.VirtDaemon
@@ -103,13 +103,13 @@ func HandleVirtdaemon(daemon *Daemon) {
 	}
 }
 
-func (daemon *Daemon)DeployVM(g string) (*packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 	defer update_vms(daemon)
 
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
-		log.PushLog("failed to query gpus %s", err.Error())
+		return nil,err
 	}
 	for _, candidate := range gpus {
 		if candidate.Active || candidate.Capability.Product.Val != g {
@@ -191,7 +191,7 @@ func (daemon *Daemon)DeployVM(g string) (*packet.WorkerInfor, error) {
 
 }
 
-func (daemon *Daemon)ShutdownVM(info *packet.WorkerInfor) error {
+func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	defer update_vms(daemon)
 
 	removeVM := func(vm libvirt.Domain) {
