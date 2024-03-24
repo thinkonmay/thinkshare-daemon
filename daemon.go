@@ -168,6 +168,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			childprocess: process,
 		}
 
+		daemon.info.Sessions = append(daemon.info.Sessions, ss)
 		return ss, nil
 	})
 
@@ -188,11 +189,18 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 					delete(daemon.session, v)
 				}
 			}
+
+			wss := []*packet.WorkerSession{}
 			for _, v := range daemon.info.Sessions {
 				if ss == v.Id {
 					ws = v
+				} else {
+					wss = append(wss, v)
 				}
 			}
+
+			daemon.info.Sessions = wss
+
 
 			if ws != nil {
 				if ws.Display != nil {
