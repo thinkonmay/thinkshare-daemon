@@ -14,7 +14,6 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
@@ -23,10 +22,9 @@ import (
 )
 
 type internalWorkerSession struct {
-	packet.WorkerSession
+	*packet.WorkerSession
 	childprocess []childprocess.ProcessID
 	turn_server  *turn.TurnServer
-	vm           *libvirt.VMLaunchModel
 }
 
 type Daemon struct {
@@ -63,18 +61,11 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 		}),
 	}
 
-	go func() {
-		for {
-			if err != nil {
-				log.PushLog("error get sysinfor : %s", err.Error())
-				return
-			}
-
-			infor.VMs = daemon.vms
-			infor.GPUs = daemon.gpus
-			daemon.persist.Infor(infor)
-		}
-	}()
+	daemon.persist.Infor(func() *packet.WorkerInfor {
+		infor.VMs = daemon.vms
+		infor.GPUs = daemon.gpus
+		return infor
+	})
 	daemon.persist.Sessions(func() []packet.WorkerSession {
 		sessions := []packet.WorkerSession{}
 		for _, iws := range daemon.session {
@@ -106,10 +97,9 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	})
 
 	go HandleVirtdaemon(daemon)
-	daemon.persist.RecvSession(func(ss *packet.WorkerSession) error {
+	daemon.persist.RecvSession(func(ss *packet.WorkerSession) (*packet.WorkerSession, error) {
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
-		var m *libvirt.VMLaunchModel = nil
 
 		err := fmt.Errorf("no session configured")
 		if ss.Turn != nil {
@@ -133,10 +123,10 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 						"application/json",
 						strings.NewReader(string(b)))
 					if err != nil {
-						return err
+						return nil, err
 					} else if resp.StatusCode != 200 {
 						b, _ := io.ReadAll(resp.Body)
-						return fmt.Errorf(string(b))
+						return nil, fmt.Errorf(string(b))
 					}
 
 					break
@@ -149,21 +139,22 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 					int(ss.Display.ScreenHeight),
 				)
 				if err != nil {
-					return err
+					return nil, err
 				}
 				val := int32(index)
 				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
-			} else {
+			} else if len(media.Displays()) > 0 {
 				ss.Display = &packet.DisplaySession{
 					DisplayName:  &media.Displays()[0],
 					DisplayIndex: nil,
 				}
 			}
+
 			if ss.Thinkmay != nil {
 				process, err = daemon.handleHub(ss)
 			}
 			if ss.Vm != nil {
-				m, err = DeployVM(ss.Vm.GPU)
+				ss.Vm.Result, err = daemon.DeployVM(ss.Vm.GPU)
 			}
 			if ss.Sunshine != nil {
 				process, err = daemon.handleSunshine(ss)
@@ -172,16 +163,16 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 
 		if err != nil {
 			log.PushLog("session failed")
-			return err
+			return nil, err
 		}
 
 		log.PushLog("session creation successful")
 		daemon.session = append(daemon.session,
 			internalWorkerSession{
-				*ss, process, t, m,
+				ss, process, t,
 			})
 
-		return nil
+		return ss, nil
 	})
 
 	go func() {
@@ -190,11 +181,13 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			log.PushLog("terminating session %d", ss)
 			queue := []internalWorkerSession{}
 			for _, ws := range daemon.session {
-				if ws.Display.DisplayIndex != nil {
-					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+				if ws.Display != nil {
+					if ws.Display.DisplayIndex != nil {
+						media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+					}
 				}
 				if ws.Vm != nil {
-					ShutdownVM(*ws.vm)
+					daemon.ShutdownVM(ws.Vm.Result)
 				}
 				if ws.turn_server != nil {
 					ws.turn_server.Close()
@@ -223,11 +216,13 @@ func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
 	log.RemoveCallback(daemon.log)
 	for _, ws := range daemon.session {
-		if ws.Display.DisplayIndex != nil {
-			media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+		if ws.Display != nil {
+			if ws.Display.DisplayIndex != nil {
+				media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+			}
 		}
 		if ws.Vm != nil {
-			ShutdownVM(*ws.vm)
+			daemon.ShutdownVM(ws.Vm.Result)
 		}
 		if ws.turn_server != nil {
 			ws.turn_server.Close()

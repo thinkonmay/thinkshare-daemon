@@ -17,13 +17,73 @@ import (
 var disk_part = "/disk/HHDa/default.qcow2"
 
 var (
-	virt *libvirt.VirtDaemon
+	virt    *libvirt.VirtDaemon
 	network libvirt.Network
+	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
 )
+
+func update_vms(daemon *Daemon) {
+	vms, err := virt.ListVMs()
+	if err != nil {
+		log.PushLog("failed to query gpus %s", err.Error())
+		return
+	}
+
+	doms := []*packet.WorkerInfor{}
+	for _, vm := range vms {
+		if !vm.Running {
+			continue
+		}
+
+		addr, err := network.FindDomainIPs(vm)
+		if err != nil {
+			log.PushLog("failed to query gpus %s", err.Error())
+			continue
+		} else if addr.Ip == nil {
+			continue
+		}
+
+		client := http.Client{Timeout: time.Second}
+		resp, err := client.Post(fmt.Sprintf("http://%s:60000/info", *addr.Ip), "application/json", strings.NewReader("{}"))
+		if err != nil {
+			continue
+		} else if resp.StatusCode != 200 {
+			continue
+		}
+
+		b, _ := io.ReadAll(resp.Body)
+		inf := packet.WorkerInfor{}
+		err = json.Unmarshal(b, &inf)
+		if err != nil {
+			log.PushLog("failed to query gpus %s", err.Error())
+			continue
+		}
+
+		doms = append(doms, &inf)
+	}
+
+	daemon.vms = doms
+}
+
+func update_gpu(daemon *Daemon) {
+	gpus, err := virt.ListGPUs()
+	if err != nil {
+		log.PushLog("failed to query gpus %s", err.Error())
+		return
+	}
+
+	daemon.gpus = []string{}
+	for _, g := range gpus {
+		if g.Active {
+			return
+		}
+		daemon.gpus = append(daemon.gpus, g.Capability.Product.Val)
+	}
+}
 
 func HandleVirtdaemon(daemon *Daemon) {
 	var err error
-	virt, err := libvirt.NewVirtDaemon()
+	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
 		log.PushLog("failed to create virtdaemon %s", err.Error())
 		return
@@ -36,74 +96,16 @@ func HandleVirtdaemon(daemon *Daemon) {
 	}
 	defer network.Close()
 
-	update_vms := func() {
-		vms, err := virt.ListVMs()
-		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
-			return
-		}
-
-		doms := []*packet.WorkerInfor{}
-		for _, vm := range vms {
-			if !vm.Running {
-				continue
-			}
-
-			addr, err := network.FindDomainIPs(vm)
-			if err != nil {
-				log.PushLog("failed to query gpus %s", err.Error())
-				continue
-			} else if addr.Ip == nil {
-				continue
-			}
-
-			client := http.Client{Timeout: time.Second}
-			resp, err := client.Post(fmt.Sprintf("http://%s:60000/info", *addr.Ip), "application/json", strings.NewReader("{}"))
-			if err != nil {
-				continue
-			} else if resp.StatusCode != 200 {
-				continue
-			}
-
-			b, _ := io.ReadAll(resp.Body)
-			inf := packet.WorkerInfor{}
-			err = json.Unmarshal(b, &inf)
-			if err != nil {
-				log.PushLog("failed to query gpus %s", err.Error())
-				continue
-			}
-
-			doms = append(doms, &inf)
-		}
-
-		daemon.vms = doms
-	}
-
-
-	update_gpu := func() {
-		gpus, err := virt.ListGPUs()
-		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
-			return
-		}
-
-		daemon.gpus = []string{}
-		for _, g := range gpus {
-			if g.Active {
-				return
-			}
-			daemon.gpus = append(daemon.gpus, g.Capability.Product.Val)
-		}
-	}
-
 	for {
-		update_vms()
-		update_gpu()
+		update_vms(daemon)
+		update_gpu(daemon)
 		time.Sleep(time.Second * 20)
 	}
 }
 
-func DeployVM(g string) (*libvirt.VMLaunchModel ,error) {
+func (daemon *Daemon)DeployVM(g string) (*packet.WorkerInfor, error) {
+	defer update_vms(daemon)
+
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
@@ -119,18 +121,18 @@ func DeployVM(g string) (*libvirt.VMLaunchModel ,error) {
 	}
 
 	if gpu == nil {
-		return nil,fmt.Errorf("unable to find available gpu")
+		return nil, fmt.Errorf("unable to find available gpu")
 	}
 
 	iface, err := network.CreateInterface(libvirt.Virtio)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	chain := libvirt.NewVolume(disk_part)
 	err = chain.PushChain(40)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	id := uuid.NewString()
@@ -144,9 +146,10 @@ func DeployVM(g string) (*libvirt.VMLaunchModel ,error) {
 		VDriver:       true,
 	}
 
+	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	for {
@@ -167,20 +170,37 @@ func DeployVM(g string) (*libvirt.VMLaunchModel ,error) {
 			continue
 		}
 
+		resp, err = client.Get(fmt.Sprintf("http://%s:60000/info", *addr.Ip))
+		if err != nil {
+			continue
+		} else if resp.StatusCode != 200 {
+			continue
+		}
+
+		b, _ := io.ReadAll(resp.Body)
+		inf := packet.WorkerInfor{}
+		err = json.Unmarshal(b, &inf)
+		if err != nil {
+			log.PushLog("failed to query gpus %s", err.Error())
+			continue
+		}
+
 		log.PushLog("deployed a new worker %s", *addr.Ip)
-		break
+		return &inf, nil
 	}
 
-	return &model,nil
 }
 
+func (daemon *Daemon)ShutdownVM(info *packet.WorkerInfor) error {
+	defer update_vms(daemon)
 
-func ShutdownVM(model libvirt.VMLaunchModel) error {
 	removeVM := func(vm libvirt.Domain) {
 		virt.DeleteVM(*vm.Name)
-		if model.ID == *vm.Name {
-			for _, v := range model.BackingVolume {
-				v.PopChain()
+		for _, model := range models {
+			if model.ID == *vm.Name {
+				for _, v := range model.BackingVolume {
+					v.PopChain()
+				}
 			}
 		}
 	}
@@ -191,14 +211,16 @@ func ShutdownVM(model libvirt.VMLaunchModel) error {
 	}
 
 	for _, vm := range vms {
-		if !vm.Running {
+		ip, err := network.FindDomainIPs(vm)
+		if err != nil {
 			continue
 		}
 
-		if *vm.Name == model.ID {
+		if vm.Running && *ip.Ip == *info.PrivateIP {
 			removeVM(vm)
+			return nil
 		}
 	}
 
-	return nil
+	return fmt.Errorf("vm not found")
 }
