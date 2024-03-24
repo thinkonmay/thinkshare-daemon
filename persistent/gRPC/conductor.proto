@@ -13,9 +13,10 @@ message WorkerSession{
 }
 
 message VMSession{ 
-	string GPU = 1;
+	string 	 GPU = 1;
 	string   CPU        = 2;
 	string   RAM        = 3;
+	optional WorkerInfor result = 4;
 }
 
 message TurnSession{ 
