@@ -46,6 +46,9 @@ message ThinkmaySession{
 	string turnAddress = 2; 
 	string username = 3; 
 	string password = 4; 
+
+	optional string audioToken = 5;
+	optional string videoToken = 6;
 }
 
 message SunshineSession{ 

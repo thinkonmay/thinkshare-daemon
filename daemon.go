@@ -10,12 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
+	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
@@ -28,6 +30,7 @@ type internalWorkerSession struct {
 type Daemon struct {
 	info packet.WorkerInfor
 
+	signaling *signaling.Signaling
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
 
@@ -37,12 +40,13 @@ type Daemon struct {
 	log     int
 }
 
-func WebDaemon(persistent persistent.Persistent) *Daemon {
+func WebDaemon(persistent persistent.Persistent,
+			   signaling *signaling.Signaling) *Daemon {
 	i, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent)
+		return WebDaemon(persistent,signaling)
 	}
 
 	daemon := &Daemon{
@@ -50,6 +54,7 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 		mutex:   &sync.Mutex{},
 		session: map[string]*internalWorkerSession{},
 		persist: persistent,
+		signaling: signaling,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
 			persistent.Log(proc, "childprocess", log)
@@ -211,6 +216,10 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 				if ws.Vm != nil {
 					daemon.ShutdownVM(ws.Vm)
 				}
+				if ws.Thinkmay != nil {
+					daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.VideoToken)
+					daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.AudioToken)
+				}
 			}
 			if iws != nil {
 				if iws.turn_server != nil {
@@ -255,12 +264,17 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 	if err != nil {
 		return nil, err
 	}
+
+	video_token := uuid.NewString()
+	audio_token := uuid.NewString()
 	cmd := []string{
 		"--stun", current.Thinkmay.StunAddress,
 		"--turn", current.Thinkmay.TurnAddress,
 		"--turn_username", current.Thinkmay.Username,
 		"--turn_password", current.Thinkmay.Password,
 		"--display", *current.Display.DisplayName,
+		"--video", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s",video_token),
+		"--audio", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s",audio_token),
 	}
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
@@ -268,6 +282,10 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, err
 	}
 
+	current.Thinkmay.AudioToken = &audio_token;
+	current.Thinkmay.VideoToken = &video_token;
+	daemon.signaling.AddSignalingChannel(video_token)
+	daemon.signaling.AddSignalingChannel(audio_token)
 	return []childprocess.ProcessID{video}, nil
 }
 

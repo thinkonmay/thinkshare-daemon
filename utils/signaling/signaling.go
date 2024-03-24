@@ -2,32 +2,26 @@ package signaling
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
-type Signalling struct {
+type Signaling struct {
+	mut      *sync.Mutex
 	waitLine map[string]struct {
 		server chan protocol.Tenant
 		client chan protocol.Tenant
 	}
 }
 
-func InitSignallingServer(client protocol.ProtocolHandler, server protocol.ProtocolHandler) *Signalling {
-	signaling := Signalling{
+func InitSignallingServer(client protocol.ProtocolHandler, server protocol.ProtocolHandler) *Signaling {
+	signaling := Signaling{
+		mut: &sync.Mutex{},
 		waitLine: map[string]struct {
 			server chan protocol.Tenant
 			client chan protocol.Tenant
-		}{
-			"video": {
-				server: make(chan protocol.Tenant, 8),
-				client: make(chan protocol.Tenant, 8),
-			},
-			"audio": {
-				server: make(chan protocol.Tenant, 8),
-				client: make(chan protocol.Tenant, 8),
-			},
-		},
+		}{},
 	}
 
 	find_token := func(token string) bool {
@@ -47,6 +41,8 @@ func InitSignallingServer(client protocol.ProtocolHandler, server protocol.Proto
 	}
 
 	server.OnTenant(func(tent protocol.Tenant) error {
+		signaling.mut.Lock()
+		defer signaling.mut.Unlock()
 		if !find_token(tent.Token) {
 			return fmt.Errorf("invalid key %s", tent.Token)
 		}
@@ -62,6 +58,8 @@ func InitSignallingServer(client protocol.ProtocolHandler, server protocol.Proto
 		return nil
 	})
 	client.OnTenant(func(tent protocol.Tenant) error {
+		signaling.mut.Lock()
+		defer signaling.mut.Unlock()
 		if !find_token(tent.Token) {
 			return fmt.Errorf("invalid key %s", tent.Token)
 		}
@@ -79,7 +77,9 @@ func InitSignallingServer(client protocol.ProtocolHandler, server protocol.Proto
 	return &signaling
 }
 
-func (signaling *Signalling) AddSignalingChannel(token string) {
+func (signaling *Signaling) AddSignalingChannel(token string) {
+	signaling.mut.Lock()
+	defer signaling.mut.Unlock()
 	signaling.waitLine[token] = struct {
 		server chan protocol.Tenant
 		client chan protocol.Tenant
@@ -87,4 +87,10 @@ func (signaling *Signalling) AddSignalingChannel(token string) {
 		server: make(chan protocol.Tenant, 8),
 		client: make(chan protocol.Tenant, 8),
 	}
+}
+
+func (signaling *Signaling) RemoveSignalingChannel(token string) {
+	signaling.mut.Lock()
+	defer signaling.mut.Unlock()
+	delete(signaling.waitLine,token)
 }

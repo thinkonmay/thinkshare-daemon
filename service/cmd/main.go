@@ -23,7 +23,7 @@ func Start(stop chan bool) {
 	}
 	defer grpc.Stop()
 
-	signaling.InitSignallingServer(
+	signaling := signaling.InitSignallingServer(
 		ws.InitSignallingHttp("/handshake/client", func(r *http.Request) bool { return true }),
 		ws.InitSignallingHttp("/handshake/server", func(r *http.Request) bool { return true }),
 	)
@@ -33,7 +33,7 @@ func Start(stop chan bool) {
 	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
-	dm := daemon.WebDaemon(grpc)
+	dm := daemon.WebDaemon(grpc,signaling)
 	defer dm.Close()
 	<-stop
 }

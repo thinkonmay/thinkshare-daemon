@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
@@ -14,9 +15,7 @@ import (
 type GRPCclient struct {
 	logger      []string
 	worker_info func() *packet.WorkerInfor
-
 	recv_session    func(*packet.WorkerSession) (*packet.WorkerSession, error)
-	worker_session  func() []packet.WorkerSession
 	closed_sesssion chan string
 
 	done bool
@@ -34,9 +33,6 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		recv_session: func(ws *packet.WorkerSession) (*packet.WorkerSession, error) {
 			return nil, fmt.Errorf("handler not configured")
 		},
-		worker_session: func() []packet.WorkerSession {
-			return []packet.WorkerSession{}
-		},
 		closed_sesssion: make(chan string),
 	}
 
@@ -48,14 +44,9 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		func(conn string) ([]byte, error) {
 			return json.Marshal(ret.worker_info())
 		})
-	ret.wrapper("sessions",
-		func(conn string) ([]byte, error) {
-			return json.Marshal(ret.worker_session())
-		})
 	ret.wrapper("log",
 		func(conn string) ([]byte, error) {
-			time.Sleep(100 * time.Millisecond)
-			return json.Marshal(ret.logger)
+			return []byte(strings.Join(ret.logger, "\n")),nil
 		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
@@ -96,7 +87,6 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
-		log.PushLog("-- request: %s", string(b))
 		resp, err := fun(string(b))
 		if err != nil {
 			w.WriteHeader(503)
@@ -104,7 +94,6 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
-		log.PushLog("-- response: %s", string(resp))
 		w.WriteHeader(200)
 		w.Write(resp)
 	})
@@ -120,9 +109,6 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 
 func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
 	grpc.worker_info = fun
-}
-func (grpc *GRPCclient) Sessions(fun func() []packet.WorkerSession) {
-	grpc.worker_session = fun
 }
 func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
