@@ -41,18 +41,26 @@ func GetPrivateIP() string {
 	return localAddr.IP.String()
 }
 
-
-
 func GetPublicIPCurl() (result string) {
 	result = ""
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = getPublicIPSTUN() }
-	if result == "" { result = getPublicIPSTUN() }
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = getPublicIPSTUN()
+	}
+	if result == "" {
+		result = getPublicIPSTUN()
+	}
 	return result
 }
-func getPublicIPCurl(url string) (string) {
+func getPublicIPCurl(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.PushLog(err.Error())
@@ -96,9 +104,6 @@ func getPublicIPSTUN() (result string) {
 	return result
 }
 
-
-
-
 func GetInfor() (*packet.WorkerInfor, error) {
 	hostStat, err := host.Info()
 	if err != nil {
@@ -133,19 +138,19 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
 		BIOS: fmt.Sprintf("%v", bios),
 
-		GPUs:  make([]string, 0),
-		VMs: []*packet.WorkerInfor{},
+		GPUs:     []string{},
+		Sessions: []*packet.WorkerSession{},
 
 		// Get preferred outbound ip of this machine
 		PublicIP:  &public,
 		PrivateIP: &private,
 	}
 
-	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)", 
-		hostStat.Hostname, 
-		hostStat.Platform, 
-		hostStat.KernelArch, 
-		hostStat.KernelVersion, 
+	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)",
+		hostStat.Hostname,
+		hostStat.Platform,
+		hostStat.KernelArch,
+		hostStat.KernelVersion,
 		hostStat.PlatformVersion)
 
 	for _, i := range gpu.GraphicsCards {
@@ -154,4 +159,3 @@ func GetInfor() (*packet.WorkerInfor, error) {
 
 	return ret, nil
 }
-

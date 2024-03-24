@@ -2,21 +2,28 @@ syntax = "proto3";
 package protobuf;
 option go_package = "./packet";
 
+message WorkerInfor{ 
+	string   Hostname   = 2;
+	string   CPU        = 3;
+	string   RAM        = 4;
+	string   BIOS       = 5;
+	optional string   PublicIP   = 6;
+	optional string   PrivateIP  = 7;
+	optional string   MacAddr  = 8;
+
+	repeated string GPUs    = 9;
+	repeated WorkerSession Sessions    = 11;
+}
+
 message WorkerSession{ 
-	int32  id = 1;
-	WorkerInfor target = 2;
+	string id = 1;
+	optional string target  = 2;
+
 	optional DisplaySession  display = 3;
 	optional ThinkmaySession thinkmay = 4;
 	optional SunshineSession sunshine = 5;
 	optional TurnSession turn = 6;
-	optional VMSession vm = 7;
-}
-
-message VMSession{ 
-	string 	 GPU = 1;
-	string   CPU        = 2;
-	string   RAM        = 3;
-	optional WorkerInfor result = 4;
+	optional WorkerInfor vm = 7;
 }
 
 message TurnSession{ 
@@ -35,34 +42,14 @@ message DisplaySession{
 }
 
 message ThinkmaySession{ 
-	string webrtcConfig    		= 1; 
+	string stunAddress = 1; 
+	string turnAddress = 2; 
+	string username = 3; 
+	string password = 4; 
 }
 
 message SunshineSession{ 
 	string port = 2; 
 	string username = 3; 
 	string password = 4; 
-}
-
-message WorkerInfor{ 
-	string   Hostname   = 2;
-	string   CPU        = 3;
-	string   RAM        = 4;
-	string   BIOS       = 5;
-
-	optional string   PublicIP   = 6;
-	optional string   PrivateIP  = 7;
-	optional string   MacAddr  = 8;
-
-	repeated string GPUs    = 9;
-	repeated WorkerInfor VMs    = 10;
-}
-
-
-message WorkerLog{ 
-	string timestamp = 1;
-
-	string log       = 2;
-	string level     = 3;
-	string source    = 4;
 }

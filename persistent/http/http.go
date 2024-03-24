@@ -12,12 +12,12 @@ import (
 )
 
 type GRPCclient struct {
-	logger      []*packet.WorkerLog
+	logger      []string
 	worker_info func() *packet.WorkerInfor
 
 	recv_session    func(*packet.WorkerSession) (*packet.WorkerSession, error)
 	worker_session  func() []packet.WorkerSession
-	closed_sesssion chan int
+	closed_sesssion chan string
 
 	done bool
 }
@@ -26,7 +26,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 	ret = &GRPCclient{
 		done: false,
 
-		logger: []*packet.WorkerLog{},
+		logger: []string{},
 		worker_info: func() *packet.WorkerInfor {
 			return &packet.WorkerInfor{}
 		},
@@ -37,7 +37,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		worker_session: func() []packet.WorkerSession {
 			return []packet.WorkerSession{}
 		},
-		closed_sesssion: make(chan int),
+		closed_sesssion: make(chan string),
 	}
 
 	ret.wrapper("ping",
@@ -73,9 +73,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		})
 	ret.wrapper("closed",
 		func(conn string) ([]byte, error) {
-			msg := &struct {
-				Id int `json:"id"`
-			}{Id: 0}
+			msg := &packet.WorkerSession{}
 			if err = json.Unmarshal([]byte(conn), msg); err != nil {
 				return nil, err
 			}
@@ -116,12 +114,7 @@ func (client *GRPCclient) Stop() {
 }
 
 func (grpc *GRPCclient) Log(source string, level string, log string) {
-	grpc.logger = append(grpc.logger, &packet.WorkerLog{
-		Timestamp: time.Now().Format(time.RFC3339),
-		Log:       log,
-		Level:     level,
-		Source:    source,
-	})
+	grpc.logger = append(grpc.logger, fmt.Sprintf("%s %s %s: %s",time.Now().Format(time.DateTime), source, level, log))
 }
 
 func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
@@ -133,6 +126,6 @@ func (grpc *GRPCclient) Sessions(fun func() []packet.WorkerSession) {
 func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
 }
-func (grpc *GRPCclient) ClosedSession() int {
+func (grpc *GRPCclient) ClosedSession() string {
 	return <-grpc.closed_sesssion
 }

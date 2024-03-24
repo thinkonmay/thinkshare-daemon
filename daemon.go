@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,25 +21,24 @@ import (
 )
 
 type internalWorkerSession struct {
-	*packet.WorkerSession
 	childprocess []childprocess.ProcessID
 	turn_server  *turn.TurnServer
 }
 
 type Daemon struct {
-	vms          []*packet.WorkerInfor
-	gpus         []string
+	info packet.WorkerInfor
+
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
 
 	mutex *sync.Mutex
 
-	session []internalWorkerSession
+	session map[string]*internalWorkerSession
 	log     int
 }
 
 func WebDaemon(persistent persistent.Persistent) *Daemon {
-	infor, err := system.GetInfor()
+	i, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
@@ -48,9 +46,9 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	}
 
 	daemon := &Daemon{
+		info:    *i,
 		mutex:   &sync.Mutex{},
-		session: []internalWorkerSession{},
-		vms:     []*packet.WorkerInfor{},
+		session: map[string]*internalWorkerSession{},
 		persist: persistent,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
@@ -62,42 +60,31 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	}
 
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		infor.VMs = daemon.vms
-		infor.GPUs = daemon.gpus
-		return infor
-	})
-	daemon.persist.Sessions(func() []packet.WorkerSession {
-		sessions := []packet.WorkerSession{}
-		for _, iws := range daemon.session {
-			sessions = append(sessions, packet.WorkerSession{
-				Id:       iws.Id,
-				Target:   infor,
-				Thinkmay: iws.Thinkmay,
-				Sunshine: iws.Sunshine,
-			})
-		}
+		for _, session := range daemon.info.Sessions {
+			if session.Vm == nil {
+				continue
+			}
 
-		for _, vm := range daemon.vms {
-			resp, err := http.Get(fmt.Sprintf("http://%s:60000/sessions", *vm.PrivateIP))
+			resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
 			if err != nil {
 				continue
 			}
 
-			ss := packet.WorkerSession{}
+			ss := packet.WorkerInfor{}
 			b, _ := io.ReadAll(resp.Body)
 			err = json.Unmarshal(b, &ss)
 			if err != nil {
 				continue
 			}
 
-			sessions = append(sessions, ss)
+			session.Vm = &ss
 		}
-
-		return sessions
+		return &daemon.info
 	})
 
 	go HandleVirtdaemon(daemon)
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) (*packet.WorkerSession, error) {
+
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
 
@@ -112,53 +99,62 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 			)
 		}
 
-		if ss.Target != nil &&
-			(*ss.Target.PrivateIP != *infor.PrivateIP ||
-				ss.Target.Hostname != infor.Hostname) {
-			for _, vm := range daemon.vms {
-				if *vm.PrivateIP == *ss.Target.PrivateIP {
-					b, _ := json.Marshal(ss)
+		if ss.Target != nil {
+			for _, session := range daemon.info.Sessions {
+				if session.Id == *ss.Target && session.Vm != nil {
+					nss := *ss
+					nss.Target = nil
+					b, _ := json.Marshal(nss)
 					resp, err := http.Post(
-						fmt.Sprintf("http://%s:60000/new", *vm.PrivateIP),
+						fmt.Sprintf("http://%s:60000/new", *session.Vm.PrivateIP),
 						"application/json",
 						strings.NewReader(string(b)))
 					if err != nil {
 						return nil, err
-					} else if resp.StatusCode != 200 {
-						b, _ := io.ReadAll(resp.Body)
+					}
+
+					b, _ = io.ReadAll(resp.Body)
+					if resp.StatusCode != 200 {
 						return nil, fmt.Errorf(string(b))
 					}
 
-					break
-				}
-			}
-		} else {
-			if ss.Display != nil {
-				name, index, err := media.StartVirtualDisplay(
-					int(ss.Display.ScreenWidth),
-					int(ss.Display.ScreenHeight),
-				)
-				if err != nil {
-					return nil, err
-				}
-				val := int32(index)
-				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
-			} else if len(media.Displays()) > 0 {
-				ss.Display = &packet.DisplaySession{
-					DisplayName:  &media.Displays()[0],
-					DisplayIndex: nil,
+					err = json.Unmarshal(b, &nss)
+					if err != nil {
+						return nil, err
+					}
+
+					return &nss, nil
 				}
 			}
 
-			if ss.Thinkmay != nil {
-				process, err = daemon.handleHub(ss)
+			return nil, fmt.Errorf("no vm found for target")
+		}
+
+		if ss.Display != nil {
+			name, index, err := media.StartVirtualDisplay(
+				int(ss.Display.ScreenWidth),
+				int(ss.Display.ScreenHeight),
+			)
+			if err != nil {
+				return nil, err
 			}
-			if ss.Vm != nil {
-				ss.Vm.Result, err = daemon.DeployVM(ss.Vm.GPU)
+			val := int32(index)
+			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
+		} else if len(media.Displays()) > 0 {
+			ss.Display = &packet.DisplaySession{
+				DisplayName:  &media.Displays()[0],
+				DisplayIndex: nil,
 			}
-			if ss.Sunshine != nil {
-				process, err = daemon.handleSunshine(ss)
-			}
+		}
+
+		if ss.Thinkmay != nil {
+			process, err = daemon.handleHub(ss)
+		}
+		if ss.Vm != nil {
+			ss.Vm, err = daemon.DeployVM(ss.Vm.GPUs[0])
+		}
+		if ss.Sunshine != nil {
+			process, err = daemon.handleSunshine(ss)
 		}
 
 		if err != nil {
@@ -167,10 +163,10 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 		}
 
 		log.PushLog("session creation successful")
-		daemon.session = append(daemon.session,
-			internalWorkerSession{
-				ss, process, t,
-			})
+		daemon.session[ss.Id] = &internalWorkerSession{
+			turn_server:  t,
+			childprocess: process,
+		}
 
 		return ss, nil
 	})
@@ -178,33 +174,43 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
-			log.PushLog("terminating session %d", ss)
-			queue := []internalWorkerSession{}
-			for _, ws := range daemon.session {
+			log.PushLog("terminating session %s", ss)
+			keys := make([]string, 0, len(daemon.session))
+			for k, _ := range daemon.session {
+				keys = append(keys, k)
+			}
+
+			var ws *packet.WorkerSession = nil
+			var iws *internalWorkerSession = nil
+			for _, v := range keys {
+				if ss == v {
+					iws = daemon.session[v]
+					delete(daemon.session, v)
+				}
+			}
+			for _, v := range daemon.info.Sessions {
+				if ss == v.Id {
+					ws = v
+				}
+			}
+
+			if ws != nil {
 				if ws.Display != nil {
 					if ws.Display.DisplayIndex != nil {
 						media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
 					}
 				}
 				if ws.Vm != nil {
-					daemon.ShutdownVM(ws.Vm.Result)
-				}
-				if ws.turn_server != nil {
-					ws.turn_server.Close()
-				}
-				if int(ws.Id) == ss {
-					for _, pi := range ws.childprocess {
-						daemon.childprocess.CloseID(pi)
-					}
-				} else {
-					queue = append(queue, ws)
+					daemon.ShutdownVM(ws.Vm)
 				}
 			}
-
-			if len(daemon.session) == len(queue) {
-				log.PushLog("no session terminated, total session : %d", len(daemon.session))
-			} else {
-				daemon.session = queue
+			if iws != nil {
+				if iws.turn_server != nil {
+					iws.turn_server.Close()
+				}
+				for _, pi := range iws.childprocess {
+					daemon.childprocess.CloseID(pi)
+				}
 			}
 		}
 	}()
@@ -215,15 +221,18 @@ func WebDaemon(persistent persistent.Persistent) *Daemon {
 func (daemon *Daemon) Close() {
 	daemon.childprocess.CloseAll()
 	log.RemoveCallback(daemon.log)
-	for _, ws := range daemon.session {
+	for _, ws := range daemon.info.Sessions {
 		if ws.Display != nil {
 			if ws.Display.DisplayIndex != nil {
 				media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
 			}
 		}
 		if ws.Vm != nil {
-			daemon.ShutdownVM(ws.Vm.Result)
+			daemon.ShutdownVM(ws.Vm)
 		}
+	}
+
+	for _, ws := range daemon.session {
 		if ws.turn_server != nil {
 			ws.turn_server.Close()
 		}
@@ -234,20 +243,16 @@ func (daemon *Daemon) Close() {
 }
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
-	daemon.mutex.Lock()
-	defer daemon.mutex.Unlock()
-
-	webrtcHash, displayHash :=
-		string(base64.StdEncoding.EncodeToString([]byte(current.Thinkmay.WebrtcConfig))),
-		string(base64.StdEncoding.EncodeToString([]byte(*current.Display.DisplayName)))
-
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
 		return nil, err
 	}
 	cmd := []string{
-		"--webrtc", webrtcHash,
-		"--display", displayHash,
+		"--stun", current.Thinkmay.StunAddress,
+		"--turn", current.Thinkmay.TurnAddress,
+		"--turn_username", current.Thinkmay.Username,
+		"--turn_password", current.Thinkmay.Password,
+		"--display", *current.Display.DisplayName,
 	}
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
@@ -259,9 +264,6 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 }
 
 func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
-	daemon.mutex.Lock()
-	defer daemon.mutex.Unlock()
-
 	hub_path, err := path.FindProcessPath("", "sunshine.exe")
 	if err != nil {
 		return nil, err
