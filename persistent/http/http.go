@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
@@ -54,8 +55,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		})
 	ret.wrapper("log",
 		func(conn string) ([]byte, error) {
-			time.Sleep(100 * time.Millisecond)
-			return json.Marshal(ret.logger)
+			return []byte(strings.Join(ret.logger, "\n")),nil
 		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
@@ -96,7 +96,6 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
-		log.PushLog("-- request: %s", string(b))
 		resp, err := fun(string(b))
 		if err != nil {
 			w.WriteHeader(503)
@@ -104,7 +103,6 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 			return
 		}
 
-		log.PushLog("-- response: %s", string(resp))
 		w.WriteHeader(200)
 		w.Write(resp)
 	})
