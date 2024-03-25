@@ -232,6 +232,15 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}()
 
+	daemon.signaling.AuthHandler(func(token string) *string {
+		for _,s  := range daemon.info.Sessions {
+			if s.Id == token && s.Vm != nil{
+				return s.Vm.PrivateIP
+			}
+		}
+		return nil
+	})
+
 	return daemon
 }
 

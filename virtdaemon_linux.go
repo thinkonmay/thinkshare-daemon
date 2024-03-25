@@ -42,13 +42,13 @@ func HandleVirtdaemon(daemon *Daemon) {
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
-		log.PushLog("failed to create virtdaemon %s", err.Error())
+		log.PushLog("failed to connect libvirt %s", err.Error())
 		return
 	}
 
 	network, err = libvirt.NewLibvirtNetwork("enp0s25")
 	if err != nil {
-		log.PushLog("failed to query gpus %s", err.Error())
+		log.PushLog("failed to start network %s", err.Error())
 		return
 	}
 	defer network.Close()
@@ -110,7 +110,7 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		time.Sleep(time.Second)
 		addr, err := network.FindDomainIPs(dom)
 		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
+			log.PushLog("VM ip not available %s", err.Error())
 			continue
 		} else if addr.Ip == nil {
 			continue
@@ -135,7 +135,7 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		inf := packet.WorkerInfor{}
 		err = json.Unmarshal(b, &inf)
 		if err != nil {
-			log.PushLog("failed to query gpus %s", err.Error())
+			log.PushLog("failed unmarshal reponse body %s", err.Error())
 			continue
 		}
 

@@ -24,8 +24,8 @@ func Start(stop chan bool) {
 	defer grpc.Stop()
 
 	signaling := signaling.InitSignallingServer(
-		ws.InitSignallingHttp("/handshake/client", func(r *http.Request) bool { return true }),
-		ws.InitSignallingHttp("/handshake/server", func(r *http.Request) bool { return true }),
+		ws.InitSignallingHttp("/handshake/client"),
+		ws.InitSignallingHttp("/handshake/server"),
 	)
 
 	srv := &http.Server{Addr: ":60000"}

@@ -16,7 +16,7 @@ import (
 
 type WebSocketServer struct {
 	fun  protocol.OnTenantFunc
-	auth func(*http.Request) bool
+	auth func(string) *string
 	path string
 
 	mapid map[string]*HttpTenant
@@ -27,17 +27,18 @@ func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
 	server.fun = fun
 }
 func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Request) bool {
-	ip := r.URL.Query().Get("target")
-	if ip == "" {
+	target := r.URL.Query().Get("target")
+	ip := server.auth(target)
+	if target == "" || ip == nil {
 		return false
 	}
 
 	q := r.URL.Query()
 	q.Del("target")
 	clone := url.URL{
-		Scheme: "http",
-		Host: fmt.Sprintf("%s:60000", ip),
-		Path: r.URL.Path,
+		Scheme:   "http",
+		Host:     fmt.Sprintf("%s:60000", *ip),
+		Path:     r.URL.Path,
 		RawQuery: q.Encode(),
 	}
 	req, err := http.NewRequest(r.Method, clone.String(), r.Body)
@@ -69,12 +70,7 @@ func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Requ
 func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "*")
-	if wsserver.HandleForward(w,r) {
-		return
-	}
-
-	if !wsserver.auth(r) {
-		w.WriteHeader(401)
+	if wsserver.HandleForward(w, r) {
 		return
 	}
 
@@ -172,14 +168,18 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 	w.Write(b)
 }
 
-func InitSignallingHttp(path string, auth func(*http.Request) bool) *WebSocketServer {
+func InitSignallingHttp(path string) *WebSocketServer {
 	wsserver := &WebSocketServer{
 		mapid: map[string]*HttpTenant{},
 		fun:   func(protocol.Tenant) error { return nil },
-		auth:  auth,
+		auth:  func(s string) *string { return nil },
 		path:  path,
 		mut:   &sync.Mutex{},
 	}
 	http.HandleFunc(path, wsserver.HandleHttpSignaling)
 	return wsserver
+}
+
+func (server *WebSocketServer) AuthHandler(auth func(string) *string) {
+	server.auth = auth
 }

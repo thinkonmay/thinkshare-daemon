@@ -10,7 +10,6 @@ type ITenant interface {
 	Exit()
 }
 
-
 type Tenant struct {
 	ITenant
 	Token string
@@ -20,4 +19,5 @@ type OnTenantFunc func(tent Tenant) error
 
 type ProtocolHandler interface {
 	OnTenant(fun OnTenantFunc)
+	AuthHandler(auth func(string) *string)
 }

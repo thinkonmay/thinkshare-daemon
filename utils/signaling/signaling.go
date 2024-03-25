@@ -8,6 +8,8 @@ import (
 )
 
 type Signaling struct {
+	client protocol.ProtocolHandler	
+
 	mut      *sync.Mutex
 	waitLine map[string]struct {
 		server chan protocol.Tenant
@@ -18,6 +20,7 @@ type Signaling struct {
 func InitSignallingServer(client protocol.ProtocolHandler, server protocol.ProtocolHandler) *Signaling {
 	signaling := Signaling{
 		mut: &sync.Mutex{},
+		client: client,
 		waitLine: map[string]struct {
 			server chan protocol.Tenant
 			client chan protocol.Tenant
@@ -93,4 +96,7 @@ func (signaling *Signaling) RemoveSignalingChannel(token string) {
 	signaling.mut.Lock()
 	defer signaling.mut.Unlock()
 	delete(signaling.waitLine,token)
+}
+func (server *Signaling) AuthHandler(auth func(string) *string) {
+	server.client.AuthHandler(auth)
 }

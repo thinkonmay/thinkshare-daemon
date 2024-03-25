@@ -162,5 +162,5 @@ func (network *LibvirtNetwork) FindDomainIPs(dom Domain) (DomainAddress, error) 
 		}
 	}
 
-	return DomainAddress{Mac: nil, Ip: nil}, nil
+	return DomainAddress{Mac: nil, Ip: nil}, fmt.Errorf("not found")
 }
