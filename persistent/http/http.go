@@ -16,7 +16,7 @@ type GRPCclient struct {
 	logger      []string
 	worker_info func() *packet.WorkerInfor
 	recv_session    func(*packet.WorkerSession) (*packet.WorkerSession, error)
-	closed_sesssion chan string
+	closed_sesssion chan *packet.WorkerSession
 
 	done bool
 }
@@ -33,7 +33,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		recv_session: func(ws *packet.WorkerSession) (*packet.WorkerSession, error) {
 			return nil, fmt.Errorf("handler not configured")
 		},
-		closed_sesssion: make(chan string),
+		closed_sesssion: make(chan *packet.WorkerSession),
 	}
 
 	ret.wrapper("ping",
@@ -68,7 +68,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, err
 			}
 
-			ret.closed_sesssion <- msg.Id
+			ret.closed_sesssion <- msg
 			return []byte("ok"), nil
 		})
 	return ret, nil
@@ -113,6 +113,6 @@ func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
 func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
 }
-func (grpc *GRPCclient) ClosedSession() string {
+func (grpc *GRPCclient) ClosedSession() *packet.WorkerSession{
 	return <-grpc.closed_sesssion
 }

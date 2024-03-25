@@ -30,7 +30,7 @@ type internalWorkerSession struct {
 type Daemon struct {
 	info packet.WorkerInfor
 
-	signaling *signaling.Signaling
+	signaling    *signaling.Signaling
 	childprocess *childprocess.ChildProcesses
 	persist      persistent.Persistent
 
@@ -41,19 +41,19 @@ type Daemon struct {
 }
 
 func WebDaemon(persistent persistent.Persistent,
-			   signaling *signaling.Signaling) *Daemon {
+	signaling *signaling.Signaling) *Daemon {
 	i, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent,signaling)
+		return WebDaemon(persistent, signaling)
 	}
 
 	daemon := &Daemon{
-		info:    *i,
-		mutex:   &sync.Mutex{},
-		session: map[string]*internalWorkerSession{},
-		persist: persistent,
+		info:      *i,
+		mutex:     &sync.Mutex{},
+		session:   map[string]*internalWorkerSession{},
+		persist:   persistent,
 		signaling: signaling,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
@@ -163,7 +163,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		if err != nil {
-			log.PushLog("session failed %s",err.Error())
+			log.PushLog("session failed %s", err.Error())
 			return nil, err
 		}
 
@@ -180,6 +180,37 @@ func WebDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
+			if ss.Target != nil {
+				for _, session := range daemon.info.Sessions {
+					if session.Id == *ss.Target && session.Vm != nil {
+						nss := *ss
+						nss.Target = nil
+						b, _ := json.Marshal(nss)
+						resp, err := http.Post(
+							fmt.Sprintf("http://%s:60000/closed", *session.Vm.PrivateIP),
+							"application/json",
+							strings.NewReader(string(b)))
+						if err != nil {
+							log.PushLog("failed to request ", err.Error())
+							continue
+						}
+
+						b, _ = io.ReadAll(resp.Body)
+						if resp.StatusCode != 200 {
+							log.PushLog("failed to request %s", string(b))
+							continue
+						}
+
+						err = json.Unmarshal(b, &nss)
+						if err != nil {
+							log.PushLog("failed to request %s", err.Error())
+						}
+					}
+				}
+
+				continue
+			}
+
 			log.PushLog("terminating session %s", ss)
 			keys := make([]string, 0, len(daemon.session))
 			for k, _ := range daemon.session {
@@ -189,7 +220,7 @@ func WebDaemon(persistent persistent.Persistent,
 			var ws *packet.WorkerSession = nil
 			var iws *internalWorkerSession = nil
 			for _, v := range keys {
-				if ss == v {
+				if ss.Id == v {
 					iws = daemon.session[v]
 					delete(daemon.session, v)
 				}
@@ -197,7 +228,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 			wss := []*packet.WorkerSession{}
 			for _, v := range daemon.info.Sessions {
-				if ss == v.Id {
+				if ss.Id == v.Id {
 					ws = v
 				} else {
 					wss = append(wss, v)
@@ -205,7 +236,6 @@ func WebDaemon(persistent persistent.Persistent,
 			}
 
 			daemon.info.Sessions = wss
-
 
 			if ws != nil {
 				if ws.Display != nil {
@@ -233,8 +263,8 @@ func WebDaemon(persistent persistent.Persistent,
 	}()
 
 	daemon.signaling.AuthHandler(func(token string) *string {
-		for _,s  := range daemon.info.Sessions {
-			if s.Id == token && s.Vm != nil{
+		for _, s := range daemon.info.Sessions {
+			if s.Id == token && s.Vm != nil {
 				return s.Vm.PrivateIP
 			}
 		}
@@ -282,8 +312,8 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		"--turn_username", current.Thinkmay.Username,
 		"--turn_password", current.Thinkmay.Password,
 		"--display", *current.Display.DisplayName,
-		"--video", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s",video_token),
-		"--audio", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s",audio_token),
+		"--video", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s", video_token),
+		"--audio", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s", audio_token),
 	}
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
@@ -291,8 +321,8 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, err
 	}
 
-	current.Thinkmay.AudioToken = &audio_token;
-	current.Thinkmay.VideoToken = &video_token;
+	current.Thinkmay.AudioToken = &audio_token
+	current.Thinkmay.VideoToken = &video_token
 	daemon.signaling.AddSignalingChannel(video_token)
 	daemon.signaling.AddSignalingChannel(audio_token)
 	return []childprocess.ProcessID{video}, nil
