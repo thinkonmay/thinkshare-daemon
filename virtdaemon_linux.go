@@ -137,6 +137,9 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		if err != nil {
 			log.PushLog("failed unmarshal reponse body %s", err.Error())
 			continue
+		} else if inf.PrivateIP == nil || inf.PublicIP == nil {
+			log.PushLog("VM address is null, retry")
+			continue
 		}
 
 		log.PushLog("deployed a new worker %s", *addr.Ip)

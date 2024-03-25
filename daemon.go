@@ -191,7 +191,7 @@ func WebDaemon(persistent persistent.Persistent,
 							"application/json",
 							strings.NewReader(string(b)))
 						if err != nil {
-							log.PushLog("failed to request ", err.Error())
+							log.PushLog("failed to request %s", err.Error())
 							continue
 						}
 
