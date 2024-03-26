@@ -1,12 +1,8 @@
 package daemon
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os/exec"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,12 +37,14 @@ type Daemon struct {
 }
 
 func WebDaemon(persistent persistent.Persistent,
-	signaling *signaling.Signaling) *Daemon {
+	signaling *signaling.Signaling,
+	cluster *ClusterConfig,
+) *Daemon {
 	i, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent, signaling)
+		return WebDaemon(persistent, signaling, cluster)
 	}
 
 	daemon := &Daemon{
@@ -64,30 +62,13 @@ func WebDaemon(persistent persistent.Persistent,
 		}),
 	}
 
+	go HandleVirtdaemon(daemon, cluster)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		for _, session := range daemon.info.Sessions {
-			if session.Vm == nil {
-				continue
-			}
-
-			resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
-			if err != nil {
-				continue
-			}
-
-			ss := packet.WorkerInfor{}
-			b, _ := io.ReadAll(resp.Body)
-			err = json.Unmarshal(b, &ss)
-			if err != nil {
-				continue
-			}
-
-			session.Vm = &ss
-		}
-		return &daemon.info
+		info := &daemon.info
+		InfoBuilder(info)
+		return info
 	})
 
-	go HandleVirtdaemon(daemon)
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) (*packet.WorkerSession, error) {
 
 		process := []childprocess.ProcessID{}
@@ -105,34 +86,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		if ss.Target != nil {
-			for _, session := range daemon.info.Sessions {
-				if session.Id == *ss.Target && session.Vm != nil {
-					nss := *ss
-					nss.Target = nil
-					b, _ := json.Marshal(nss)
-					resp, err := http.Post(
-						fmt.Sprintf("http://%s:60000/new", *session.Vm.PrivateIP),
-						"application/json",
-						strings.NewReader(string(b)))
-					if err != nil {
-						return nil, err
-					}
-
-					b, _ = io.ReadAll(resp.Body)
-					if resp.StatusCode != 200 {
-						return nil, fmt.Errorf(string(b))
-					}
-
-					err = json.Unmarshal(b, &nss)
-					if err != nil {
-						return nil, err
-					}
-
-					return &nss, nil
-				}
-			}
-
-			return nil, fmt.Errorf("no vm found for target")
+			return HandleSessionForward(daemon, ss, "new")
 		}
 
 		if ss.Display != nil {
@@ -181,33 +135,10 @@ func WebDaemon(persistent persistent.Persistent,
 		for {
 			ss := daemon.persist.ClosedSession()
 			if ss.Target != nil {
-				for _, session := range daemon.info.Sessions {
-					if session.Id == *ss.Target && session.Vm != nil {
-						nss := *ss
-						nss.Target = nil
-						b, _ := json.Marshal(nss)
-						resp, err := http.Post(
-							fmt.Sprintf("http://%s:60000/closed", *session.Vm.PrivateIP),
-							"application/json",
-							strings.NewReader(string(b)))
-						if err != nil {
-							log.PushLog("failed to request %s", err.Error())
-							continue
-						}
-
-						b, _ = io.ReadAll(resp.Body)
-						if resp.StatusCode != 200 {
-							log.PushLog("failed to request %s", string(b))
-							continue
-						}
-
-						err = json.Unmarshal(b, &nss)
-						if err != nil {
-							log.PushLog("failed to request %s", err.Error())
-						}
-					}
+				_, err := HandleSessionForward(daemon, ss, "closed")
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
 				}
-
 				continue
 			}
 

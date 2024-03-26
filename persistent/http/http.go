@@ -69,7 +69,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			}
 
 			ret.closed_sesssion <- msg
-			return []byte("ok"), nil
+			return []byte("{}"), nil
 		})
 	return ret, nil
 }

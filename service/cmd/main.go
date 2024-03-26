@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"net/http"
+	"os"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
@@ -9,6 +10,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
+	"gopkg.in/yaml.v3"
 )
 
 
@@ -33,7 +35,21 @@ func Start(stop chan bool) {
 	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
-	dm := daemon.WebDaemon(grpc,signaling)
+	cluster := &daemon.ClusterConfig{}
+	files,err := os.ReadFile("./cluster.yaml")
+	if err != nil {
+		log.PushLog("failed to read cluster.yaml %s",err.Error())
+		cluster = nil
+	} else {
+		err = yaml.Unmarshal(files,cluster)
+		if err != nil {
+			log.PushLog("failed to read cluster.yaml %s",err.Error())
+			cluster = nil
+		}
+	}
+
+
+	dm := daemon.WebDaemon(grpc,signaling,cluster)
 	defer dm.Close()
 	<-stop
 }

@@ -1,0 +1,5 @@
+nodes:
+  - ip: 192.168.1.54
+    username : cde
+    password : abc
+    role : follower

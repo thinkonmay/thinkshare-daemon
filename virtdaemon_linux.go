@@ -5,20 +5,38 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/melbahja/goph"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-var disk_part = "/home/huyhoang/seed/vol.qcow2"
+type Node struct {
+	Ip       string `yaml:"ip"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	Role     string `yaml:"role"`
+
+	client *goph.Client
+}
+
+type ClusterConfig struct {
+	Nodes []Node `yaml:"nodes"`
+}
 
 var (
+	ldisk   = "/home/huyhoang/thinkshare-daemon/vol.qcow2"
+	lbinary = "/home/huyhoang/thinkshare-daemon/daemon"
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
 	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
+	nodes   []Node                  = []Node{}
 )
 
 func update_gpu(daemon *Daemon) {
@@ -38,7 +56,89 @@ func update_gpu(daemon *Daemon) {
 	daemon.info.GPUs = gs
 }
 
-func HandleVirtdaemon(daemon *Daemon) {
+func FileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
+	out, err := exec.Command("du", lfile).Output()
+	if err != nil {
+		return err
+	}
+	lsize := strings.Split(string(out), "\t")[0]
+
+	out, err = client.Run(fmt.Sprintf("du %s", rfile))
+	rsize := strings.Split(string(out), "\t")[0]
+	if err == nil && force {
+		client.Run(fmt.Sprintf("rm -f %s", rfile))
+	}
+	if err != nil || force {
+		err = client.Upload(lfile, rfile)
+		if err != nil {
+			return err
+		}
+
+		out, err := client.Run(fmt.Sprintf("du %s", rfile))
+		if err != nil {
+			return err
+		}
+
+		rsize = strings.Split(string(out), "\t")[0]
+	}
+
+	log.PushLog("%s : local file size %s, remote file size %s", rfile, lsize, rsize)
+	return nil
+}
+
+func SetupNode(node Node) error {
+	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
+	if err != nil {
+		return err
+	}
+
+	binary := fmt.Sprintf("/home/%s/thinkshare-daemon/daemon", node.Username)
+	disk := fmt.Sprintf("/home/%s/thinkshare-daemon/vol.qcow2", node.Username)
+
+	client.Run(fmt.Sprintf("mkdir /home/%s/thinkshare-daemon", node.Username))
+
+	abs, _ := filepath.Abs(lbinary)
+	err = FileTransfer(client, binary, abs, true)
+	if err != nil {
+		return err
+	}
+
+	abs, _ = filepath.Abs(ldisk)
+	err = FileTransfer(client, disk, abs, false)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		node.client = client
+		if err != nil {
+			return
+		}
+
+		log.PushLog("start %s on %s", binary, node.Ip)
+		client.Run(fmt.Sprintf("chmod 777 %s", binary))
+		client.Run(fmt.Sprintf("chmod 777 %s", disk))
+		_, err = client.Run(binary)
+		if err != nil {
+			log.PushLog(err.Error())
+		}
+	}()
+	return nil
+}
+
+func HandleVirtdaemon(daemon *Daemon, cluster *ClusterConfig) {
+	if cluster != nil {
+		for _, node := range cluster.Nodes {
+			err := SetupNode(node)
+			if err != nil {
+				log.PushLog(err.Error())
+				continue
+			}
+
+			nodes = append(nodes, node)
+		}
+	}
+
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
@@ -83,7 +183,7 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		return nil, err
 	}
 
-	chain := libvirt.NewVolume(disk_part)
+	chain := libvirt.NewVolume(ldisk)
 	err = chain.PushChain(40)
 	if err != nil {
 		return nil, err
@@ -178,4 +278,76 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	}
 
 	return fmt.Errorf("vm not found")
+}
+
+func InfoBuilder(info *packet.WorkerInfor) {
+	for _, session := range info.Sessions {
+		if session.Vm == nil {
+			continue
+		}
+
+		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
+		if err != nil {
+			continue
+		}
+
+		ss := packet.WorkerInfor{}
+		b, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(b, &ss)
+		if err != nil {
+			continue
+		}
+
+		session.Vm = &ss
+	}
+
+	for _, session := range nodes {
+		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", session.Ip))
+		if err != nil {
+			continue
+		}
+
+		ss := packet.WorkerInfor{}
+		b, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(b, &ss)
+		if err != nil {
+			continue
+		}
+
+		info.Sessions = append(info.Sessions, ss.Sessions...)
+	}
+}
+
+func HandleSessionForward(daemon *Daemon, ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
+	for _, session := range daemon.info.Sessions {
+		if session.Id == *ss.Target && session.Vm != nil {
+			nss := *ss
+			nss.Target = nil
+			b, _ := json.Marshal(nss)
+			resp, err := http.Post(
+				fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
+				"application/json",
+				strings.NewReader(string(b)))
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			b, _ = io.ReadAll(resp.Body)
+			if resp.StatusCode != 200 {
+				log.PushLog("failed to request %s", string(b))
+				continue
+			}
+
+			err = json.Unmarshal(b, &nss)
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			return &nss, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no receiver detected")
 }

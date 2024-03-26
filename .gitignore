@@ -12,3 +12,5 @@ task_result.yaml
 thinkmay.log
 *.dll
 *.qcow2
+daemon
+cluster.yaml
