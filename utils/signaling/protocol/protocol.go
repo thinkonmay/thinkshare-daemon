@@ -19,5 +19,5 @@ type OnTenantFunc func(tent Tenant) error
 
 type ProtocolHandler interface {
 	OnTenant(fun OnTenantFunc)
-	AuthHandler(auth func(string) *string)
+	AuthHandler(auth func(string) (*string,bool))
 }

@@ -64,9 +64,9 @@ func WebDaemon(persistent persistent.Persistent,
 
 	go HandleVirtdaemon(daemon, cluster)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		info := &daemon.info
-		InfoBuilder(info)
-		return info
+		QueryInfo(&daemon.info)
+		result := InfoBuilder(daemon.info)
+		return &result
 	})
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession) (*packet.WorkerSession, error) {
@@ -110,7 +110,15 @@ func WebDaemon(persistent persistent.Persistent,
 			process, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
-			ss.Vm, err = daemon.DeployVM(ss.Vm.GPUs[0])
+			var Vm *packet.WorkerInfor
+			Vm, err = daemon.DeployVM(ss)
+			if err != nil {
+				if err.Error() == "ran out of gpu" {
+					return daemon.DeployVMonNode(ss)
+				}
+			} else {
+				ss.Vm = Vm
+			}
 		}
 		if ss.Sunshine != nil {
 			process, err = daemon.handleSunshine(ss)
@@ -193,19 +201,13 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}()
 
-	daemon.signaling.AuthHandler(func(token string) *string {
-		for _, s := range daemon.info.Sessions {
-			if s.Id == token && s.Vm != nil {
-				return s.Vm.PrivateIP
-			}
-		}
-		return nil
-	})
+	daemon.signaling.AuthHandler(daemon.HandleSignaling)
 
 	return daemon
 }
 
 func (daemon *Daemon) Close() {
+	deinit()
 	daemon.childprocess.CloseAll()
 	log.RemoveCallback(daemon.log)
 	for _, ws := range daemon.info.Sessions {

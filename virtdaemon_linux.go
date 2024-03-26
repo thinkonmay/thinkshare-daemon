@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +25,9 @@ type Node struct {
 	Role     string `yaml:"role"`
 
 	client *goph.Client
+	cancel context.CancelFunc
+
+	internal *packet.WorkerInfor
 }
 
 type ClusterConfig struct {
@@ -36,8 +40,14 @@ var (
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
 	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
-	nodes   []Node                  = []Node{}
+	nodes   []*Node                 = []*Node{}
 )
+
+func deinit() {
+	for _, node := range nodes {
+		node.cancel()
+	}
+}
 
 func update_gpu(daemon *Daemon) {
 	gpus, err := virt.ListGPUs()
@@ -86,7 +96,7 @@ func FileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
 	return nil
 }
 
-func SetupNode(node Node) error {
+func SetupNode(node *Node) error {
 	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
 	if err != nil {
 		return err
@@ -118,7 +128,10 @@ func SetupNode(node Node) error {
 		log.PushLog("start %s on %s", binary, node.Ip)
 		client.Run(fmt.Sprintf("chmod 777 %s", binary))
 		client.Run(fmt.Sprintf("chmod 777 %s", disk))
-		_, err = client.Run(binary)
+
+		var ctx context.Context
+		ctx, node.cancel = context.WithCancel(context.Background())
+		_, err = client.RunContext(ctx, binary)
 		if err != nil {
 			log.PushLog(err.Error())
 		}
@@ -129,13 +142,13 @@ func SetupNode(node Node) error {
 func HandleVirtdaemon(daemon *Daemon, cluster *ClusterConfig) {
 	if cluster != nil {
 		for _, node := range cluster.Nodes {
-			err := SetupNode(node)
+			err := SetupNode(&node)
 			if err != nil {
 				log.PushLog(err.Error())
 				continue
 			}
 
-			nodes = append(nodes, node)
+			nodes = append(nodes, &node)
 		}
 	}
 
@@ -155,11 +168,17 @@ func HandleVirtdaemon(daemon *Daemon, cluster *ClusterConfig) {
 
 	for {
 		update_gpu(daemon)
+		QueryInfo(&daemon.info)
 		time.Sleep(time.Second * 20)
 	}
 }
 
-func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInfor, error) {
+	if len(session.Vm.GPUs) == 0 {
+		return nil, fmt.Errorf("empty gpu")
+	}
+
+	g := session.Vm.GPUs[0]
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
@@ -175,7 +194,7 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 	}
 
 	if gpu == nil {
-		return nil, fmt.Errorf("unable to find available gpu")
+		return nil, fmt.Errorf("ran out of gpu")
 	}
 
 	iface, err := network.CreateInterface(libvirt.Virtio)
@@ -227,11 +246,13 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		resp, err = client.Get(fmt.Sprintf("http://%s:60000/info", *addr.Ip))
 		if err != nil {
 			continue
-		} else if resp.StatusCode != 200 {
+		}
+		b, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			log.PushLog(string(b))
 			continue
 		}
 
-		b, _ := io.ReadAll(resp.Body)
 		inf := packet.WorkerInfor{}
 		err = json.Unmarshal(b, &inf)
 		if err != nil {
@@ -246,6 +267,66 @@ func (daemon *Daemon) DeployVM(g string) (*packet.WorkerInfor, error) {
 		return &inf, nil
 	}
 
+}
+
+func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+	if len(nss.Vm.GPUs) == 0 {
+		return nil, fmt.Errorf("empty gpu")
+	}
+
+	g := nss.Vm.GPUs[0]
+	var node *Node = nil
+	for _, n := range nodes {
+		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", n.Ip))
+		if err != nil {
+			continue
+		}
+
+		ss := packet.WorkerInfor{}
+		b, _ := io.ReadAll(resp.Body)
+		err = json.Unmarshal(b, &ss)
+		if err != nil {
+			log.PushLog(err.Error())
+			continue
+		}
+
+		for _, gpu := range ss.GPUs {
+			if gpu == g {
+				cp := *n
+				node = &cp
+				break
+			}
+		}
+
+		if node != nil {
+			break
+		}
+	}
+
+	if node == nil {
+		return nil, fmt.Errorf("cluster ran out of gpu")
+	}
+
+	log.PushLog("deploying VM on node %s", node.Ip)
+	b, _ := json.Marshal(nss)
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s:60000/new", node.Ip),
+		"application/json",
+		strings.NewReader(string(b)))
+	if err != nil {
+		return nil, err
+	}
+	b, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf(string(b))
+	}
+
+	err = json.Unmarshal(b, &nss)
+	if err != nil {
+		return nil, err
+	}
+
+	return nss, nil
 }
 
 func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
@@ -280,7 +361,7 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	return fmt.Errorf("vm not found")
 }
 
-func InfoBuilder(info *packet.WorkerInfor) {
+func QueryInfo(info *packet.WorkerInfor) {
 	for _, session := range info.Sessions {
 		if session.Vm == nil {
 			continue
@@ -288,6 +369,7 @@ func InfoBuilder(info *packet.WorkerInfor) {
 
 		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
 		if err != nil {
+			log.PushLog(err.Error())
 			continue
 		}
 
@@ -295,14 +377,15 @@ func InfoBuilder(info *packet.WorkerInfor) {
 		b, _ := io.ReadAll(resp.Body)
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
+			log.PushLog(err.Error())
 			continue
 		}
 
 		session.Vm = &ss
 	}
 
-	for _, session := range nodes {
-		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", session.Ip))
+	for _, node := range nodes {
+		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", node.Ip))
 		if err != nil {
 			continue
 		}
@@ -314,18 +397,61 @@ func InfoBuilder(info *packet.WorkerInfor) {
 			continue
 		}
 
-		info.Sessions = append(info.Sessions, ss.Sessions...)
+		node.internal = &ss
 	}
+}
+
+func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+	for _, node := range nodes {
+		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
+		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
+	}
+	return cp
+
 }
 
 func HandleSessionForward(daemon *Daemon, ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
 	for _, session := range daemon.info.Sessions {
-		if session.Id == *ss.Target && session.Vm != nil {
-			nss := *ss
-			nss.Target = nil
-			b, _ := json.Marshal(nss)
+		if session.Id != *ss.Target || session.Vm == nil {
+			continue
+		}
+
+		nss := *ss
+		nss.Target = nil
+		b, _ := json.Marshal(nss)
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
+			"application/json",
+			strings.NewReader(string(b)))
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		b, _ = io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			log.PushLog("failed to request %s", string(b))
+			continue
+		}
+
+		err = json.Unmarshal(b, &nss)
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		return &nss, nil
+	}
+
+	for _, node := range nodes {
+		for _, session := range node.internal.Sessions {
+			if session.Id != *ss.Target || session.Vm == nil {
+				continue
+			}
+
+			b, _ := json.Marshal(ss)
 			resp, err := http.Post(
-				fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
+				fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
@@ -339,6 +465,7 @@ func HandleSessionForward(daemon *Daemon, ss *packet.WorkerSession, command stri
 				continue
 			}
 
+			nss := packet.WorkerSession{}
 			err = json.Unmarshal(b, &nss)
 			if err != nil {
 				log.PushLog("failed to request %s", err.Error())
@@ -346,8 +473,27 @@ func HandleSessionForward(daemon *Daemon, ss *packet.WorkerSession, command stri
 			}
 
 			return &nss, nil
+
 		}
 	}
 
 	return nil, fmt.Errorf("no receiver detected")
+}
+
+func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
+	for _, s := range daemon.info.Sessions {
+		if s.Id == token && s.Vm != nil {
+			return s.Vm.PrivateIP, true
+		}
+	}
+	for _, node := range nodes {
+		for _, s := range node.internal.Sessions {
+			if s.Id == token && s.Vm != nil {
+				return &node.Ip, false
+			}
+
+		}
+
+	}
+	return nil,false
 }

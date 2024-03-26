@@ -97,6 +97,6 @@ func (signaling *Signaling) RemoveSignalingChannel(token string) {
 	defer signaling.mut.Unlock()
 	delete(signaling.waitLine,token)
 }
-func (server *Signaling) AuthHandler(auth func(string) *string) {
+func (server *Signaling) AuthHandler(auth func(string) (*string,bool)) {
 	server.client.AuthHandler(auth)
 }
