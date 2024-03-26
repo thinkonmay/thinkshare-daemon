@@ -66,7 +66,7 @@ func update_gpu(daemon *Daemon) {
 	daemon.info.GPUs = gs
 }
 
-func FileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
+func fileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
 	out, err := exec.Command("du", lfile).Output()
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func FileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
 	return nil
 }
 
-func SetupNode(node *Node) error {
+func setupNode(node *Node) error {
 	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
 	if err != nil {
 		return err
@@ -108,13 +108,13 @@ func SetupNode(node *Node) error {
 	client.Run(fmt.Sprintf("mkdir /home/%s/thinkshare-daemon", node.Username))
 
 	abs, _ := filepath.Abs(lbinary)
-	err = FileTransfer(client, binary, abs, true)
+	err = fileTransfer(client, binary, abs, true)
 	if err != nil {
 		return err
 	}
 
 	abs, _ = filepath.Abs(ldisk)
-	err = FileTransfer(client, disk, abs, false)
+	err = fileTransfer(client, disk, abs, false)
 	if err != nil {
 		return err
 	}
@@ -139,10 +139,10 @@ func SetupNode(node *Node) error {
 	return nil
 }
 
-func HandleVirtdaemon(daemon *Daemon, cluster *ClusterConfig) {
+func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 	if cluster != nil {
 		for _, node := range cluster.Nodes {
-			err := SetupNode(&node)
+			err := setupNode(&node)
 			if err != nil {
 				log.PushLog(err.Error())
 				continue
@@ -361,6 +361,135 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	return fmt.Errorf("vm not found")
 }
 
+func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
+	if ss.Target == nil {
+		for _, node := range nodes {
+			for _, session := range node.internal.Sessions {
+				if session.Id != ss.Id  {
+					continue
+				}
+
+				log.PushLog("forwarding command %s to node %s", command, node.Ip)
+
+				b, _ := json.Marshal(ss)
+				resp, err := http.Post(
+					fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
+					"application/json",
+					strings.NewReader(string(b)))
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				b, _ = io.ReadAll(resp.Body)
+				if resp.StatusCode != 200 {
+					log.PushLog("failed to request %s", string(b))
+					continue
+				}
+
+				nss := packet.WorkerSession{}
+				err = json.Unmarshal(b, &nss)
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				return &nss, nil
+			}
+		}
+		return nil, fmt.Errorf("no session found on any node")
+	}
+
+	for _, session := range daemon.info.Sessions {
+		if session.Id != *ss.Target || session.Vm == nil {
+			continue
+		}
+
+		log.PushLog("forwarding command %s to vm %s", command, *session.Vm.PrivateIP)
+
+		nss := *ss
+		nss.Target = nil
+		b, _ := json.Marshal(nss)
+		resp, err := http.Post(
+			fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
+			"application/json",
+			strings.NewReader(string(b)))
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		b, _ = io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			log.PushLog("failed to request %s", string(b))
+			continue
+		}
+
+		err = json.Unmarshal(b, &nss)
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		return &nss, nil
+	}
+
+	for _, node := range nodes {
+		for _, session := range node.internal.Sessions {
+			if session.Id != *ss.Target || session.Vm == nil {
+				continue
+			}
+
+			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Ip, *session.Vm.PrivateIP)
+
+			b, _ := json.Marshal(ss)
+			resp, err := http.Post(
+				fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
+				"application/json",
+				strings.NewReader(string(b)))
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			b, _ = io.ReadAll(resp.Body)
+			if resp.StatusCode != 200 {
+				log.PushLog("failed to request %s", string(b))
+				continue
+			}
+
+			nss := packet.WorkerSession{}
+			err = json.Unmarshal(b, &nss)
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			return &nss, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no receiver detected")
+}
+
+func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
+	for _, s := range daemon.info.Sessions {
+		if s.Id == token && s.Vm != nil {
+			return s.Vm.PrivateIP, true
+		}
+	}
+	for _, node := range nodes {
+		for _, s := range node.internal.Sessions {
+			if s.Id == token && s.Vm != nil {
+				return &node.Ip, false
+			}
+
+		}
+
+	}
+	return nil, false
+}
+
 func QueryInfo(info *packet.WorkerInfor) {
 	for _, session := range info.Sessions {
 		if session.Vm == nil {
@@ -408,92 +537,4 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 	return cp
 
-}
-
-func HandleSessionForward(daemon *Daemon, ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
-	for _, session := range daemon.info.Sessions {
-		if session.Id != *ss.Target || session.Vm == nil {
-			continue
-		}
-
-		nss := *ss
-		nss.Target = nil
-		b, _ := json.Marshal(nss)
-		resp, err := http.Post(
-			fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
-			"application/json",
-			strings.NewReader(string(b)))
-		if err != nil {
-			log.PushLog("failed to request %s", err.Error())
-			continue
-		}
-
-		b, _ = io.ReadAll(resp.Body)
-		if resp.StatusCode != 200 {
-			log.PushLog("failed to request %s", string(b))
-			continue
-		}
-
-		err = json.Unmarshal(b, &nss)
-		if err != nil {
-			log.PushLog("failed to request %s", err.Error())
-			continue
-		}
-
-		return &nss, nil
-	}
-
-	for _, node := range nodes {
-		for _, session := range node.internal.Sessions {
-			if session.Id != *ss.Target || session.Vm == nil {
-				continue
-			}
-
-			b, _ := json.Marshal(ss)
-			resp, err := http.Post(
-				fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
-				"application/json",
-				strings.NewReader(string(b)))
-			if err != nil {
-				log.PushLog("failed to request %s", err.Error())
-				continue
-			}
-
-			b, _ = io.ReadAll(resp.Body)
-			if resp.StatusCode != 200 {
-				log.PushLog("failed to request %s", string(b))
-				continue
-			}
-
-			nss := packet.WorkerSession{}
-			err = json.Unmarshal(b, &nss)
-			if err != nil {
-				log.PushLog("failed to request %s", err.Error())
-				continue
-			}
-
-			return &nss, nil
-
-		}
-	}
-
-	return nil, fmt.Errorf("no receiver detected")
-}
-
-func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
-	for _, s := range daemon.info.Sessions {
-		if s.Id == token && s.Vm != nil {
-			return s.Vm.PrivateIP, true
-		}
-	}
-	for _, node := range nodes {
-		for _, s := range node.internal.Sessions {
-			if s.Id == token && s.Vm != nil {
-				return &node.Ip, false
-			}
-
-		}
-
-	}
-	return nil,false
 }

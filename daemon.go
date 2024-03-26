@@ -62,7 +62,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}),
 	}
 
-	go HandleVirtdaemon(daemon, cluster)
+	go daemon.HandleVirtdaemon(cluster)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
 		QueryInfo(&daemon.info)
 		result := InfoBuilder(daemon.info)
@@ -86,7 +86,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		if ss.Target != nil {
-			return HandleSessionForward(daemon, ss, "new")
+			return daemon.HandleSessionForward(ss, "new")
 		}
 
 		if ss.Display != nil {
@@ -142,11 +142,8 @@ func WebDaemon(persistent persistent.Persistent,
 	go func() {
 		for {
 			ss := daemon.persist.ClosedSession()
-			if ss.Target != nil {
-				_, err := HandleSessionForward(daemon, ss, "closed")
-				if err != nil {
-					log.PushLog("failed to request %s", err.Error())
-				}
+			_, err := daemon.HandleSessionForward(ss, "closed")
+			if err == nil {
 				continue
 			}
 
