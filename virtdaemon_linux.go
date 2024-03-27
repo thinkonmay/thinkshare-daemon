@@ -37,6 +37,7 @@ type ClusterConfig struct {
 
 var (
 	dir     = "."
+	child   = "./child"
 	los     = "./vol.qcow2"
 	ldisk   = "./empty.qcow2"
 	lbinary = "./daemon"
@@ -47,7 +48,10 @@ var (
 )
 
 func init() {
-	dir, _ = filepath.Abs(filepath.Dir(os.Args[0]))
+	exe, _ := os.Executable()
+	dir, _ = filepath.Abs(filepath.Dir(exe))
+	child = fmt.Sprintf("%s/child", dir)
+	los = fmt.Sprintf("%s/vol.qcow2", dir)
 	los = fmt.Sprintf("%s/vol.qcow2", dir)
 	ldisk = fmt.Sprintf("%s/empty.qcow2", dir)
 	lbinary = fmt.Sprintf("%s/daemon", dir)
@@ -121,6 +125,7 @@ func setupNode(node *Node) error {
 	os := "~/thinkshare-daemon/vol.qcow2"
 
 	client.Run("mkdir ~/thinkshare-daemon")
+	client.Run("mkdir ~/thinkshare-daemon/child")
 
 	abs, _ := filepath.Abs(lbinary)
 	err = fileTransfer(node, binary, abs, true)
@@ -224,7 +229,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 
 	disk := ldisk
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		disk = fmt.Sprintf("./%s.qcow2", session.Vm.Volumes[0])
+		disk = fmt.Sprintf("%s/%s.qcow2",child, session.Vm.Volumes[0])
 	}
 
 	disks, err := prepareVolume(los, disk)
@@ -246,6 +251,9 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
+		for _,disk  := range disks {
+			disk.PopChain()
+		}
 		return nil, err
 	}
 
@@ -300,8 +308,9 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 
 	g := nss.Vm.GPUs[0]
 	var node *Node = nil
+	client := http.Client{Timeout: time.Second}
 	for _, n := range nodes {
-		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", n.Ip))
+		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", n.Ip))
 		if err != nil {
 			continue
 		}
@@ -351,6 +360,27 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 	}
 
 	return nss, nil
+}
+
+func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
+	volume_id := nss.Vm.Volumes[0]
+	for _, local := range daemon.info.Volumes {
+		if local == volume_id {
+			Vm, err := daemon.DeployVM(nss)
+			return nil,Vm, err
+		}
+	}
+
+	for _, node := range nodes {
+		for _, remote := range node.internal.Volumes {
+			if remote == volume_id {
+				session,err := daemon.DeployVMonNode(nss)
+				return session,nil,err
+			}
+		}
+	}
+
+	return nil, nil, fmt.Errorf("volume id %s not found", volume_id)
 }
 
 func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
@@ -521,12 +551,13 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 }
 
 func QueryInfo(info *packet.WorkerInfor) {
+	client := http.Client{Timeout: time.Second}
 	for _, session := range info.Sessions {
 		if session.Vm == nil {
 			continue
 		}
 
-		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
+		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
@@ -544,7 +575,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 	}
 
 	for _, node := range nodes {
-		resp, err := http.Get(fmt.Sprintf("http://%s:60000/info", node.Ip))
+		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", node.Ip))
 		if err != nil {
 			continue
 		}
@@ -607,7 +638,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 		}
 	}
 
-	files, err := os.ReadDir(".")
+	files, err := os.ReadDir(child)
 	if err != nil {
 		log.PushLog(err.Error())
 		return
@@ -650,6 +681,7 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	for _, node := range nodes {
 		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
+		cp.Volumes = append(cp.Volumes, node.internal.Volumes...)
 	}
 	return cp
 }
@@ -663,6 +695,7 @@ func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
 
 	result, err := exec.Command("qemu-img", "info", ldisk, "--output", "json").Output()
 	if err != nil {
+		chain_os.PopChain()
 		return []libvirt.Volume{}, err
 	}
 
@@ -672,6 +705,7 @@ func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
 	}{}
 	err = json.Unmarshal(result, &result_data)
 	if err != nil {
+		chain_os.PopChain()
 		return []libvirt.Volume{}, err
 	} else if result_data.Backing != nil {
 		chain_disk = libvirt.NewVolume(ldisk, *result_data.Backing)
@@ -679,6 +713,7 @@ func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
 		chain_disk = libvirt.NewVolume(ldisk)
 		err = chain_disk.PushChain(150)
 		if err != nil {
+			chain_os.PopChain()
 			return []libvirt.Volume{}, err
 		}
 	}

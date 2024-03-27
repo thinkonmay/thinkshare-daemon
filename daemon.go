@@ -110,14 +110,27 @@ func WebDaemon(persistent persistent.Persistent,
 			process, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
-			var Vm *packet.WorkerInfor
-			Vm, err = daemon.DeployVM(ss)
-			if err != nil {
-				if err.Error() == "ran out of gpu" {
-					return daemon.DeployVMonNode(ss)
+			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
+				var Vm *packet.WorkerInfor
+				Vm, err = daemon.DeployVM(ss)
+				if err != nil {
+					if err.Error() == "ran out of gpu" {
+						return daemon.DeployVMonNode(ss)
+					}
+				} else {
+					ss.Vm = Vm
 				}
 			} else {
-				ss.Vm = Vm
+				var session *packet.WorkerSession
+				var inf *packet.WorkerInfor
+				session,inf,err = daemon.DeployVMwithVolume(ss)
+				if err != nil {
+					return nil, err
+				} else if session != nil {
+					return session,nil
+				} else if inf != nil {
+					ss.Vm = inf
+				}
 			}
 		}
 		if ss.Sunshine != nil {

@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
@@ -35,8 +37,11 @@ func Start(stop chan bool) {
 	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
+
+	exe, _ := os.Executable()
+	dir, _ := filepath.Abs(filepath.Dir(exe))
 	cluster := &daemon.ClusterConfig{}
-	files,err := os.ReadFile("./cluster.yaml")
+	files,err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml",dir))
 	if err != nil {
 		log.PushLog("failed to read cluster.yaml %s",err.Error())
 		cluster = nil
