@@ -11,11 +11,11 @@ import (
 
 type Volume struct {
 	Disposable bool
-	Path    string  `yaml:"path"`
-	Backing *Volume `yaml:"backing"`
+	Path       string  `yaml:"path"`
+	Backing    *Volume `yaml:"backing"`
 }
 
-func NewVolume(path... string) *Volume {
+func NewVolume(path ...string) *Volume {
 	if len(path) == 0 {
 		return nil
 	}
@@ -23,8 +23,8 @@ func NewVolume(path... string) *Volume {
 	abs, _ := filepath.Abs(path[0])
 	child := NewVolume(path[1:]...)
 	return &Volume{
-		Path:    abs,
-		Backing: child,
+		Path:       abs,
+		Backing:    child,
 		Disposable: true,
 	}
 }
@@ -56,4 +56,12 @@ func (volume *Volume) PopChain() error {
 	volume.Path = volume.Backing.Path
 	volume.Backing = volume.Backing.Backing
 	return os.Remove(current)
+}
+
+func (volume *Volume) AllFiles() []string {
+	if volume == nil {
+		return []string{}
+	}
+
+	return append(volume.Backing.AllFiles(), volume.Path)
 }

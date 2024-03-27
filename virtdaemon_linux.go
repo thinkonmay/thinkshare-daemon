@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -35,14 +36,22 @@ type ClusterConfig struct {
 }
 
 var (
-	los     = "/home/huyhoang/thinkshare-daemon/vol.qcow2"
-	ldisk   = "/home/huyhoang/thinkshare-daemon/empty.qcow2"
-	lbinary = "/home/huyhoang/thinkshare-daemon/daemon"
+	dir     = "."
+	los     = "./vol.qcow2"
+	ldisk   = "./empty.qcow2"
+	lbinary = "./daemon"
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
 	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
 	nodes   []*Node                 = []*Node{}
 )
+
+func init() {
+	dir, _ = filepath.Abs(filepath.Dir(os.Args[0]))
+	los = fmt.Sprintf("%s/vol.qcow2", dir)
+	ldisk = fmt.Sprintf("%s/empty.qcow2", dir)
+	lbinary = fmt.Sprintf("%s/daemon", dir)
+}
 
 func deinit() {
 	for _, node := range nodes {
@@ -107,11 +116,11 @@ func setupNode(node *Node) error {
 	}
 
 	node.client = client
-	binary := fmt.Sprintf("/home/%s/thinkshare-daemon/daemon", node.Username)
-	disk := fmt.Sprintf("/home/%s/thinkshare-daemon/empty.qcow2", node.Username)
-	os := fmt.Sprintf("/home/%s/thinkshare-daemon/vol.qcow2", node.Username)
+	binary := "~/thinkshare-daemon/daemon"
+	disk := "~/thinkshare-daemon/empty.qcow2"
+	os := "~/thinkshare-daemon/vol.qcow2"
 
-	client.Run(fmt.Sprintf("mkdir /home/%s/thinkshare-daemon", node.Username))
+	client.Run("mkdir ~/thinkshare-daemon")
 
 	abs, _ := filepath.Abs(lbinary)
 	err = fileTransfer(node, binary, abs, true)
@@ -214,21 +223,14 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	}
 
 	disk := ldisk
-	if session.Vm.VolumeID != nil {
-		disk = fmt.Sprintf("./%s.qcow2",*session.Vm.VolumeID)
+	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
+		disk = fmt.Sprintf("./%s.qcow2", session.Vm.Volumes[0])
 	}
 
-	disks, err := prepareVolume(los,disk)
+	disks, err := prepareVolume(los, disk)
 	if err != nil {
 		return nil, err
 	}
-
-	var volume_id *string = nil
-	if session.Vm.VolumeID == nil && len(disks) > 1 {
-		volume_id = &strings.Split(filepath.Base(disks[1].Path),".qcow2")[0]
-		fmt.Println(*volume_id)
-	}
-
 
 	id := uuid.NewString()
 	model := libvirt.VMLaunchModel{
@@ -286,7 +288,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		}
 
 		log.PushLog("deployed a new worker %s", *addr.Ip)
-		inf.VolumeID = volume_id
 		return &inf, nil
 	}
 
@@ -557,6 +558,92 @@ func QueryInfo(info *packet.WorkerInfor) {
 
 		node.internal = &ss
 	}
+
+	vms, err := virt.ListVMs()
+	if err != nil {
+		return
+	}
+
+	in_use := []string{}
+	for _, vm := range vms {
+		ip, err := network.FindDomainIPs(vm)
+		if err != nil {
+			continue
+		}
+
+		for _, model := range models {
+			if model.ID != *vm.Name {
+				continue
+			}
+
+			for _, vol := range model.BackingVolume {
+				for _, f := range vol.AllFiles() {
+					volume_id := strings.Split(filepath.Base(f), ".qcow2")[0]
+					if uuid.Validate(volume_id) != nil {
+						continue
+					}
+
+					in_use = append(in_use, volume_id)
+				}
+
+			}
+
+			var volume_id *string = nil
+			if len(model.BackingVolume) > 1 {
+				volume_id = &strings.Split(filepath.Base(model.BackingVolume[1].Path), ".qcow2")[0]
+			}
+
+			if volume_id == nil {
+				continue
+			}
+
+			for _, ss := range info.Sessions {
+				if ss.Vm == nil || *ss.Vm.PrivateIP != *ip.Ip {
+					continue
+				}
+
+				ss.Vm.Volumes = []string{*volume_id}
+			}
+		}
+	}
+
+	files, err := os.ReadDir(".")
+	if err != nil {
+		log.PushLog(err.Error())
+		return
+	}
+
+	vols := []string{}
+	for _, f := range files {
+		if f.IsDir() || !strings.Contains(f.Name(), "qcow2") {
+			continue
+		}
+
+		volume_id := strings.Split(filepath.Base(f.Name()), ".qcow2")[0]
+
+		if uuid.Validate(volume_id) != nil {
+			continue
+		}
+
+		vols = append(vols, volume_id)
+	}
+
+	available := []string{}
+	for _, vol := range vols {
+		found := false
+		for _, iu := range in_use {
+			if iu == vol {
+				found = true
+			}
+		}
+		if found {
+			continue
+		}
+
+		available = append(available, vol)
+	}
+
+	info.Volumes = available
 }
 
 func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
@@ -565,7 +652,6 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
 	}
 	return cp
-
 }
 
 func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {

@@ -140,6 +140,7 @@ func GetInfor() (*packet.WorkerInfor, error) {
 
 		GPUs:     []string{},
 		Sessions: []*packet.WorkerSession{},
+		Volumes:  []string{},
 
 		// Get preferred outbound ip of this machine
 		PublicIP:  &public,
