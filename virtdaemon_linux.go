@@ -229,7 +229,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 
 	disk := ldisk
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		disk = fmt.Sprintf("%s/%s.qcow2",child, session.Vm.Volumes[0])
+		disk = fmt.Sprintf("%s/%s.qcow2", child, session.Vm.Volumes[0])
 	}
 
 	disks, err := prepareVolume(los, disk)
@@ -251,8 +251,10 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
-		for _,disk  := range disks {
-			disk.PopChain()
+		for _, d := range disks {
+			if d.Disposable || disk == ldisk {
+				d.PopChain()
+			}
 		}
 		return nil, err
 	}
@@ -367,15 +369,15 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 	for _, local := range daemon.info.Volumes {
 		if local == volume_id {
 			Vm, err := daemon.DeployVM(nss)
-			return nil,Vm, err
+			return nil, Vm, err
 		}
 	}
 
 	for _, node := range nodes {
 		for _, remote := range node.internal.Volumes {
 			if remote == volume_id {
-				session,err := daemon.DeployVMonNode(nss)
-				return session,nil,err
+				session, err := daemon.DeployVMonNode(nss)
+				return session, nil, err
 			}
 		}
 	}
