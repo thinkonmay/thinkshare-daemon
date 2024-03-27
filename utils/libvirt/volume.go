@@ -10,15 +10,22 @@ import (
 )
 
 type Volume struct {
+	Disposable bool
 	Path    string  `yaml:"path"`
 	Backing *Volume `yaml:"backing"`
 }
 
-func NewVolume(path string) Volume {
-	abs, _ := filepath.Abs(path)
-	return Volume{
+func NewVolume(path... string) *Volume {
+	if len(path) == 0 {
+		return nil
+	}
+
+	abs, _ := filepath.Abs(path[0])
+	child := NewVolume(path[1:]...)
+	return &Volume{
 		Path:    abs,
-		Backing: nil,
+		Backing: child,
+		Disposable: true,
 	}
 }
 

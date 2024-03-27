@@ -35,7 +35,7 @@ type ClusterConfig struct {
 }
 
 var (
-	los   	= "/home/huyhoang/thinkshare-daemon/vol.qcow2"
+	los     = "/home/huyhoang/thinkshare-daemon/vol.qcow2"
 	ldisk   = "/home/huyhoang/thinkshare-daemon/empty.qcow2"
 	lbinary = "/home/huyhoang/thinkshare-daemon/daemon"
 	virt    *libvirt.VirtDaemon
@@ -82,7 +82,7 @@ func fileTransfer(node *Node, rfile, lfile string, force bool) error {
 	if err != nil || force {
 		_, err := exec.Command("sshpass",
 			"-p", node.Password,
-			"scp", lfile, fmt.Sprintf("%s@%s:%s",node.Username,node.Ip, rfile),
+			"scp", lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
 		).Output()
 		if err != nil {
 			return err
@@ -213,25 +213,30 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return nil, err
 	}
 
-	chain_os := libvirt.NewVolume(los)
-	err = chain_os.PushChain(40)
+	disk := ldisk
+	if session.Vm.VolumeID != nil {
+		disk = fmt.Sprintf("./%s.qcow2",*session.Vm.VolumeID)
+	}
+
+	disks, err := prepareVolume(los,disk)
 	if err != nil {
 		return nil, err
 	}
 
-	chain_disk := libvirt.NewVolume(ldisk)
-	err = chain_disk.PushChain(150)
-	if err != nil {
-		return nil, err
+	var volume_id *string = nil
+	if session.Vm.VolumeID == nil && len(disks) > 1 {
+		volume_id = &strings.Split(filepath.Base(disks[1].Path),".qcow2")[0]
+		fmt.Println(*volume_id)
 	}
+
 
 	id := uuid.NewString()
 	model := libvirt.VMLaunchModel{
 		ID:            id,
 		VCPU:          8,
 		RAM:           8,
+		BackingVolume: disks,
 		GPU:           []libvirt.GPU{*gpu},
-		BackingVolume: []libvirt.Volume{chain_os,chain_disk},
 		Interfaces:    []libvirt.Interface{*iface},
 		VDriver:       true,
 	}
@@ -281,6 +286,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		}
 
 		log.PushLog("deployed a new worker %s", *addr.Ip)
+		inf.VolumeID = volume_id
 		return &inf, nil
 	}
 
@@ -352,7 +358,9 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 		for _, model := range models {
 			if model.ID == *vm.Name {
 				for _, v := range model.BackingVolume {
-					v.PopChain()
+					if v.Disposable {
+						v.PopChain()
+					}
 				}
 			}
 		}
@@ -496,6 +504,10 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 		}
 	}
 	for _, node := range nodes {
+		if node.internal == nil {
+			continue
+		}
+
 		for _, s := range node.internal.Sessions {
 			if s.Id == token && s.Vm != nil {
 				return &node.Ip, false
@@ -554,4 +566,37 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 	return cp
 
+}
+
+func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
+	chain_os := libvirt.NewVolume(los)
+	err := chain_os.PushChain(40)
+	if err != nil {
+		return []libvirt.Volume{}, err
+	}
+
+	result, err := exec.Command("qemu-img", "info", ldisk, "--output", "json").Output()
+	if err != nil {
+		return []libvirt.Volume{}, err
+	}
+
+	var chain_disk *libvirt.Volume = nil
+	result_data := struct {
+		Backing *string `json:"backing-filename"`
+	}{}
+	err = json.Unmarshal(result, &result_data)
+	if err != nil {
+		return []libvirt.Volume{}, err
+	} else if result_data.Backing != nil {
+		chain_disk = libvirt.NewVolume(ldisk, *result_data.Backing)
+	} else {
+		chain_disk = libvirt.NewVolume(ldisk)
+		err = chain_disk.PushChain(150)
+		if err != nil {
+			return []libvirt.Volume{}, err
+		}
+	}
+
+	chain_disk.Disposable = false
+	return []libvirt.Volume{*chain_os, *chain_disk}, nil
 }
