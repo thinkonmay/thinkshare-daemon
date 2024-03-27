@@ -35,7 +35,8 @@ type ClusterConfig struct {
 }
 
 var (
-	ldisk   = "/home/huyhoang/thinkshare-daemon/vol.qcow2"
+	los   	= "/home/huyhoang/thinkshare-daemon/vol.qcow2"
+	ldisk   = "/home/huyhoang/thinkshare-daemon/empty.qcow2"
 	lbinary = "/home/huyhoang/thinkshare-daemon/daemon"
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
@@ -66,25 +67,28 @@ func update_gpu(daemon *Daemon) {
 	daemon.info.GPUs = gs
 }
 
-func fileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
+func fileTransfer(node *Node, rfile, lfile string, force bool) error {
 	out, err := exec.Command("du", lfile).Output()
 	if err != nil {
 		return err
 	}
 	lsize := strings.Split(string(out), "\t")[0]
 
-	out, err = client.Run(fmt.Sprintf("du %s", rfile))
+	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
 	rsize := strings.Split(string(out), "\t")[0]
 	if err == nil && force {
-		client.Run(fmt.Sprintf("rm -f %s", rfile))
+		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
 	}
 	if err != nil || force {
-		err = client.Upload(lfile, rfile)
+		_, err := exec.Command("sshpass",
+			"-p", node.Password,
+			"scp", lfile, fmt.Sprintf("%s@%s:%s",node.Username,node.Ip, rfile),
+		).Output()
 		if err != nil {
 			return err
 		}
 
-		out, err := client.Run(fmt.Sprintf("du %s", rfile))
+		out, err := node.client.Run(fmt.Sprintf("du %s", rfile))
 		if err != nil {
 			return err
 		}
@@ -102,25 +106,32 @@ func setupNode(node *Node) error {
 		return err
 	}
 
+	node.client = client
 	binary := fmt.Sprintf("/home/%s/thinkshare-daemon/daemon", node.Username)
-	disk := fmt.Sprintf("/home/%s/thinkshare-daemon/vol.qcow2", node.Username)
+	disk := fmt.Sprintf("/home/%s/thinkshare-daemon/empty.qcow2", node.Username)
+	os := fmt.Sprintf("/home/%s/thinkshare-daemon/vol.qcow2", node.Username)
 
 	client.Run(fmt.Sprintf("mkdir /home/%s/thinkshare-daemon", node.Username))
 
 	abs, _ := filepath.Abs(lbinary)
-	err = fileTransfer(client, binary, abs, true)
+	err = fileTransfer(node, binary, abs, true)
 	if err != nil {
 		return err
 	}
 
 	abs, _ = filepath.Abs(ldisk)
-	err = fileTransfer(client, disk, abs, false)
+	err = fileTransfer(node, disk, abs, false)
+	if err != nil {
+		return err
+	}
+
+	abs, _ = filepath.Abs(los)
+	err = fileTransfer(node, os, abs, false)
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		node.client = client
 		if err != nil {
 			return
 		}
@@ -202,8 +213,14 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return nil, err
 	}
 
-	chain := libvirt.NewVolume(ldisk)
-	err = chain.PushChain(40)
+	chain_os := libvirt.NewVolume(los)
+	err = chain_os.PushChain(40)
+	if err != nil {
+		return nil, err
+	}
+
+	chain_disk := libvirt.NewVolume(ldisk)
+	err = chain_disk.PushChain(150)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +231,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		VCPU:          8,
 		RAM:           8,
 		GPU:           []libvirt.GPU{*gpu},
-		BackingVolume: []libvirt.Volume{chain},
+		BackingVolume: []libvirt.Volume{chain_os,chain_disk},
 		Interfaces:    []libvirt.Interface{*iface},
 		VDriver:       true,
 	}
@@ -365,7 +382,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 	if ss.Target == nil {
 		for _, node := range nodes {
 			for _, session := range node.internal.Sessions {
-				if session.Id != ss.Id  {
+				if session.Id != ss.Id {
 					continue
 				}
 

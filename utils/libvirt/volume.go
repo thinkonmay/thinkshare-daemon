@@ -15,14 +15,14 @@ type Volume struct {
 }
 
 func NewVolume(path string) Volume {
-	abs,_ := filepath.Abs(path)
+	abs, _ := filepath.Abs(path)
 	return Volume{
-		Path: abs,
+		Path:    abs,
 		Backing: nil,
 	}
 }
 
-func (chain *Volume) PushChain(size int) (error) {
+func (chain *Volume) PushChain(size int) error {
 	_, err := os.Stat(chain.Path)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (chain *Volume) PushChain(size int) (error) {
 	return nil
 }
 
-func (volume *Volume) PopChain() (error) {
+func (volume *Volume) PopChain() error {
 	current := volume.Path
 	volume.Path = volume.Backing.Path
 	volume.Backing = volume.Backing.Backing
