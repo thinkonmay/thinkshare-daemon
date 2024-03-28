@@ -1,3 +1,6 @@
 [submodule "hub"]
 	path = hub
 	url = https://github.com/thinkonmay/thinkremote-rtchub
+[submodule "binary/web"]
+	path = binary/web
+	url = https://github.com/thinkonmay/VirtualOS-win11

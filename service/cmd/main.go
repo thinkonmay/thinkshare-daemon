@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
@@ -12,11 +10,9 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
-	"gopkg.in/yaml.v3"
 )
 
-
-func Start(stop chan bool) {
+func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
@@ -38,23 +34,7 @@ func Start(stop chan bool) {
 
 	log.PushLog("starting worker daemon")
 
-	exe, _ := os.Executable()
-	dir, _ := filepath.Abs(filepath.Dir(exe))
-	cluster := &daemon.ClusterConfig{}
-	files,err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml",dir))
-	if err != nil {
-		log.PushLog("failed to read cluster.yaml %s",err.Error())
-		cluster = nil
-	} else {
-		err = yaml.Unmarshal(files,cluster)
-		if err != nil {
-			log.PushLog("failed to read cluster.yaml %s",err.Error())
-			cluster = nil
-		}
-	}
-
-
-	dm := daemon.WebDaemon(grpc,signaling,cluster)
+	dm := daemon.WebDaemon(grpc, signaling, cluster)
 	defer dm.Close()
-	<-stop
+	stop<-<-stop
 }

@@ -16,7 +16,6 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-
 const (
 	name = "thinkmay-remote-desktop"
 	desc = "high performance remote desktop by Thinkmay"
@@ -24,12 +23,12 @@ const (
 
 // program implements svc.Service
 type program struct {
-	exit chan bool
+	exit chan os.Signal
 }
 
 func main() {
 	prg := &program{
-		exit: make(chan bool, 2),
+		exit: make(chan os.Signal, 16),
 	}
 
 	if len(os.Args) == 3 {
@@ -71,7 +70,7 @@ func main() {
 			return
 		} else if os.Args[1] == "display" {
 			media.ActivateVirtualDriver()
-			_, id,err := media.StartVirtualDisplay(1920, 1080)
+			_, id, err := media.StartVirtualDisplay(1920, 1080)
 			if err != nil {
 				panic(err)
 			}
@@ -106,7 +105,7 @@ func (p *program) Start() error {
 	// The Start method must not block, or Windows may assume your service failed
 	// to start. Launch a Goroutine here to do something interesting/blocking.
 
-	go cmd.Start(p.exit)
+	go cmd.Start(nil, p.exit)
 	return nil
 }
 
@@ -115,7 +114,8 @@ func (p *program) Stop() error {
 	// This method may block, but it's a good idea to finish quickly or your process may be killed by
 	// Windows during a shutdown/reboot. As a general rule you shouldn't rely on graceful shutdown.
 
-	p.exit <- true
+	p.exit <- os.Interrupt
+	<-p.exit
 	log.PushLog("Stopped.")
 	time.Sleep(3 * time.Second)
 	return nil

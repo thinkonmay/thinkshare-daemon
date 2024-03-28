@@ -14,3 +14,4 @@ thinkmay.log
 *.qcow2
 daemon
 cluster.yaml
+binary/pb_data/
