@@ -13,10 +13,10 @@ import (
 )
 
 type GRPCclient struct {
-	logger      []string
-	worker_info func() *packet.WorkerInfor
+	logger          []string
+	worker_info     func() *packet.WorkerInfor
 	recv_session    func(*packet.WorkerSession) (*packet.WorkerSession, error)
-	closed_sesssion chan *packet.WorkerSession
+	closed_sesssion func(*packet.WorkerSession) error
 
 	done bool
 }
@@ -33,7 +33,9 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		recv_session: func(ws *packet.WorkerSession) (*packet.WorkerSession, error) {
 			return nil, fmt.Errorf("handler not configured")
 		},
-		closed_sesssion: make(chan *packet.WorkerSession),
+		closed_sesssion: func(ws *packet.WorkerSession) error {
+			return fmt.Errorf("handler not configured")
+		},
 	}
 
 	ret.wrapper("ping",
@@ -46,7 +48,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		})
 	ret.wrapper("log",
 		func(conn string) ([]byte, error) {
-			return []byte(strings.Join(ret.logger, "\n")),nil
+			return []byte(strings.Join(ret.logger, "\n")), nil
 		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
@@ -68,8 +70,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, err
 			}
 
-			ret.closed_sesssion <- msg
-			return []byte("{}"), nil
+			return []byte("{}"), ret.closed_sesssion(msg)
 		})
 	return ret, nil
 }
@@ -89,7 +90,7 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 
 		resp, err := fun(string(b))
 		if err != nil {
-			log.PushLog("request failed : %s",err.Error())
+			log.PushLog("request failed : %s", err.Error())
 			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
@@ -105,7 +106,7 @@ func (client *GRPCclient) Stop() {
 }
 
 func (grpc *GRPCclient) Log(source string, level string, log string) {
-	grpc.logger = append(grpc.logger, fmt.Sprintf("%s %s %s: %s",time.Now().Format(time.DateTime), source, level, log))
+	grpc.logger = append(grpc.logger, fmt.Sprintf("%s %s %s: %s", time.Now().Format(time.DateTime), source, level, log))
 }
 
 func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
@@ -114,6 +115,6 @@ func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
 func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
 }
-func (grpc *GRPCclient) ClosedSession() *packet.WorkerSession{
-	return <-grpc.closed_sesssion
+func (grpc *GRPCclient) ClosedSession(fun func(*packet.WorkerSession) error) {
+	grpc.closed_sesssion = fun
 }

@@ -123,11 +123,11 @@ func WebDaemon(persistent persistent.Persistent,
 			} else {
 				var session *packet.WorkerSession
 				var inf *packet.WorkerInfor
-				session,inf,err = daemon.DeployVMwithVolume(ss)
+				session, inf, err = daemon.DeployVMwithVolume(ss)
 				if err != nil {
 					return nil, err
 				} else if session != nil {
-					return session,nil
+					return session, nil
 				} else if inf != nil {
 					ss.Vm = inf
 				}
@@ -152,64 +152,63 @@ func WebDaemon(persistent persistent.Persistent,
 		return ss, nil
 	})
 
-	go func() {
-		for {
-			ss := daemon.persist.ClosedSession()
-			_, err := daemon.HandleSessionForward(ss, "closed")
-			if err == nil {
-				continue
-			}
+	daemon.persist.ClosedSession(func(ss *packet.WorkerSession) error {
+		_, err := daemon.HandleSessionForward(ss, "closed")
+		if err == nil {
+			return nil
+		}
 
-			log.PushLog("terminating session %s", ss)
-			keys := make([]string, 0, len(daemon.session))
-			for k, _ := range daemon.session {
-				keys = append(keys, k)
-			}
+		log.PushLog("terminating session %s", ss)
+		keys := make([]string, 0, len(daemon.session))
+		for k, _ := range daemon.session {
+			keys = append(keys, k)
+		}
 
-			var ws *packet.WorkerSession = nil
-			var iws *internalWorkerSession = nil
-			for _, v := range keys {
-				if ss.Id == v {
-					iws = daemon.session[v]
-					delete(daemon.session, v)
-				}
-			}
-
-			wss := []*packet.WorkerSession{}
-			for _, v := range daemon.info.Sessions {
-				if ss.Id == v.Id {
-					ws = v
-				} else {
-					wss = append(wss, v)
-				}
-			}
-
-			daemon.info.Sessions = wss
-
-			if ws != nil {
-				if ws.Display != nil {
-					if ws.Display.DisplayIndex != nil {
-						media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
-					}
-				}
-				if ws.Vm != nil {
-					daemon.ShutdownVM(ws.Vm)
-				}
-				if ws.Thinkmay != nil {
-					daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.VideoToken)
-					daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.AudioToken)
-				}
-			}
-			if iws != nil {
-				if iws.turn_server != nil {
-					iws.turn_server.Close()
-				}
-				for _, pi := range iws.childprocess {
-					daemon.childprocess.CloseID(pi)
-				}
+		var ws *packet.WorkerSession = nil
+		var iws *internalWorkerSession = nil
+		for _, v := range keys {
+			if ss.Id == v {
+				iws = daemon.session[v]
+				delete(daemon.session, v)
 			}
 		}
-	}()
+
+		wss := []*packet.WorkerSession{}
+		for _, v := range daemon.info.Sessions {
+			if ss.Id == v.Id {
+				ws = v
+			} else {
+				wss = append(wss, v)
+			}
+		}
+
+		daemon.info.Sessions = wss
+
+		if ws != nil {
+			if ws.Display != nil {
+				if ws.Display.DisplayIndex != nil {
+					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+				}
+			}
+			if ws.Vm != nil {
+				daemon.ShutdownVM(ws.Vm)
+			}
+			if ws.Thinkmay != nil {
+				daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.VideoToken)
+				daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.AudioToken)
+			}
+		}
+		if iws != nil {
+			if iws.turn_server != nil {
+				iws.turn_server.Close()
+			}
+			for _, pi := range iws.childprocess {
+				daemon.childprocess.CloseID(pi)
+			}
+		}
+
+		return nil
+	})
 
 	daemon.signaling.AuthHandler(daemon.HandleSignaling)
 
