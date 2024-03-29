@@ -38,8 +38,8 @@ type ClusterConfig struct {
 var (
 	dir     = "."
 	child   = "./child"
-	los     = "./vol.qcow2"
-	ldisk   = "./empty.qcow2"
+	los     = "./os.qcow2"
+	lapp    = "./app.qcow2"
 	lbinary = "./daemon"
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
@@ -51,9 +51,8 @@ func init() {
 	exe, _ := os.Executable()
 	dir, _ = filepath.Abs(filepath.Dir(exe))
 	child = fmt.Sprintf("%s/child", dir)
-	los = fmt.Sprintf("%s/vol.qcow2", dir)
-	los = fmt.Sprintf("%s/vol.qcow2", dir)
-	ldisk = fmt.Sprintf("%s/empty.qcow2", dir)
+	los = fmt.Sprintf("%s/os.qcow2", dir)
+	lapp = fmt.Sprintf("%s/app.qcow2", dir)
 	lbinary = fmt.Sprintf("%s/daemon", dir)
 }
 
@@ -83,7 +82,7 @@ func update_gpu(daemon *Daemon) {
 func fileTransfer(node *Node, rfile, lfile string, force bool) error {
 	out, err := exec.Command("du", lfile).Output()
 	if err != nil {
-		return fmt.Errorf("failed to retrieve file info %s",err.Error())
+		return fmt.Errorf("failed to retrieve file info %s", err.Error())
 	}
 
 	lsize := strings.Split(string(out), "\t")[0]
@@ -121,8 +120,8 @@ func setupNode(node *Node) error {
 
 	node.client = client
 	binary := "~/thinkshare-daemon/daemon"
-	disk := "~/thinkshare-daemon/empty.qcow2"
-	os := "~/thinkshare-daemon/vol.qcow2"
+	app := "~/thinkshare-daemon/app.qcow2"
+	os := "~/thinkshare-daemon/os.qcow2"
 
 	client.Run("mkdir ~/thinkshare-daemon")
 	client.Run("mkdir ~/thinkshare-daemon/child")
@@ -133,8 +132,8 @@ func setupNode(node *Node) error {
 		return err
 	}
 
-	abs, _ = filepath.Abs(ldisk)
-	err = fileTransfer(node, disk, abs, false)
+	abs, _ = filepath.Abs(lapp)
+	err = fileTransfer(node, app, abs, false)
 	if err != nil {
 		return err
 	}
@@ -152,7 +151,7 @@ func setupNode(node *Node) error {
 
 		log.PushLog("start %s on %s", binary, node.Ip)
 		client.Run(fmt.Sprintf("chmod 777 %s", binary))
-		client.Run(fmt.Sprintf("chmod 777 %s", disk))
+		client.Run(fmt.Sprintf("chmod 777 %s", app))
 
 		var ctx context.Context
 		ctx, node.cancel = context.WithCancel(context.Background())
@@ -222,12 +221,12 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return nil, err
 	}
 
-	disk := ldisk
+	os := los
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		disk = fmt.Sprintf("%s/%s.qcow2", child, session.Vm.Volumes[0])
+		os = fmt.Sprintf("%s/%s.qcow2", child, session.Vm.Volumes[0])
 	}
 
-	disks, err := prepareVolume(los, disk)
+	disks, err := prepareVolume(os, lapp)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +246,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	dom, err := virt.DeployVM(model)
 	if err != nil {
 		for _, d := range disks {
-			if d.Disposable || disk == ldisk {
+			if d.Disposable || os == los {
 				d.PopChain()
 			}
 		}
@@ -256,7 +255,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 
 	start := time.Now().UnixMilli()
 	for {
-		if time.Now().UnixMilli() - start > 3 * 60 * 1000 {
+		if time.Now().UnixMilli()-start > 3*60*1000 {
 			break
 		}
 
@@ -302,7 +301,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	}
 
 	virt.DeleteVM(model.ID)
-	return nil,fmt.Errorf("timeout deploy new VM")
+	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
 func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
@@ -625,7 +624,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 
 			var volume_id *string = nil
 			if len(model.BackingVolume) > 1 {
-				volume_id = &strings.Split(filepath.Base(model.BackingVolume[1].Path), ".qcow2")[0]
+				volume_id = &strings.Split(filepath.Base(model.BackingVolume[0].Path), ".qcow2")[0]
 			}
 
 			if volume_id == nil {
@@ -690,38 +689,38 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	return cp
 }
 
-func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
-	chain_os := libvirt.NewVolume(los)
-	err := chain_os.PushChain(40)
+func prepareVolume(os, app string) ([]libvirt.Volume, error) {
+	chain_app := libvirt.NewVolume(app)
+	err := chain_app.PushChain(5)
 	if err != nil {
 		return []libvirt.Volume{}, err
 	}
 
-	result, err := exec.Command("qemu-img", "info", ldisk, "--output", "json").Output()
+	result, err := exec.Command("qemu-img", "info", os, "--output", "json").Output()
 	if err != nil {
-		chain_os.PopChain()
-		return []libvirt.Volume{}, fmt.Errorf("failed to retrieve disk info %s",err.Error())
+		chain_app.PopChain()
+		return []libvirt.Volume{}, fmt.Errorf("failed to retrieve disk info %s", err.Error())
 	}
 
-	var chain_disk *libvirt.Volume = nil
+	var chain_os *libvirt.Volume = nil
 	result_data := struct {
 		Backing *string `json:"backing-filename"`
 	}{}
 	err = json.Unmarshal(result, &result_data)
 	if err != nil {
-		chain_os.PopChain()
+		chain_app.PopChain()
 		return []libvirt.Volume{}, err
 	} else if result_data.Backing != nil {
-		chain_disk = libvirt.NewVolume(ldisk, *result_data.Backing)
+		chain_os = libvirt.NewVolume(os, *result_data.Backing)
 	} else {
-		chain_disk = libvirt.NewVolume(ldisk)
-		err = chain_disk.PushChain(150)
+		chain_os = libvirt.NewVolume(os)
+		err = chain_os.PushChain(200)
 		if err != nil {
-			chain_os.PopChain()
+			chain_app.PopChain()
 			return []libvirt.Volume{}, err
 		}
 	}
 
-	chain_disk.Disposable = false
-	return []libvirt.Volume{*chain_os, *chain_disk}, nil
+	chain_os.Disposable = false
+	return []libvirt.Volume{*chain_os, *chain_app}, nil
 }
