@@ -199,18 +199,13 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 }
 
 func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInfor, error) {
-	if len(session.Vm.GPUs) == 0 {
-		return nil, fmt.Errorf("empty gpu")
-	}
-
-	g := session.Vm.GPUs[0]
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
 		return nil, err
 	}
 	for _, candidate := range gpus {
-		if candidate.Active || candidate.Capability.Product.Val != g {
+		if candidate.Active {
 			continue
 		}
 

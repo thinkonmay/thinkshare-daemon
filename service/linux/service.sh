@@ -8,6 +8,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+User=huyhoang
 ExecStart="$PWD"/binary/daemon
 WorkingDirectory="$PWD"
 
