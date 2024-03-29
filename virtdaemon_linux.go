@@ -83,10 +83,10 @@ func update_gpu(daemon *Daemon) {
 func fileTransfer(node *Node, rfile, lfile string, force bool) error {
 	out, err := exec.Command("du", lfile).Output()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve file info %s",err.Error())
 	}
-	lsize := strings.Split(string(out), "\t")[0]
 
+	lsize := strings.Split(string(out), "\t")[0]
 	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
 	rsize := strings.Split(string(out), "\t")[0]
 	if err == nil && force {
@@ -259,7 +259,12 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return nil, err
 	}
 
+	start := time.Now().UnixMilli()
 	for {
+		if time.Now().UnixMilli() - start > 3 * 60 * 1000 {
+			break
+		}
+
 		time.Sleep(time.Second)
 		addr, err := network.FindDomainIPs(dom)
 		if err != nil {
@@ -301,6 +306,8 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return &inf, nil
 	}
 
+	virt.DeleteVM(model.ID)
+	return nil,fmt.Errorf("timeout deploy new VM")
 }
 
 func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
@@ -698,7 +705,7 @@ func prepareVolume(los string, ldisk string) ([]libvirt.Volume, error) {
 	result, err := exec.Command("qemu-img", "info", ldisk, "--output", "json").Output()
 	if err != nil {
 		chain_os.PopChain()
-		return []libvirt.Volume{}, err
+		return []libvirt.Volume{}, fmt.Errorf("failed to retrieve disk info %s",err.Error())
 	}
 
 	var chain_disk *libvirt.Volume = nil

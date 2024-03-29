@@ -23,7 +23,9 @@ import (
 )
 
 func main() {
-	if log_file, err := os.OpenFile("./thinkmay.log", os.O_RDWR|os.O_CREATE, 0755); err == nil {
+	exe, _ := os.Executable()
+	dir, _ := filepath.Abs(filepath.Dir(exe))
+	if log_file, err := os.OpenFile(fmt.Sprintf("%s/thinkmay.log",dir), os.O_RDWR|os.O_CREATE, 0755); err == nil {
 		i := log.TakeLog(func(log string) {
 			str := fmt.Sprintf("daemon.exe : %s", log)
 			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
@@ -33,8 +35,6 @@ func main() {
 		defer log_file.Close()
 	}
 
-	exe, _ := os.Executable()
-	dir, _ := filepath.Abs(filepath.Dir(exe))
 	cluster := &daemon.ClusterConfig{}
 	files, err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml", dir))
 	if err != nil {
@@ -44,28 +44,29 @@ func main() {
 		app := pocketbase.New()
 		app.Bootstrap()
 
-
-		handle := func (c echo.Context) (err error) {
-			body,_ := io.ReadAll(c.Request().Body)
-			req,_ := http.NewRequest(
+		handle := func(c echo.Context) (err error) {
+			body, _ := io.ReadAll(c.Request().Body)
+			req, _ := http.NewRequest(
 				c.Request().Method,
 				fmt.Sprintf("http://localhost:60000%s?%s",
 					c.Request().URL.Path,
 					c.Request().URL.RawQuery),
 				strings.NewReader(string(body)))
 
-			resp,err := http.DefaultClient.Do(req)
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
-				log.PushLog("error handle command %s : %s",c.Request().URL.Path,err.Error())
+				log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
 				return err
 			}
 
-			for k,v := range resp.Header {
-				if len(v) == 0 { continue }
-				c.Response().Header().Add(k,v[0])
+			for k, v := range resp.Header {
+				if len(v) == 0 {
+					continue
+				}
+				c.Response().Header().Add(k, v[0])
 			}
 
-			body,_ = io.ReadAll(resp.Body)
+			body, _ = io.ReadAll(resp.Body)
 			c.Response().Write(body)
 			return nil
 		}

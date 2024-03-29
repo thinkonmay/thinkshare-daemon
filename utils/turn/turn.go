@@ -2,40 +2,41 @@ package turn
 
 import (
 	"flag"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
 
 	"github.com/pion/stun/v2"
 	"github.com/pion/turn/v3"
-	"github.com/thinkonmay/thinkshare-daemon/credential"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 )
 
 const (
-	realm     = "thinkmay.net"
+	realm = "thinkmay.net"
 )
 
 type TurnServer struct {
 	s *turn.Server
 }
 
-func Open(username,password string,min_port, max_port, port int) (*TurnServer,error) {
+func Open(username, password string, min_port, max_port, port int) (*TurnServer, error) {
 	s, err := SetupTurn(
-		username,password,
-		credential.Addresses.PublicIP,
+		username, password,
+		system.GetPublicIPCurl(),
 		port,
 		min_port,
 		max_port)
 	if err != nil {
 		log.PushLog("failed to setup turn account: %s", err.Error())
-		return nil,err
+		return nil, err
 	}
 
-	return &TurnServer{s},nil
+	return &TurnServer{s}, nil
 }
 
-func (t *TurnServer)Close() {
+func (t *TurnServer) Close() {
 	t.s.Close()
 }
 
@@ -118,4 +119,24 @@ func SetupTurn(
 			},
 		},
 	})
+}
+
+func getFreeUDPPort(min int, max int) (int, error) {
+	addr, err := net.ResolveUDPAddr("udp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	port := l.LocalAddr().(*net.UDPAddr).Port
+	if port > max {
+		return 0, fmt.Errorf("invalid port %d", port)
+	} else if port < min {
+		return getFreeUDPPort(min, max)
+	}
+	return port, nil
 }
