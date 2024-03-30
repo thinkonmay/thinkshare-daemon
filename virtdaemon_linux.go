@@ -55,6 +55,7 @@ func init() {
 	los = fmt.Sprintf("%s/os.qcow2", dir)
 	lapp = fmt.Sprintf("%s/app.qcow2", dir)
 	lbinary = fmt.Sprintf("%s/daemon", dir)
+	exec.Command("cpupower","frequency-set","-g","performance").Output() // TODO
 }
 
 func deinit() {
