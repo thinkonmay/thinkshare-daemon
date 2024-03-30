@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -226,6 +227,21 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		os = fmt.Sprintf("%s/%s.qcow2", child, session.Vm.Volumes[0])
 	}
 
+	vcpu := int64(16)
+	ram := int64(16)
+	if session.Vm.CPU != "" {
+		i, err := strconv.ParseInt(session.Vm.CPU, 10, 32)
+		if err == nil {
+			vcpu = i
+		}
+	}
+	if session.Vm.RAM != "" {
+		i, err := strconv.ParseInt(session.Vm.RAM, 10, 32)
+		if err == nil {
+			ram = i
+		}
+	}
+
 	disks, err := prepareVolume(os, lapp)
 	if err != nil {
 		return nil, err
@@ -234,8 +250,8 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	id := uuid.NewString()
 	model := libvirt.VMLaunchModel{
 		ID:            id,
-		VCPU:          8,
-		RAM:           8,
+		VCPU:          int(vcpu),
+		RAM:           int(ram),
 		BackingVolume: disks,
 		GPU:           []libvirt.GPU{*gpu},
 		Interfaces:    []libvirt.Interface{*iface},
@@ -305,11 +321,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 }
 
 func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
-	if len(nss.Vm.GPUs) == 0 {
-		return nil, fmt.Errorf("empty gpu")
-	}
-
-	g := nss.Vm.GPUs[0]
 	var node *Node = nil
 	client := http.Client{Timeout: time.Second}
 	for _, n := range nodes {
@@ -318,23 +329,16 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 			continue
 		}
 
-		ss := packet.WorkerInfor{}
+		info := packet.WorkerInfor{}
 		b, _ := io.ReadAll(resp.Body)
-		err = json.Unmarshal(b, &ss)
+		err = json.Unmarshal(b, &info)
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
 		}
 
-		for _, gpu := range ss.GPUs {
-			if gpu == g {
-				cp := *n
-				node = &cp
-				break
-			}
-		}
-
-		if node != nil {
+		if len(info.GPUs) > 0 {
+			node = n
 			break
 		}
 	}
@@ -714,7 +718,7 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 		chain_os = libvirt.NewVolume(os, *result_data.Backing)
 	} else {
 		chain_os = libvirt.NewVolume(os)
-		err = chain_os.PushChain(200)
+		err = chain_os.PushChain(240)
 		if err != nil {
 			chain_app.PopChain()
 			return []libvirt.Volume{}, err
