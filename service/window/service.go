@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -80,10 +82,59 @@ func main() {
 		}
 	}
 
-	// Call svc.Run to start your program/service.
-	if err := svc.Run(prg); err != nil {
-		log.PushLog(err.Error())
+	if _, err := os.Stat("./.git"); errors.Is(err, os.ErrNotExist) {
+		if err := AutoUpdate(); err != nil {
+			fmt.Println(err.Error())
+		}
+	} else {
+		if err := svc.Run(prg); err != nil {
+			log.PushLog(err.Error())
+		}
 	}
+}
+
+func AutoUpdate() error {
+	exec.Command("git", "clone", "https://github.com/thinkonmay/thinkmay", "thinkmay").Run()
+	update := exec.Command("git", "pull")
+	update.Dir = "./thinkmay"
+	update.Run()
+	update = exec.Command("git", "reset","--hard")
+	update.Dir = "./thinkmay"
+	update.Run()
+	update = exec.Command("git", "reset","--hard")
+	update.Dir = "./thinkmay/binary"
+	update.Run()
+	update = exec.Command("git", "submodule", "update", "--init", "binary")
+	update.Dir = "./thinkmay"
+	update.Run()
+	final := exec.Command("./daemon.exe")
+	final.Dir = "./thinkmay/binary"
+	stderr,_ := final.StderrPipe()
+	stdout,_ := final.StdoutPipe()
+	final.Start()
+	go func() {
+		bytes := make([]byte, 4096)
+		for {
+			n, err := stdout.Read(bytes)
+			if err != nil {
+				break
+			}
+
+			fmt.Printf("%s",string(bytes[:n]))
+		}
+	}()
+	go func() {
+		bytes := make([]byte, 4096)
+		for {
+			n, err := stderr.Read(bytes)
+			if err != nil {
+				break
+			}
+
+			fmt.Printf("%s",string(bytes[:n]))
+		}
+	}()
+	return final.Wait()
 }
 
 func (p *program) Init(env svc.Environment) error {
