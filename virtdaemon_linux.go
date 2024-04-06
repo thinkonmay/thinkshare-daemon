@@ -286,14 +286,14 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		}
 
 		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(fmt.Sprintf("http://%s:60000/ping", *addr.Ip))
+		resp, err := client.Get(fmt.Sprintf("http://%s:%d/ping", *addr.Ip,Httpport))
 		if err != nil {
 			continue
 		} else if resp.StatusCode != 200 {
 			continue
 		}
 
-		resp, err = client.Get(fmt.Sprintf("http://%s:60000/info", *addr.Ip))
+		resp, err = client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip,Httpport))
 		if err != nil {
 			continue
 		}
@@ -325,7 +325,7 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 	var node *Node = nil
 	client := http.Client{Timeout: time.Second}
 	for _, n := range nodes {
-		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", n.Ip))
+		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", n.Ip,Httpport))
 		if err != nil {
 			continue
 		}
@@ -351,7 +351,7 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 	log.PushLog("deploying VM on node %s", node.Ip)
 	b, _ := json.Marshal(nss)
 	resp, err := http.Post(
-		fmt.Sprintf("http://%s:60000/new", node.Ip),
+		fmt.Sprintf("http://%s:%d/new", node.Ip,Httpport),
 		"application/json",
 		strings.NewReader(string(b)))
 	if err != nil {
@@ -437,7 +437,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 
 				b, _ := json.Marshal(ss)
 				resp, err := http.Post(
-					fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
+					fmt.Sprintf("http://%s:%d/%s", node.Ip,Httpport, command),
 					"application/json",
 					strings.NewReader(string(b)))
 				if err != nil {
@@ -475,7 +475,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		nss.Target = nil
 		b, _ := json.Marshal(nss)
 		resp, err := http.Post(
-			fmt.Sprintf("http://%s:60000/%s", *session.Vm.PrivateIP, command),
+			fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP,Httpport, command),
 			"application/json",
 			strings.NewReader(string(b)))
 		if err != nil {
@@ -508,7 +508,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 
 			b, _ := json.Marshal(ss)
 			resp, err := http.Post(
-				fmt.Sprintf("http://%s:60000/%s", node.Ip, command),
+				fmt.Sprintf("http://%s:%d/%s", node.Ip,Httpport, command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
@@ -565,7 +565,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 			continue
 		}
 
-		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", *session.Vm.PrivateIP))
+		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP,Httpport))
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
@@ -583,7 +583,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 	}
 
 	for _, node := range nodes {
-		resp, err := client.Get(fmt.Sprintf("http://%s:60000/info", node.Ip))
+		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip,Httpport))
 		if err != nil {
 			continue
 		}

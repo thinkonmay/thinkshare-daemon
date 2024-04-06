@@ -1,5 +1,6 @@
 package daemon
 
+import "C"
 import (
 	"fmt"
 	"os/exec"
@@ -18,13 +19,20 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
 )
 
+const (
+	Httpport = 60000
+)
+
 type internalWorkerSession struct {
 	childprocess []childprocess.ProcessID
 	turn_server  *turn.TurnServer
 }
 
 type Daemon struct {
-	info packet.WorkerInfor
+	info    packet.WorkerInfor
+	memory  *SharedMemory
+	mhandle string
+	cleans   []func()
 
 	signaling    *signaling.Signaling
 	childprocess *childprocess.ChildProcesses
@@ -47,9 +55,18 @@ func WebDaemon(persistent persistent.Persistent,
 		return WebDaemon(persistent, signaling, cluster)
 	}
 
+	memory, handle, def, err := AllocateSharedMemory()
+	if err != nil {
+		log.PushLog("fail to create shared memory %s", err.Error())
+		return nil
+	}
+
 	daemon := &Daemon{
+		mhandle:   handle,
+		memory:    memory,
 		info:      *i,
 		mutex:     &sync.Mutex{},
+		cleans:     []func(){def},
 		session:   map[string]*internalWorkerSession{},
 		persist:   persistent,
 		signaling: signaling,
@@ -60,6 +77,19 @@ func WebDaemon(persistent persistent.Persistent,
 		log: log.TakeLog(func(log string) {
 			persistent.Log("daemon.exe", "infor", log)
 		}),
+	}
+
+	sunshine_path, err := path.FindProcessPath("", "shmsunshine.exe")
+	if err != nil {
+		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
+		return nil
+	}
+
+	for i := 0; i <= Video1; i++ {
+		_, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle))
+		if err != nil {
+			return nil
+		}
 	}
 
 	go daemon.HandleVirtdaemon(cluster)
@@ -217,6 +247,9 @@ func WebDaemon(persistent persistent.Persistent,
 
 func (daemon *Daemon) Close() {
 	deinit()
+	for _,clean  := range daemon.cleans {
+		clean()
+	}
 	daemon.childprocess.CloseAll()
 	log.RemoveCallback(daemon.log)
 	for _, ws := range daemon.info.Sessions {
@@ -246,16 +279,20 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, err
 	}
 
+	daemon.memory.queues[Video0].metadata.active = C.int(1)
+	daemon.memory.queues[Audio].metadata.active = C.int(1)
+
 	video_token := uuid.NewString()
 	audio_token := uuid.NewString()
 	cmd := []string{
+		"--token", daemon.mhandle,
 		"--stun", current.Thinkmay.StunAddress,
 		"--turn", current.Thinkmay.TurnAddress,
 		"--turn_username", current.Thinkmay.Username,
 		"--turn_password", current.Thinkmay.Password,
 		"--display", *current.Display.DisplayName,
-		"--video", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s", video_token),
-		"--audio", fmt.Sprintf("http://localhost:60000/handshake/server?token=%s", audio_token),
+		"--video", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s",Httpport, video_token),
+		"--audio", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s",Httpport, audio_token),
 	}
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))

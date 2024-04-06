@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
+	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
@@ -40,7 +41,7 @@ func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Requ
 
 	clone := url.URL{
 		Scheme:   "http",
-		Host:     fmt.Sprintf("%s:60000", *ip),
+		Host:     fmt.Sprintf("%s:%d", *ip,daemon.Httpport),
 		Path:     r.URL.Path,
 		RawQuery: q.Encode(),
 	}
