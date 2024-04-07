@@ -19,6 +19,7 @@ const (
 	Video0 = C.Video0
 	Video1 = C.Video1
 	Audio  = C.Audio
+	Input  = C.Input
 )
 
 type SharedMemory C.SharedMemory

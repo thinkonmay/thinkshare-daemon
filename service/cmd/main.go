@@ -9,14 +9,14 @@ import (
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 
-	// "github.com/thinkonmay/thinkshare-daemon/utils/media"
+	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 )
 
 func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
-	// media.ActivateVirtualDriver()
-	// defer media.DeactivateVirtualDriver()
+	media.ActivateVirtualDriver()
+	defer media.DeactivateVirtualDriver()
 
 	grpc, err := httpp.InitHttppServer()
 	if err != nil {
