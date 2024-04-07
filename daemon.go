@@ -85,11 +85,10 @@ func WebDaemon(persistent persistent.Persistent,
 		return nil
 	}
 
-	for i := 0; i <= Video1; i++ {
-		_, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle))
-		if err != nil {
-			return nil
-		}
+	_,err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d",Audio)))
+	if err != nil {
+		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
+		return nil
 	}
 
 	go daemon.HandleVirtdaemon(cluster)
@@ -279,13 +278,30 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, err
 	}
 
-	daemon.memory.queues[Video0].metadata.active = C.int(1)
-	daemon.memory.queues[Audio].metadata.active = C.int(1)
+	var channel int
+	if daemon.memory.queues[Video0].metadata.active == 0 {
+		channel = Video0
+	} else if daemon.memory.queues[Video1].metadata.active == 0 {
+		channel = Video1
+	} else {
+		return []childprocess.ProcessID{},fmt.Errorf("no capture channel available")
+	}
+
+	sunshine_path, err := path.FindProcessPath("", "shmsunshine.exe")
+	if err != nil {
+		return []childprocess.ProcessID{},err
+	}
+
+	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d",channel)))
+	if err != nil {
+		return []childprocess.ProcessID{},err
+	}
 
 	video_token := uuid.NewString()
 	audio_token := uuid.NewString()
 	cmd := []string{
 		"--token", daemon.mhandle,
+		"--video_channel", fmt.Sprintf("%d",channel),
 		"--stun", current.Thinkmay.StunAddress,
 		"--turn", current.Thinkmay.TurnAddress,
 		"--turn_username", current.Thinkmay.Username,
@@ -304,7 +320,7 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 	current.Thinkmay.VideoToken = &video_token
 	daemon.signaling.AddSignalingChannel(video_token)
 	daemon.signaling.AddSignalingChannel(audio_token)
-	return []childprocess.ProcessID{video}, nil
+	return []childprocess.ProcessID{video,sunshine}, nil
 }
 
 func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
