@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
+	"regexp"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"github.com/spf13/viper"
 )
 
 type GRPCclient struct {
@@ -75,11 +76,30 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 	return ret, nil
 }
 
+func allowedOrigin(origin string) bool {
+    if viper.GetString("cors") == "*" {
+        return true
+    }
+    if matched, _ := regexp.MatchString(viper.GetString("cors"), origin); matched {
+        return true
+    }
+    return false
+}
+
 func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, error)) {
 	log.PushLog("registering url handler on %s", url)
 	http.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
+
+		if allowedOrigin(r.Header.Get("Orgin")) {
+			w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+            w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
+            w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, ResponseType")
+		}
+
+		if r.Method == "OPTIONS" {
+            return
+        }
+
 		log.PushLog("incoming request %s", r.URL.Path)
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
