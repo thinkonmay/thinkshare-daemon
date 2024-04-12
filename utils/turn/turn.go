@@ -2,7 +2,6 @@ package turn
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -78,7 +77,7 @@ func SetupTurn(
 	publicip string,
 	port int,
 	min int,
-	max int) (*turn.Server, error) {
+	max int) (t *turn.Server, err error) {
 	flag.Parse()
 
 	// Create a UDP listener to pass into pion/turn
@@ -87,12 +86,22 @@ func SetupTurn(
 	udpListener, err := net.ListenPacket("udp4", "0.0.0.0:"+strconv.Itoa(port))
 	if err != nil {
 		log.PushLog("Failed to create TURN server listener: %s", err)
+		return nil, err
 	}
 
 	// Cache -users flag for easy lookup later
 	// If passwords are stored they should be saved to your DB hashed using turn.GenerateAuthKey
 	usersMap := map[string][]byte{}
 	usersMap[username] = turn.GenerateAuthKey(username, realm, password)
+
+	go func() {
+		if err != nil {
+			return
+		}
+
+		time.Sleep(time.Hour * 48)
+		t.Close()
+	}()
 
 	return turn.NewServer(turn.ServerConfig{
 		Realm: realm,
@@ -119,24 +128,4 @@ func SetupTurn(
 			},
 		},
 	})
-}
-
-func getFreeUDPPort(min int, max int) (int, error) {
-	addr, err := net.ResolveUDPAddr("udp", "localhost:0")
-	if err != nil {
-		return 0, err
-	}
-
-	l, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-	port := l.LocalAddr().(*net.UDPAddr).Port
-	if port > max {
-		return 0, fmt.Errorf("invalid port %d", port)
-	} else if port < min {
-		return getFreeUDPPort(min, max)
-	}
-	return port, nil
 }
