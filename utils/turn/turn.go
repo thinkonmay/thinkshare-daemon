@@ -52,7 +52,7 @@ func (s *stunLogger) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 			return
 		}
 
-		log.PushLog("[%s] Outbound STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
+		// log.PushLog("[%s] Outbound STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
 	}
 
 	return
@@ -65,7 +65,7 @@ func (s *stunLogger) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 			return
 		}
 
-		log.PushLog("[%s] Inbound  STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
+		// log.PushLog("[%s] Inbound  STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
 	}
 
 	return

@@ -1,11 +1,15 @@
 package daemon
 
+/*
+#include <strings.h>
+*/
 import "C"
 import (
 	"fmt"
 	"os/exec"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
@@ -24,15 +28,16 @@ const (
 )
 
 type internalWorkerSession struct {
-	childprocess []childprocess.ProcessID
-	turn_server  *turn.TurnServer
+	childprocess   []childprocess.ProcessID
+	turn_server    *turn.TurnServer
+	memory_channel *int
 }
 
 type Daemon struct {
 	info    packet.WorkerInfor
 	memory  *SharedMemory
 	mhandle string
-	cleans   []func()
+	cleans  []func()
 
 	signaling    *signaling.Signaling
 	childprocess *childprocess.ChildProcesses
@@ -66,7 +71,7 @@ func WebDaemon(persistent persistent.Persistent,
 		memory:    memory,
 		info:      *i,
 		mutex:     &sync.Mutex{},
-		cleans:     []func(){def},
+		cleans:    []func(){def},
 		session:   map[string]*internalWorkerSession{},
 		persist:   persistent,
 		signaling: signaling,
@@ -85,12 +90,12 @@ func WebDaemon(persistent persistent.Persistent,
 		return nil
 	}
 
-	_,err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d",Input)))
+	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Input)))
 	if err != nil {
 		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
 		return nil
 	}
-	_,err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d",Audio)))
+	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
 	if err != nil {
 		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
 		return nil
@@ -107,16 +112,19 @@ func WebDaemon(persistent persistent.Persistent,
 
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
+		var channel *int = nil
 
 		err := fmt.Errorf("no session configured")
 		if ss.Turn != nil {
-			t, err = turn.Open(
+			if t, err = turn.Open(
 				ss.Turn.Username,
 				ss.Turn.Password,
 				int(ss.Turn.MinPort),
 				int(ss.Turn.MaxPort),
 				int(ss.Turn.Port),
-			)
+			); err != nil {
+				return nil,err
+			}
 		}
 
 		if ss.Target != nil {
@@ -141,7 +149,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		if ss.Thinkmay != nil {
-			process, err = daemon.handleHub(ss)
+			process, channel, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
@@ -178,8 +186,9 @@ func WebDaemon(persistent persistent.Persistent,
 
 		log.PushLog("session creation successful")
 		daemon.session[ss.Id] = &internalWorkerSession{
-			turn_server:  t,
-			childprocess: process,
+			turn_server:    t,
+			childprocess:   process,
+			memory_channel: channel,
 		}
 
 		daemon.info.Sessions = append(daemon.info.Sessions, ss)
@@ -236,6 +245,9 @@ func WebDaemon(persistent persistent.Persistent,
 			if iws.turn_server != nil {
 				iws.turn_server.Close()
 			}
+			if iws.memory_channel != nil {
+				daemon.memory.queues[*iws.memory_channel].metadata.active = 0
+			}
 			for _, pi := range iws.childprocess {
 				daemon.childprocess.CloseID(pi)
 			}
@@ -251,7 +263,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 func (daemon *Daemon) Close() {
 	deinit()
-	for _,clean  := range daemon.cleans {
+	for _, clean := range daemon.cleans {
 		clean()
 	}
 	daemon.childprocess.CloseAll()
@@ -277,10 +289,10 @@ func (daemon *Daemon) Close() {
 	}
 }
 
-func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
+func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, *int, error) {
 	hub_path, err := path.FindProcessPath("", "hub.exe")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var channel int
@@ -289,43 +301,47 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 	} else if daemon.memory.queues[Video1].metadata.active == 0 {
 		channel = Video1
 	} else {
-		return []childprocess.ProcessID{},fmt.Errorf("no capture channel available")
+		return nil, nil, fmt.Errorf("no capture channel available")
 	}
 
 	sunshine_path, err := path.FindProcessPath("", "shmsunshine.exe")
 	if err != nil {
-		return []childprocess.ProcessID{},err
+		return nil, nil, err
 	}
 
-	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d",channel)))
+	display := []byte(*current.Display.DisplayName)
+	if len(display) > 0 {
+		C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulonglong(len(display)))
+	}
+	daemon.memory.queues[channel].metadata.codec = 0
+	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d", channel)))
 	if err != nil {
-		return []childprocess.ProcessID{},err
+		return nil, nil, err
 	}
 
 	video_token := uuid.NewString()
 	audio_token := uuid.NewString()
 	cmd := []string{
 		"--token", daemon.mhandle,
-		"--video_channel", fmt.Sprintf("%d",channel),
+		"--video_channel", fmt.Sprintf("%d", channel),
 		"--stun", current.Thinkmay.StunAddress,
 		"--turn", current.Thinkmay.TurnAddress,
 		"--turn_username", current.Thinkmay.Username,
 		"--turn_password", current.Thinkmay.Password,
-		"--display", *current.Display.DisplayName,
-		"--video", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s",Httpport, video_token),
-		"--audio", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s",Httpport, audio_token),
+		"--video", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s", Httpport, video_token),
+		"--audio", fmt.Sprintf("http://localhost:%d/handshake/server?token=%s", Httpport, audio_token),
 	}
 
 	video, err := daemon.childprocess.NewChildProcess(exec.Command(hub_path, cmd...))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	current.Thinkmay.AudioToken = &audio_token
 	current.Thinkmay.VideoToken = &video_token
 	daemon.signaling.AddSignalingChannel(video_token)
 	daemon.signaling.AddSignalingChannel(audio_token)
-	return []childprocess.ProcessID{video,sunshine}, nil
+	return []childprocess.ProcessID{video, sunshine}, &channel, nil
 }
 
 func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
