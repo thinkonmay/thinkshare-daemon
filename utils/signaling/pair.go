@@ -1,9 +1,6 @@
 package signaling
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
@@ -37,8 +34,6 @@ func (pair *Pair) handlePair() {
 				return
 			}
 
-			bytes, _ := json.Marshal(msg)
-			fmt.Printf("sending packet from peerB to peerA : %s \n", string(bytes))
 			pair.A.Send(msg)
 		}
 	}()
@@ -50,8 +45,6 @@ func (pair *Pair) handlePair() {
 				return
 			}
 
-			bytes, _ := json.Marshal(msg)
-			fmt.Printf("sending packet from peerA to peerB : %s \n", string(bytes))
 			pair.B.Send(msg)
 		}
 	}()

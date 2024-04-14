@@ -31,7 +31,11 @@ func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
 	)
 
 	srv := &http.Server{Addr: fmt.Sprintf(":%d",daemon.Httpport)}
-	go srv.ListenAndServe()
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			log.PushLog(err.Error())
+		}
+	}()
 	defer srv.Close()
 
 	log.PushLog("starting worker daemon")
