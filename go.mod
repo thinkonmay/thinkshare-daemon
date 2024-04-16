@@ -141,6 +141,7 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/digitalocean/go-libvirt v0.0.0-20240229222500-83343b985513
 	github.com/digitalocean/go-openvswitch v0.0.0-20240130171624-c0f7d42efe24
+	github.com/ebitengine/purego v0.7.1
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/jaypipes/pcidb v1.0.0 // indirect

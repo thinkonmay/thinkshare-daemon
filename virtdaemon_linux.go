@@ -37,6 +37,8 @@ type ClusterConfig struct {
 }
 
 var (
+	libvirt_available = true
+
 	dir     = "."
 	child   = "./child"
 	los     = "./os.qcow2"
@@ -182,6 +184,7 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
 		log.PushLog("failed to connect libvirt %s", err.Error())
+		libvirt_available = false
 		return
 	}
 
@@ -200,6 +203,10 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 }
 
 func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInfor, error) {
+	if !libvirt_available {
+		return nil, fmt.Errorf("libvirt not available")
+	}
+
 	var gpu *libvirt.GPU = nil
 	gpus, err := virt.ListGPUs()
 	if err != nil {
@@ -322,6 +329,10 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 }
 
 func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+	if !libvirt_available {
+		return nil, fmt.Errorf("libvirt not available")
+	}
+
 	var node *Node = nil
 	client := http.Client{Timeout: time.Second}
 	for _, n := range nodes {
@@ -371,6 +382,10 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 }
 
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
+	if !libvirt_available {
+		return nil,nil, fmt.Errorf("libvirt not available")
+	}
+
 	volume_id := nss.Vm.Volumes[0]
 	for _, local := range daemon.info.Volumes {
 		if local == volume_id {
@@ -392,6 +407,10 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 }
 
 func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
+	if !libvirt_available {
+		return fmt.Errorf("libvirt not available")
+	}
+
 	removeVM := func(vm libvirt.Domain) {
 		virt.DeleteVM(*vm.Name)
 		for _, model := range models {
@@ -426,6 +445,10 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 }
 
 func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
+	if !libvirt_available {
+		return nil,fmt.Errorf("libvirt not available")
+	}
+
 	if ss.Target == nil {
 		for _, node := range nodes {
 			for _, session := range node.internal.Sessions {
@@ -537,6 +560,10 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 }
 
 func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
+	if !libvirt_available {
+		return nil,false
+	}
+
 	for _, s := range daemon.info.Sessions {
 		if s.Id == token && s.Vm != nil {
 			return s.Vm.PrivateIP, true
@@ -559,6 +586,10 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 }
 
 func QueryInfo(info *packet.WorkerInfor) {
+	if !libvirt_available {
+		return 
+	}
+
 	client := http.Client{Timeout: time.Second}
 	for _, session := range info.Sessions {
 		if session.Vm == nil {
@@ -686,6 +717,10 @@ func QueryInfo(info *packet.WorkerInfor) {
 }
 
 func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+	if !libvirt_available {
+		return cp
+	}
+
 	for _, node := range nodes {
 		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)

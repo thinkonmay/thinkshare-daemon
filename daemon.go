@@ -1,6 +1,7 @@
 package daemon
 
 /*
+#include "smemory.h"
 #include <string.h>
 */
 import "C"
@@ -9,7 +10,7 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-	"unsafe"
+	// "unsafe"
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
@@ -80,24 +81,24 @@ func WebDaemon(persistent persistent.Persistent,
 			persistent.Log(proc, "childprocess", log)
 		}),
 		log: log.TakeLog(func(log string) {
-			persistent.Log("daemon.exe", "infor", log)
+			persistent.Log("daemon", "infor", log)
 		}),
 	}
 
-	sunshine_path, err := path.FindProcessPath("", "shmsunshine.exe")
+	sunshine_path, err := path.FindProcessPath("shmsunshine")
 	if err != nil {
-		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
+		log.PushLog("fail to start shmsunshine %s", err.Error())
 		return nil
 	}
 
 	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Input)))
 	if err != nil {
-		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
+		log.PushLog("fail to start shmsunshine %s", err.Error())
 		return nil
 	}
 	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
 	if err != nil {
-		log.PushLog("fail to start shmsunshine.exe %s", err.Error())
+		log.PushLog("fail to start shmsunshine %s", err.Error())
 		return nil
 	}
 
@@ -291,7 +292,7 @@ func (daemon *Daemon) Close() {
 }
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, *int, error) {
-	hub_path, err := path.FindProcessPath("", "hub.exe")
+	hub_path, err := path.FindProcessPath("hub")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -305,15 +306,15 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, nil, fmt.Errorf("no capture channel available")
 	}
 
-	sunshine_path, err := path.FindProcessPath("", "shmsunshine.exe")
+	sunshine_path, err := path.FindProcessPath("shmsunshine")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	display := []byte(*current.Display.DisplayName)
-	if len(display) > 0 {
-		C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulonglong(len(display)))
-	}
+	// display := []byte(*current.Display.DisplayName)
+	// if len(display) > 0 {
+	// 	C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulong(len(display)))
+	// }
 	daemon.memory.queues[channel].metadata.codec = 0
 	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d", channel)))
 	if err != nil {
@@ -346,7 +347,7 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 }
 
 func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childprocess.ProcessID, error) {
-	hub_path, err := path.FindProcessPath("", "sunshine.exe")
+	hub_path, err := path.FindProcessPath("sunshine")
 	if err != nil {
 		return nil, err
 	}

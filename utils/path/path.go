@@ -1,22 +1,20 @@
 package path
 
 import (
-	"os/exec"
-	"strings"
+	"fmt"
+	"os"
+	"path/filepath"
 )
 
-func FindProcessPath(dir string, process string) (string, error) {
-	cmd := exec.Command("where.exe", process)
+var (
+	dir string
+)
 
-	if dir != "" {
-		cmd.Dir = dir
-	}
+func init() {
+	exe, _ := os.Executable()
+	dir, _ = filepath.Abs(filepath.Dir(exe))
+}
 
-	bytes, err := cmd.Output()
-	if err != nil {
-		return "", nil
-	}
-	paths := strings.Split(string(bytes), "\n")
-	pathss := strings.Split(paths[0], "\r")
-	return pathss[0], nil
+func FindProcessPath(process string) (string, error) {
+	return filepath.Abs(fmt.Sprintf("%s/%s", dir, process))
 }
