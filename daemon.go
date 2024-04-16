@@ -132,15 +132,16 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		if ss.Display != nil {
-			name, index, err := media.StartVirtualDisplay(
+			if name, index, err := media.StartVirtualDisplay(
 				int(ss.Display.ScreenWidth),
 				int(ss.Display.ScreenHeight),
-			)
-			if err != nil {
-				return nil, err
+			); err != nil {
+				i := ""
+				ss.Display.DisplayName = &i
+			} else {
+				val := int32(index)
+				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
 			}
-			val := int32(index)
-			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
 		} else if len(media.Displays()) > 0 {
 			ss.Display = &packet.DisplaySession{
 				DisplayName:  &media.Displays()[0],
