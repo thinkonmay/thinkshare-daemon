@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-	// "unsafe"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
@@ -132,22 +132,23 @@ func WebDaemon(persistent persistent.Persistent,
 			return daemon.HandleSessionForward(ss, "new")
 		}
 
-		// if ss.Display != nil {
-		// 	name, index, err := media.StartVirtualDisplay(
-		// 		int(ss.Display.ScreenWidth),
-		// 		int(ss.Display.ScreenHeight),
-		// 	)
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	val := int32(index)
-		// 	ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
-		// } else if len(media.Displays()) > 0 {
-		// 	ss.Display = &packet.DisplaySession{
-		// 		DisplayName:  &media.Displays()[0],
-		// 		DisplayIndex: nil,
-		// 	}
-		// }
+		if ss.Display != nil {
+			if name, index, err := media.StartVirtualDisplay(
+				int(ss.Display.ScreenWidth),
+				int(ss.Display.ScreenHeight),
+			); err != nil {
+				i := ""
+				ss.Display.DisplayName = &i
+			} else {
+				val := int32(index)
+				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
+			}
+		} else if len(media.Displays()) > 0 {
+			ss.Display = &packet.DisplaySession{
+				DisplayName:  &media.Displays()[0],
+				DisplayIndex: nil,
+			}
+		}
 
 		if ss.Thinkmay != nil {
 			process, channel, err = daemon.handleHub(ss)
@@ -310,10 +311,10 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, nil, err
 	}
 
-	// display := []byte(*current.Display.DisplayName)
-	// if len(display) > 0 {
-	// 	C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulong(len(display)))
-	// }
+	display := []byte(*current.Display.DisplayName)
+	if len(display) > 0 {
+		C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulong(len(display)))
+	}
 	daemon.memory.queues[channel].metadata.codec = 0
 	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d", channel)))
 	if err != nil {
