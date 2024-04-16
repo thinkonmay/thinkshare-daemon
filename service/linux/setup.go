@@ -25,14 +25,18 @@ import (
 func main() {
 	exe, _ := os.Executable()
 	dir, _ := filepath.Abs(filepath.Dir(exe))
+	i := log.TakeLog(func(log string) {
+		str := fmt.Sprintf("daemon : %s", log)
+		fmt.Println(str)
+	})
+	defer log.RemoveCallback(i)
+
 	if log_file, err := os.OpenFile(fmt.Sprintf("%s/thinkmay.log",dir), os.O_RDWR|os.O_CREATE, 0755); err == nil {
 		i := log.TakeLog(func(log string) {
-			str := fmt.Sprintf("daemon.exe : %s", log)
+			str := fmt.Sprintf("daemon : %s", log)
 			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
-			fmt.Println(str)
 		})
 		defer log.RemoveCallback(i)
-		defer log_file.Close()
 	}
 
 	cluster := &daemon.ClusterConfig{}
