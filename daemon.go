@@ -91,11 +91,6 @@ func WebDaemon(persistent persistent.Persistent,
 		return nil
 	}
 
-	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Input)))
-	if err != nil {
-		log.PushLog("fail to start shmsunshine %s", err.Error())
-		return nil
-	}
 	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
 	if err != nil {
 		log.PushLog("fail to start shmsunshine %s", err.Error())
