@@ -22,6 +22,10 @@ const (
 	Input  = C.Input
 )
 
+func memcpy(to,from unsafe.Pointer, size int) {
+	C.memcpy(to, from, C.ulonglong(size))
+}
+
 type SharedMemory C.SharedMemory
 
 func byteSliceToString(s []byte) string {

@@ -23,6 +23,11 @@ const (
 
 type SharedMemory C.SharedMemory
 
+func memcpy(to,from unsafe.Pointer, size int) {
+	C.memcpy(to, from, C.ulong(size))
+}
+
+
 func byteSliceToString(s []byte) string {
 	n := bytes.IndexByte(s, 0)
 	if n >= 0 {
