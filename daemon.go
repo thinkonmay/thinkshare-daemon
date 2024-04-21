@@ -1,7 +1,7 @@
 package daemon
 
 /*
-#include <strings.h>
+#include <string.h>
 */
 import "C"
 import (
@@ -123,7 +123,7 @@ func WebDaemon(persistent persistent.Persistent,
 				int(ss.Turn.MaxPort),
 				int(ss.Turn.Port),
 			); err != nil {
-				return nil,err
+				return nil, err
 			}
 		}
 

@@ -135,7 +135,7 @@ func setupNode(node *Node) error {
 	}
 
 	abs, _ = filepath.Abs(lapp)
-	err = fileTransfer(node, app, abs, false)
+	err = fileTransfer(node, app, abs, true)
 	if err != nil {
 		return err
 	}
