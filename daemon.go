@@ -306,10 +306,10 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, nil, err
 	}
 
-	// display := []byte(*current.Display.DisplayName)
-	// if len(display) > 0 {
-	// 	C.memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), C.ulong(len(display)))
-	// }
+	display := []byte(*current.Display.DisplayName)
+	if len(display) > 0 {
+		memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), len(display))
+	}
 	daemon.memory.queues[channel].metadata.codec = 0
 	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d", channel)))
 	if err != nil {
