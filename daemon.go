@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"sync"
 	"time"
-	// "unsafe"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
