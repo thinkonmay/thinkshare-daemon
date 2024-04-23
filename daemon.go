@@ -61,18 +61,12 @@ func WebDaemon(persistent persistent.Persistent,
 		return WebDaemon(persistent, signaling, cluster)
 	}
 
-	memory, handle, def, err := AllocateSharedMemory()
-	if err != nil {
-		log.PushLog("fail to create shared memory %s", err.Error())
-		return nil
-	}
-
 	daemon := &Daemon{
-		mhandle:   handle,
-		memory:    memory,
+		mhandle:   "empty",
+		memory:    &SharedMemory{},
 		info:      *i,
 		mutex:     &sync.Mutex{},
-		cleans:    []func(){def},
+		cleans:    []func(){},
 		session:   map[string]*internalWorkerSession{},
 		persist:   persistent,
 		signaling: signaling,
@@ -85,16 +79,23 @@ func WebDaemon(persistent persistent.Persistent,
 		}),
 	}
 
-	sunshine_path, err := path.FindProcessPath("shmsunshine")
-	if err != nil {
-		log.PushLog("fail to start shmsunshine %s", err.Error())
-		return nil
-	}
+	if memory, handle, def, err := AllocateSharedMemory(); err != nil {
+		log.PushLog("fail to create shared memory %s", err.Error())
+	} else {
+		daemon.mhandle = handle
+		daemon.memory = memory
+		daemon.cleans = append(daemon.cleans, def)
+		sunshine_path, err := path.FindProcessPath("shmsunshine")
+		if err != nil {
+			log.PushLog("fail to start shmsunshine %s", err.Error())
+			return nil
+		}
 
-	_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
-	if err != nil {
-		log.PushLog("fail to start shmsunshine %s", err.Error())
-		return nil
+		_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
+		if err != nil {
+			log.PushLog("fail to start shmsunshine %s", err.Error())
+			return nil
+		}
 	}
 
 	go daemon.HandleVirtdaemon(cluster)
@@ -287,6 +288,9 @@ func (daemon *Daemon) Close() {
 }
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, *int, error) {
+	if daemon.mhandle == "empty" {
+		return nil,nil,fmt.Errorf("shared memory not working")
+	}
 	hub_path, err := path.FindProcessPath("hub")
 	if err != nil {
 		return nil, nil, err

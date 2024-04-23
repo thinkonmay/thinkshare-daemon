@@ -37,17 +37,18 @@ type ClusterConfig struct {
 }
 
 var (
+	quick_client      = http.Client{Timeout: time.Second}
+	slow_client       = http.Client{Timeout: time.Minute * 3}
 	libvirt_available = true
-
-	dir     = "."
-	child   = "./child"
-	los     = "./os.qcow2"
-	lapp    = "./app.qcow2"
-	lbinary = "./daemon"
-	virt    *libvirt.VirtDaemon
-	network libvirt.Network
-	models  []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
-	nodes   []*Node                 = []*Node{}
+	dir               = "."
+	child             = "./child"
+	los               = "./os.qcow2"
+	lapp              = "./app.qcow2"
+	lbinary           = "./daemon"
+	virt              *libvirt.VirtDaemon
+	network           libvirt.Network
+	models            []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
+	nodes             []*Node                 = []*Node{}
 )
 
 func init() {
@@ -57,7 +58,6 @@ func init() {
 	los = fmt.Sprintf("%s/os.qcow2", dir)
 	lapp = fmt.Sprintf("%s/app.qcow2", dir)
 	lbinary = fmt.Sprintf("%s/daemon", dir)
-	exec.Command("cpupower","frequency-set","-g","performance").Output() // TODO
 }
 
 func deinit() {
@@ -292,19 +292,22 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 			continue
 		}
 
-		client := http.Client{Timeout: time.Second}
-		resp, err := client.Get(fmt.Sprintf("http://%s:%d/ping", *addr.Ip,Httpport))
+		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/ping", *addr.Ip, Httpport))
 		if err != nil {
 			continue
 		} else if resp.StatusCode != 200 {
 			continue
 		}
 
-		resp, err = client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip,Httpport))
+		resp, err = quick_client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip, Httpport))
 		if err != nil {
 			continue
 		}
-		b, _ := io.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			continue
+		}
+
 		if resp.StatusCode != 200 {
 			log.PushLog(string(b))
 			continue
@@ -334,15 +337,18 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 	}
 
 	var node *Node = nil
-	client := http.Client{Timeout: time.Second}
 	for _, n := range nodes {
-		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", n.Ip,Httpport))
+		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", n.Ip, Httpport))
 		if err != nil {
 			continue
 		}
 
 		info := packet.WorkerInfor{}
-		b, _ := io.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog(err.Error())
+			continue
+		}
 		err = json.Unmarshal(b, &info)
 		if err != nil {
 			log.PushLog(err.Error())
@@ -361,14 +367,17 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 
 	log.PushLog("deploying VM on node %s", node.Ip)
 	b, _ := json.Marshal(nss)
-	resp, err := http.Post(
-		fmt.Sprintf("http://%s:%d/new", node.Ip,Httpport),
+	resp, err := slow_client.Post(
+		fmt.Sprintf("http://%s:%d/new", node.Ip, Httpport),
 		"application/json",
 		strings.NewReader(string(b)))
 	if err != nil {
 		return nil, err
 	}
-	b, _ = io.ReadAll(resp.Body)
+	b, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf(string(b))
 	}
@@ -383,7 +392,7 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
 	if !libvirt_available {
-		return nil,nil, fmt.Errorf("libvirt not available")
+		return nil, nil, fmt.Errorf("libvirt not available")
 	}
 
 	volume_id := nss.Vm.Volumes[0]
@@ -446,7 +455,7 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 
 func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
 	if !libvirt_available {
-		return nil,fmt.Errorf("libvirt not available")
+		return nil, fmt.Errorf("libvirt not available")
 	}
 
 	if ss.Target == nil {
@@ -459,8 +468,8 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 				log.PushLog("forwarding command %s to node %s", command, node.Ip)
 
 				b, _ := json.Marshal(ss)
-				resp, err := http.Post(
-					fmt.Sprintf("http://%s:%d/%s", node.Ip,Httpport, command),
+				resp, err := slow_client.Post(
+					fmt.Sprintf("http://%s:%d/%s", node.Ip, Httpport, command),
 					"application/json",
 					strings.NewReader(string(b)))
 				if err != nil {
@@ -468,7 +477,11 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 					continue
 				}
 
-				b, _ = io.ReadAll(resp.Body)
+				b, err = io.ReadAll(resp.Body)
+				if err != nil {
+					log.PushLog(err.Error())
+					continue
+				}
 				if resp.StatusCode != 200 {
 					log.PushLog("failed to request %s", string(b))
 					continue
@@ -497,8 +510,8 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		nss := *ss
 		nss.Target = nil
 		b, _ := json.Marshal(nss)
-		resp, err := http.Post(
-			fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP,Httpport, command),
+		resp, err := slow_client.Post(
+			fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP, Httpport, command),
 			"application/json",
 			strings.NewReader(string(b)))
 		if err != nil {
@@ -506,7 +519,11 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			continue
 		}
 
-		b, _ = io.ReadAll(resp.Body)
+		b, err = io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog("failed to parse request %s", err.Error())
+			continue
+		}
 		if resp.StatusCode != 200 {
 			log.PushLog("failed to request %s", string(b))
 			continue
@@ -530,8 +547,8 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Ip, *session.Vm.PrivateIP)
 
 			b, _ := json.Marshal(ss)
-			resp, err := http.Post(
-				fmt.Sprintf("http://%s:%d/%s", node.Ip,Httpport, command),
+			resp, err := slow_client.Post(
+				fmt.Sprintf("http://%s:%d/%s", node.Ip, Httpport, command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
@@ -539,7 +556,11 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 				continue
 			}
 
-			b, _ = io.ReadAll(resp.Body)
+			b, err = io.ReadAll(resp.Body)
+			if err != nil {
+				log.PushLog("failed to parse request %s", err.Error())
+				continue
+			}
 			if resp.StatusCode != 200 {
 				log.PushLog("failed to request %s", string(b))
 				continue
@@ -561,7 +582,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 
 func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 	if !libvirt_available {
-		return nil,false
+		return nil, false
 	}
 
 	for _, s := range daemon.info.Sessions {
@@ -587,23 +608,26 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 
 func QueryInfo(info *packet.WorkerInfor) {
 	if !libvirt_available {
-		return 
+		return
 	}
 
-	client := http.Client{Timeout: time.Second}
 	for _, session := range info.Sessions {
 		if session.Vm == nil {
 			continue
 		}
 
-		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP,Httpport))
+		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP, Httpport))
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
 		}
 
 		ss := packet.WorkerInfor{}
-		b, _ := io.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog(err.Error())
+			continue
+		}
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
 			log.PushLog(err.Error())
@@ -614,15 +638,20 @@ func QueryInfo(info *packet.WorkerInfor) {
 	}
 
 	for _, node := range nodes {
-		resp, err := client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip,Httpport))
+		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
 		if err != nil {
 			continue
 		}
 
 		ss := packet.WorkerInfor{}
-		b, _ := io.ReadAll(resp.Body)
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog(err.Error())
+			continue
+		}
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
+			log.PushLog(err.Error())
 			continue
 		}
 
@@ -722,6 +751,10 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 
 	for _, node := range nodes {
+		if node.internal == nil {
+			continue
+		}
+
 		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
 		cp.Volumes = append(cp.Volumes, node.internal.Volumes...)

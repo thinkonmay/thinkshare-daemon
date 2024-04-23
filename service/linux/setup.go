@@ -71,6 +71,8 @@ func main() {
 				c.Response().Header().Add(k, v[0])
 			}
 
+			c.Response().Header().Add("Access-Control-Allow-Origin", "*")
+			c.Response().Header().Add("Access-Control-Allow-Headers", "*")
 			body, _ = io.ReadAll(resp.Body)
 			c.Response().Write(body)
 			return nil
@@ -87,8 +89,8 @@ func main() {
 
 		go apis.Serve(app, apis.ServeConfig{
 			ShowStartBanner:    true,
-			HttpAddr:           "0.0.0.0:60080",
-			HttpsAddr:          "0.0.0.0:60443",
+			HttpAddr:           "0.0.0.0:40080",
+			HttpsAddr:          "0.0.0.0:40443",
 			CertificateDomains: []string{"supabase.thinkmay.net"},
 		})
 
