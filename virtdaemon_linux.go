@@ -37,8 +37,10 @@ type ClusterConfig struct {
 }
 
 var (
-	quick_client      = http.Client{Timeout: time.Second}
+	very_quick_client = http.Client{Timeout: time.Second}
+	quick_client      = http.Client{Timeout: 5 * time.Second}
 	slow_client       = http.Client{Timeout: time.Minute * 3}
+
 	libvirt_available = true
 	dir               = "."
 	child             = "./child"
@@ -292,14 +294,14 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 			continue
 		}
 
-		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/ping", *addr.Ip, Httpport))
+		resp, err := very_quick_client.Get(fmt.Sprintf("http://%s:%d/ping", *addr.Ip, Httpport))
 		if err != nil {
 			continue
 		} else if resp.StatusCode != 200 {
 			continue
 		}
 
-		resp, err = quick_client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip, Httpport))
+		resp, err = very_quick_client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip, Httpport))
 		if err != nil {
 			continue
 		}
@@ -616,7 +618,7 @@ func QueryInfo(info *packet.WorkerInfor) {
 			continue
 		}
 
-		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP, Httpport))
+		resp, err := very_quick_client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP, Httpport))
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
