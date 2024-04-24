@@ -19,5 +19,5 @@ RestartSec=5s
 WantedBy=multi-user.target" > /lib/systemd/system/virtdaemon.service
 systemctl daemon-reload
 systemctl restart virtdaemon
-cpupower frequency-setl -g performance		
+cpupower frequency-set -g performance		
 journalctl -f -u virtdaemon

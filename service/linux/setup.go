@@ -31,7 +31,7 @@ func main() {
 	})
 	defer log.RemoveCallback(i)
 
-	if log_file, err := os.OpenFile(fmt.Sprintf("%s/thinkmay.log",dir), os.O_RDWR|os.O_CREATE, 0755); err == nil {
+	if log_file, err := os.OpenFile(fmt.Sprintf("%s/thinkmay.log", dir), os.O_RDWR|os.O_CREATE, 0755); err == nil {
 		i := log.TakeLog(func(log string) {
 			str := fmt.Sprintf("daemon : %s", log)
 			log_file.Write([]byte(fmt.Sprintf("%s\n", str)))
@@ -48,6 +48,7 @@ func main() {
 		app := pocketbase.New()
 		app.Bootstrap()
 
+		client := http.Client{Timeout: 3 * time.Minute}
 		handle := func(c echo.Context) (err error) {
 			body, _ := io.ReadAll(c.Request().Body)
 			req, _ := http.NewRequest(
@@ -58,32 +59,37 @@ func main() {
 					c.Request().URL.RawQuery),
 				strings.NewReader(string(body)))
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := client.Do(req)
 			if err != nil {
 				log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
 				return err
+			} 
+
+			body, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			} else if resp.StatusCode != 200 {
+				c.Response().Status = resp.StatusCode
 			}
 
+
 			for k, v := range resp.Header {
-				if len(v) == 0 {
+				if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
 					continue
 				}
 				c.Response().Header().Add(k, v[0])
 			}
 
-			c.Response().Header().Add("Access-Control-Allow-Origin", "*")
-			c.Response().Header().Add("Access-Control-Allow-Headers", "*")
-			body, _ = io.ReadAll(resp.Body)
 			c.Response().Write(body)
 			return nil
 		}
 
 		app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
-			e.Router.GET("/*", apis.StaticDirectoryHandler(os.DirFS(fmt.Sprintf("%s/web/dist", dir)), true))
-			e.Router.GET("/info", handle)
 			e.Router.POST("/new", handle)
 			e.Router.POST("/closed", handle)
 			e.Router.POST("/handshake/*", handle)
+			e.Router.GET("/info", handle)
+			e.Router.GET("/*", apis.StaticDirectoryHandler(os.DirFS(fmt.Sprintf("%s/web/dist", dir)), true))
 			return nil
 		})
 
