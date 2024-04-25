@@ -20,6 +20,9 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
+type Host struct {
+	Interface       string `yaml:"interface"`
+}
 type Node struct {
 	Ip       string `yaml:"ip"`
 	Username string `yaml:"username"`
@@ -34,6 +37,7 @@ type Node struct {
 
 type ClusterConfig struct {
 	Nodes []Node `yaml:"nodes"`
+	Local Host `yaml:"local"`
 }
 
 var (
@@ -190,7 +194,7 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 		return
 	}
 
-	network, err = libvirt.NewLibvirtNetwork("enp0s25")
+	network, err = libvirt.NewLibvirtNetwork(cluster.Local.Interface)
 	if err != nil {
 		log.PushLog("failed to start network %s", err.Error())
 		return

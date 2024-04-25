@@ -3,3 +3,5 @@ nodes:
     username : cde
     password : abc
     role : follower
+local:
+  - interface: enp5s0

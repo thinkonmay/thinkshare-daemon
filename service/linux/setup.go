@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,7 +44,20 @@ func main() {
 	files, err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml", dir))
 	if err != nil {
 		log.PushLog("failed to read cluster.yaml %s", err.Error())
-		cluster = nil
+		if ifaces, err := net.Interfaces(); err == nil {
+			for _, local_if := range ifaces {
+				if local_if.Flags&net.FlagLoopback > 0 ||
+					local_if.Flags&net.FlagRunning == 0 {
+					continue
+				}
+
+				cluster = &daemon.ClusterConfig{
+					Nodes: []daemon.Node{},
+					Local: daemon.Host{Interface: local_if.Name},
+				}
+				break
+			}
+		}
 	} else {
 		app := pocketbase.New()
 		app.Bootstrap()
@@ -63,7 +77,7 @@ func main() {
 			if err != nil {
 				log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
 				return err
-			} 
+			}
 
 			body, err = io.ReadAll(resp.Body)
 			if err != nil {
@@ -71,7 +85,6 @@ func main() {
 			} else if resp.StatusCode != 200 {
 				c.Response().Status = resp.StatusCode
 			}
-
 
 			for k, v := range resp.Header {
 				if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
