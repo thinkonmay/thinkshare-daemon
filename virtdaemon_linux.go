@@ -573,6 +573,8 @@ func QueryInfo(info *packet.WorkerInfor) {
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
+		} else if ss.PrivateIP == nil || ss.PublicIP == nil {
+			continue
 		}
 
 		session.Vm = &ss
@@ -597,6 +599,8 @@ func QueryInfo(info *packet.WorkerInfor) {
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
 			log.PushLog(err.Error())
+			continue
+		} else if ss.PrivateIP == nil || ss.PublicIP == nil {
 			continue
 		}
 
