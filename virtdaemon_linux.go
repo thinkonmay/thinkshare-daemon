@@ -21,7 +21,7 @@ import (
 )
 
 type Host struct {
-	Interface       string `yaml:"interface"`
+	Interface string `yaml:"interface"`
 }
 type Node struct {
 	Ip       string `yaml:"ip"`
@@ -30,14 +30,14 @@ type Node struct {
 	Role     string `yaml:"role"`
 
 	client *goph.Client
-	cancel context.CancelFunc
+	cancel *context.CancelFunc
 
-	internal *packet.WorkerInfor
+	internal packet.WorkerInfor
 }
 
 type ClusterConfig struct {
 	Nodes []Node `yaml:"nodes"`
-	Local Host `yaml:"local"`
+	Local Host   `yaml:"local"`
 }
 
 var (
@@ -53,8 +53,9 @@ var (
 	lbinary           = "./daemon"
 	virt              *libvirt.VirtDaemon
 	network           libvirt.Network
-	models            []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
-	nodes             []*Node                 = []*Node{}
+
+	models []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
+	nodes  []*Node                 = []*Node{}
 )
 
 func init() {
@@ -66,126 +67,7 @@ func init() {
 	lbinary = fmt.Sprintf("%s/daemon", dir)
 }
 
-func deinit() {
-	for _, node := range nodes {
-		node.cancel()
-	}
-}
-
-func update_gpu(daemon *Daemon) {
-	gpus, err := virt.ListGPUs()
-	if err != nil {
-		log.PushLog("failed to query gpus %s", err.Error())
-		return
-	}
-
-	gs := []string{}
-	for _, g := range gpus {
-		if g.Active {
-			return
-		}
-		gs = append(gs, g.Capability.Product.Val)
-	}
-	daemon.info.GPUs = gs
-}
-
-func fileTransfer(node *Node, rfile, lfile string, force bool) error {
-	out, err := exec.Command("du", lfile).Output()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve file info %s", err.Error())
-	}
-
-	lsize := strings.Split(string(out), "\t")[0]
-	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
-	rsize := strings.Split(string(out), "\t")[0]
-	if err == nil && force {
-		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
-	}
-	if err != nil || force {
-		_, err := exec.Command("sshpass",
-			"-p", node.Password,
-			"scp", lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
-		).Output()
-		if err != nil {
-			return err
-		}
-
-		out, err := node.client.Run(fmt.Sprintf("du %s", rfile))
-		if err != nil {
-			return err
-		}
-
-		rsize = strings.Split(string(out), "\t")[0]
-	}
-
-	log.PushLog("%s : local file size %s, remote file size %s", rfile, lsize, rsize)
-	return nil
-}
-
-func setupNode(node *Node) error {
-	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
-	if err != nil {
-		return err
-	}
-
-	node.client = client
-	binary := "~/thinkshare-daemon/daemon"
-	app := "~/thinkshare-daemon/app.qcow2"
-	os := "~/thinkshare-daemon/os.qcow2"
-
-	client.Run("mkdir ~/thinkshare-daemon")
-	client.Run("mkdir ~/thinkshare-daemon/child")
-
-	abs, _ := filepath.Abs(lbinary)
-	err = fileTransfer(node, binary, abs, true)
-	if err != nil {
-		return err
-	}
-
-	abs, _ = filepath.Abs(lapp)
-	err = fileTransfer(node, app, abs, true)
-	if err != nil {
-		return err
-	}
-
-	abs, _ = filepath.Abs(los)
-	err = fileTransfer(node, os, abs, false)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if err != nil {
-			return
-		}
-
-		log.PushLog("start %s on %s", binary, node.Ip)
-		client.Run(fmt.Sprintf("chmod 777 %s", binary))
-		client.Run(fmt.Sprintf("chmod 777 %s", app))
-
-		var ctx context.Context
-		ctx, node.cancel = context.WithCancel(context.Background())
-		_, err = client.RunContext(ctx, binary)
-		if err != nil {
-			log.PushLog(err.Error())
-		}
-	}()
-	return nil
-}
-
 func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
-	if cluster != nil {
-		for _, node := range cluster.Nodes {
-			err := setupNode(&node)
-			if err != nil {
-				log.PushLog(err.Error())
-				continue
-			}
-
-			nodes = append(nodes, &node)
-		}
-	}
-
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
@@ -199,6 +81,19 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 		log.PushLog("failed to start network %s", err.Error())
 		return
 	}
+
+	if cluster != nil {
+		for _, node := range cluster.Nodes {
+			err := setupNode(&node)
+			if err != nil {
+				log.PushLog(err.Error())
+				continue
+			}
+
+			nodes = append(nodes, &node)
+		}
+	}
+
 	defer network.Close()
 
 	for {
@@ -211,6 +106,8 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
+	} else if session.Vm == nil {
+		return nil, fmt.Errorf("VM not specified")
 	}
 
 	var gpu *libvirt.GPU = nil
@@ -308,6 +205,8 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		resp, err = very_quick_client.Get(fmt.Sprintf("http://%s:%d/info", *addr.Ip, Httpport))
 		if err != nil {
 			continue
+		} else if resp.StatusCode != 200 {
+			continue
 		}
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -337,7 +236,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
-func (daemon *Daemon) DeployVMonNode(node *Node,nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession) (*packet.WorkerSession, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	}
@@ -359,12 +258,13 @@ func (daemon *Daemon) DeployVMonNode(node *Node,nss *packet.WorkerSession) (*pac
 		return nil, fmt.Errorf(string(b))
 	}
 
-	err = json.Unmarshal(b, &nss)
+	session := packet.WorkerSession{}
+	err = json.Unmarshal(b, &session)
 	if err != nil {
 		return nil, err
 	}
 
-	return nss, nil
+	return &session, nil
 }
 func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
 	if !libvirt_available {
@@ -378,8 +278,17 @@ func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packe
 			continue
 		}
 
-		info := packet.WorkerInfor{}
 		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog(err.Error())
+			continue
+		}
+		if resp.StatusCode != 200 {
+			log.PushLog("failed to request %s", string(b))
+			continue
+		}
+
+		info := packet.WorkerInfor{}
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
@@ -391,7 +300,8 @@ func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packe
 		}
 
 		if len(info.GPUs) > 0 {
-			node = n
+			i := *n
+			node = &i
 			break
 		}
 	}
@@ -400,12 +310,16 @@ func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packe
 		return nil, fmt.Errorf("cluster ran out of gpu")
 	}
 
-	return daemon.DeployVMonNode(node,nss)
+	return daemon.DeployVMonNode(*node, nss)
 }
 
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, nil, fmt.Errorf("libvirt not available")
+	} else if nss.Vm == nil {
+		return nil, nil, fmt.Errorf("VM not specified")
+	} else if len(nss.Vm.Volumes) == 0 {
+		return nil, nil, fmt.Errorf("empty volume id")
 	}
 
 	volume_id := nss.Vm.Volumes[0]
@@ -419,7 +333,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 	for _, node := range nodes {
 		for _, remote := range node.internal.Volumes {
 			if remote == volume_id {
-				session, err := daemon.DeployVMonNode(node,nss)
+				session, err := daemon.DeployVMonNode(*node, nss)
 				return session, nil, err
 			}
 		}
@@ -434,6 +348,10 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	}
 
 	removeVM := func(vm libvirt.Domain) {
+		if vm.Name == nil {
+			return
+		}
+
 		virt.DeleteVM(*vm.Name)
 		for _, model := range models {
 			if model.ID == *vm.Name {
@@ -453,7 +371,7 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 
 	for _, vm := range vms {
 		ip, err := network.FindDomainIPs(vm)
-		if err != nil {
+		if err != nil || ip.Ip == nil || info.PrivateIP == nil {
 			continue
 		}
 
@@ -514,7 +432,11 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 	}
 
 	for _, session := range daemon.info.Sessions {
-		if session.Id != *ss.Target || session.Vm == nil {
+		if session == nil ||
+			ss.Target == nil ||
+			session.Id != *ss.Target ||
+			session.Vm == nil ||
+			session.Vm.PrivateIP == nil {
 			continue
 		}
 
@@ -542,18 +464,22 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			continue
 		}
 
-		err = json.Unmarshal(b, &nss)
+		worker_session := packet.WorkerSession{}
+		err = json.Unmarshal(b, &worker_session)
 		if err != nil {
 			log.PushLog("failed to request %s", err.Error())
 			continue
 		}
 
-		return &nss, nil
+		return &worker_session, nil
 	}
 
 	for _, node := range nodes {
 		for _, session := range node.internal.Sessions {
-			if session.Id != *ss.Target || session.Vm == nil {
+			if session == nil ||
+				session.Id != *ss.Target ||
+				session.Vm == nil ||
+				session.Vm.PrivateIP == nil {
 				continue
 			}
 
@@ -604,10 +530,6 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 		}
 	}
 	for _, node := range nodes {
-		if node.internal == nil {
-			continue
-		}
-
 		for _, s := range node.internal.Sessions {
 			if s.Id == token && s.Vm != nil {
 				return &node.Ip, false
@@ -625,7 +547,9 @@ func QueryInfo(info *packet.WorkerInfor) {
 	}
 
 	for _, session := range info.Sessions {
-		if session.Vm == nil {
+		if session == nil ||
+			session.Vm == nil ||
+			session.Vm.PrivateIP == nil {
 			continue
 		}
 
@@ -640,7 +564,11 @@ func QueryInfo(info *packet.WorkerInfor) {
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
+		} else if resp.StatusCode != 200 {
+			log.PushLog("failed to request info %s", string(b))
+			continue
 		}
+
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
 			log.PushLog(err.Error())
@@ -656,19 +584,23 @@ func QueryInfo(info *packet.WorkerInfor) {
 			continue
 		}
 
-		ss := packet.WorkerInfor{}
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
+		} else if resp.StatusCode != 200 {
+			log.PushLog("failed to query info %s", string(b))
+			continue
 		}
+
+		ss := packet.WorkerInfor{}
 		err = json.Unmarshal(b, &ss)
 		if err != nil {
 			log.PushLog(err.Error())
 			continue
 		}
 
-		node.internal = &ss
+		node.internal = ss
 	}
 
 	vms, err := virt.ListVMs()
@@ -678,8 +610,14 @@ func QueryInfo(info *packet.WorkerInfor) {
 
 	in_use := []string{}
 	for _, vm := range vms {
+		if vm.Name == nil {
+			continue
+		}
+
 		ip, err := network.FindDomainIPs(vm)
 		if err != nil {
+			continue
+		} else if ip.Ip == nil {
 			continue
 		}
 
@@ -710,7 +648,9 @@ func QueryInfo(info *packet.WorkerInfor) {
 			}
 
 			for _, ss := range info.Sessions {
-				if ss.Vm == nil || *ss.Vm.PrivateIP != *ip.Ip {
+				if ss.Vm == nil ||
+					ss.Vm.PrivateIP == nil ||
+					*ss.Vm.PrivateIP != *ip.Ip {
 					continue
 				}
 
@@ -764,10 +704,6 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 
 	for _, node := range nodes {
-		if node.internal == nil {
-			continue
-		}
-
 		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
 		cp.Volumes = append(cp.Volumes, node.internal.Volumes...)
@@ -809,4 +745,113 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 
 	chain_os.Disposable = false
 	return []libvirt.Volume{*chain_os, *chain_app}, nil
+}
+
+func deinit() {
+	for _, node := range nodes {
+		cancel := *node.cancel
+		cancel()
+	}
+}
+
+func update_gpu(daemon *Daemon) {
+	gpus, err := virt.ListGPUs()
+	if err != nil {
+		log.PushLog("failed to query gpus %s", err.Error())
+		return
+	}
+
+	gs := []string{}
+	for _, g := range gpus {
+		if g.Active {
+			return
+		}
+		gs = append(gs, g.Capability.Product.Val)
+	}
+	daemon.info.GPUs = gs
+}
+
+func fileTransfer(node *Node, rfile, lfile string, force bool) error {
+	out, err := exec.Command("du", lfile).Output()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve file info %s", err.Error())
+	}
+
+	lsize := strings.Split(string(out), "\t")[0]
+	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
+	rsize := strings.Split(string(out), "\t")[0]
+	if err == nil && force {
+		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
+	}
+	if err != nil || force {
+		_, err := exec.Command("sshpass",
+			"-p", node.Password,
+			"scp", lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
+		).Output()
+		if err != nil {
+			return err
+		}
+
+		out, err := node.client.Run(fmt.Sprintf("du %s", rfile))
+		if err != nil {
+			return err
+		}
+
+		rsize = strings.Split(string(out), "\t")[0]
+	}
+
+	log.PushLog("%s : local file size %s, remote file size %s", rfile, lsize, rsize)
+	return nil
+}
+
+func setupNode(node *Node) error {
+	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
+	if err != nil {
+		return err
+	}
+
+	node.client = client
+	binary := "~/thinkshare-daemon/daemon"
+	app := "~/thinkshare-daemon/app.qcow2"
+	os := "~/thinkshare-daemon/os.qcow2"
+
+	client.Run("mkdir ~/thinkshare-daemon")
+	client.Run("mkdir ~/thinkshare-daemon/child")
+
+	abs, _ := filepath.Abs(lbinary)
+	err = fileTransfer(node, binary, abs, true)
+	if err != nil {
+		return err
+	}
+
+	abs, _ = filepath.Abs(lapp)
+	err = fileTransfer(node, app, abs, true)
+	if err != nil {
+		return err
+	}
+
+	abs, _ = filepath.Abs(los)
+	err = fileTransfer(node, os, abs, false)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for {
+			log.PushLog("start %s on %s", binary, node.Ip)
+			client.Run(fmt.Sprintf("chmod 777 %s", binary))
+			client.Run(fmt.Sprintf("chmod 777 %s", app))
+
+			var ctx context.Context
+			ctx, cancel := context.WithCancel(context.Background())
+			node.cancel = &cancel
+			_, err = client.RunContext(ctx, binary)
+			if err != nil {
+				log.PushLog(err.Error())
+			}
+
+			time.Sleep(time.Second * 10)
+		}
+	}()
+	return nil
 }
