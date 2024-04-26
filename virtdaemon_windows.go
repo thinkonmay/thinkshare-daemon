@@ -26,7 +26,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 	return nil, false
 }
-func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
 	return nil, fmt.Errorf("window forward not available")
 }
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
