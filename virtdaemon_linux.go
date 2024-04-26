@@ -337,7 +337,36 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
-func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonNode(node *Node,nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+	if !libvirt_available {
+		return nil, fmt.Errorf("libvirt not available")
+	}
+
+	log.PushLog("deploying VM on node %s", node.Ip)
+	b, _ := json.Marshal(nss)
+	resp, err := slow_client.Post(
+		fmt.Sprintf("http://%s:%d/new", node.Ip, Httpport),
+		"application/json",
+		strings.NewReader(string(b)))
+	if err != nil {
+		return nil, err
+	}
+	b, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf(string(b))
+	}
+
+	err = json.Unmarshal(b, &nss)
+	if err != nil {
+		return nil, err
+	}
+
+	return nss, nil
+}
+func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	}
@@ -371,29 +400,7 @@ func (daemon *Daemon) DeployVMonNode(nss *packet.WorkerSession) (*packet.WorkerS
 		return nil, fmt.Errorf("cluster ran out of gpu")
 	}
 
-	log.PushLog("deploying VM on node %s", node.Ip)
-	b, _ := json.Marshal(nss)
-	resp, err := slow_client.Post(
-		fmt.Sprintf("http://%s:%d/new", node.Ip, Httpport),
-		"application/json",
-		strings.NewReader(string(b)))
-	if err != nil {
-		return nil, err
-	}
-	b, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf(string(b))
-	}
-
-	err = json.Unmarshal(b, &nss)
-	if err != nil {
-		return nil, err
-	}
-
-	return nss, nil
+	return daemon.DeployVMonNode(node,nss)
 }
 
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
@@ -412,7 +419,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 	for _, node := range nodes {
 		for _, remote := range node.internal.Volumes {
 			if remote == volume_id {
-				session, err := daemon.DeployVMonNode(nss)
+				session, err := daemon.DeployVMonNode(node,nss)
 				return session, nil, err
 			}
 		}

@@ -155,7 +155,7 @@ func WebDaemon(persistent persistent.Persistent,
 				Vm, err = daemon.DeployVM(ss)
 				if err != nil {
 					if err.Error() == "ran out of gpu" {
-						return daemon.DeployVMonNode(ss)
+						return daemon.DeployVMonAvailableNode(ss)
 					}
 				} else {
 					ss.Vm = Vm
