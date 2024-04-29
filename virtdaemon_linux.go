@@ -650,7 +650,8 @@ func queryLocal(info *packet.WorkerInfor) error {
 				continue
 			}
 
-			volume_id = &splits[0]
+			vol := splits[0]
+			volume_id = &vol
 			break
 		}
 
