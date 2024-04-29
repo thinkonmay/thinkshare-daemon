@@ -842,6 +842,25 @@ func setupNode(node *Node) error {
 
 	go func() {
 		for {
+			client.Conn.Wait()
+
+			time.Sleep(time.Second)
+			for {
+				client, err = goph.New(node.Username, node.Ip, goph.Password(node.Password))
+				if err != nil {
+					time.Sleep(time.Second)
+					log.PushLog("failed to connect ssh to node %s",err.Error())
+					continue
+				}
+
+				node.client = client
+				break
+			}
+		}
+	}()
+
+	go func() {
+		for {
 			log.PushLog("start %s on %s", binary, node.Ip)
 			client.Run(fmt.Sprintf("chmod 777 %s", binary))
 			client.Run(fmt.Sprintf("chmod 777 %s", app))

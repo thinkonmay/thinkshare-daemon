@@ -13,6 +13,10 @@ import (
 	"github.com/digitalocean/go-libvirt/socket/dialers"
 )
 
+const (
+	dns_addr = "192.168.1.100"
+)
+
 func newNetwork(card string) string {
 	rand := rand.IntN(63) + 1
 	ip := fmt.Sprintf("10.10.%d.1", rand)
@@ -25,13 +29,16 @@ func newNetwork(card string) string {
 			<interface dev="%s"/>
 		</forward>
 		<bridge name="%sbr" stp="on" delay="0"/>
+		<dns>
+    		<forwarder addr='%s'/>
+  		</dns>
 		<ip address="%s" netmask="255.255.255.0">
 			<dhcp>
 				<range start="%s" end="%s"/>
 			</dhcp>
 		</ip>
 	</network>
-	`, card, card, card, card, ip, ip, endip)
+	`, card, card, card, card, dns_addr, ip, ip, endip)
 }
 
 type LibvirtNetwork struct {
