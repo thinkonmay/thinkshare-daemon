@@ -51,11 +51,12 @@ var (
 	los               = "./os.qcow2"
 	lapp              = "./app.qcow2"
 	lbinary           = "./daemon"
-	virt              *libvirt.VirtDaemon
-	network           libvirt.Network
+	sidecars          = []string{"lancache"}
+	models            = []libvirt.VMLaunchModel{}
+	nodes             = []*Node{}
 
-	models []libvirt.VMLaunchModel = []libvirt.VMLaunchModel{}
-	nodes  []*Node                 = []*Node{}
+	virt    *libvirt.VirtDaemon
+	network libvirt.Network
 )
 
 func init() {
@@ -168,6 +169,8 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		VDriver:       true,
 	}
 
+	pre := make([]libvirt.VMLaunchModel, len(models))
+	copy(pre, models)
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
@@ -231,6 +234,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		return &inf, nil
 	}
 
+	models = pre
 	virt.DeleteVM(model.ID)
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
@@ -611,8 +615,20 @@ func queryLocal(info *packet.WorkerInfor) error {
 		return fmt.Errorf("failed to query volumes %s", err.Error())
 	}
 	for _, vm := range vms {
+		if vm.Name == nil {
+			continue
+		}
+
 		if result, err := network.FindDomainIPs(vm); err != nil {
-			log.PushLog("failed to find domain ip %s", err.Error())
+			found := false
+			for _, sidecar := range sidecars {
+				if sidecar == *vm.Name {
+					found = true
+				}
+			}
+			if !found {
+				log.PushLog("failed to find domain %s ip %s", *vm.Name, err.Error())
+			}
 		} else if result.Ip == nil {
 			log.PushLog("failed to find domain ip, ip is nil")
 		} else {
@@ -620,6 +636,10 @@ func queryLocal(info *packet.WorkerInfor) error {
 		}
 	}
 	for _, vm := range vms {
+		if vm.Name == nil {
+			continue
+		}
+
 		var volume_id *string = nil
 		for _, model := range models {
 			if len(model.BackingVolume) == 0 || model.ID != *vm.Name {
