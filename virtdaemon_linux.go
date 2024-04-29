@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,9 +52,10 @@ var (
 	los               = "./os.qcow2"
 	lapp              = "./app.qcow2"
 	lbinary           = "./daemon"
-	sidecars          = []string{"lancache"}
+	sidecars          = []string{"lancache", "do-not-delete"}
 	models            = []libvirt.VMLaunchModel{}
 	nodes             = []*Node{}
+	mut               = &sync.Mutex{}
 
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
@@ -68,19 +70,19 @@ func init() {
 	lbinary = fmt.Sprintf("%s/daemon", dir)
 }
 
-func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
+func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) func() {
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
 		log.PushLog("failed to connect libvirt %s", err.Error())
 		libvirt_available = false
-		return
+		return func() {}
 	}
 
 	network, err = libvirt.NewLibvirtNetwork(cluster.Local.Interface)
 	if err != nil {
 		log.PushLog("failed to start network %s", err.Error())
-		return
+		return func() {}
 	}
 
 	if cluster != nil {
@@ -95,11 +97,8 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 		}
 	}
 
-	defer network.Close()
-
-	for {
-		QueryInfo(&daemon.info)
-		time.Sleep(time.Second * 20)
+	return func() {
+		network.Close()
 	}
 }
 
@@ -745,6 +744,8 @@ func infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 }
 
 func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
+	mut.Lock()
+	defer mut.Unlock()
 	if !libvirt_available {
 		return *info
 	}

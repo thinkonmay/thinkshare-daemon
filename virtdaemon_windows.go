@@ -11,7 +11,7 @@ type ClusterConfig struct{}
 func deinit()                                                {}
 func QueryInfo(info *packet.WorkerInfor)                     {}
 
-func (daemon *Daemon) HandleVirtdaemon(*ClusterConfig) {}
+func (daemon *Daemon) HandleVirtdaemon(*ClusterConfig) func() {return func() {}}
 func (daemon *Daemon) DeployVM(*packet.WorkerSession) (*packet.WorkerInfor, error) {
 	return nil, fmt.Errorf("window VM not available")
 }

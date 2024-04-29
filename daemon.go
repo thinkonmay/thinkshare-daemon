@@ -98,7 +98,8 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}
 
-	go daemon.HandleVirtdaemon(cluster)
+	def := daemon.HandleVirtdaemon(cluster)
+	daemon.cleans = append(daemon.cleans, def)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
 		result := QueryInfo(&daemon.info)
 		return &result
@@ -149,6 +150,7 @@ func WebDaemon(persistent persistent.Persistent,
 			process, channel, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
+			QueryInfo(&daemon.info)
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
 				var Vm *packet.WorkerInfor
 				Vm, err = daemon.DeployVM(ss)
@@ -198,6 +200,7 @@ func WebDaemon(persistent persistent.Persistent,
 			return nil
 		}
 
+		QueryInfo(&daemon.info)
 		log.PushLog("terminating session %s", ss)
 		keys := make([]string, 0, len(daemon.session))
 		for k, _ := range daemon.session {
