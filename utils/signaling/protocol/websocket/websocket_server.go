@@ -105,7 +105,6 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 
 			err := wsserver.fun(protocol.Tenant{tenant, token})
 			if err != nil {
-				log.PushLog("error authenticate session")
 				tenant.Exit()
 				return
 			}

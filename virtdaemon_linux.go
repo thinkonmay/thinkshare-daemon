@@ -97,7 +97,6 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) {
 	defer network.Close()
 
 	for {
-		update_gpu(daemon)
 		QueryInfo(&daemon.info)
 		time.Sleep(time.Second * 20)
 	}
@@ -541,135 +540,113 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 	return nil, false
 }
 
-func QueryInfo(info *packet.WorkerInfor) {
-	if !libvirt_available {
-		return
+func querySession(session *packet.WorkerSession) error {
+	if session == nil ||
+		session.Vm == nil ||
+		session.Vm.PrivateIP == nil {
+		return fmt.Errorf("nil session")
 	}
 
-	for _, session := range info.Sessions {
-		if session == nil ||
-			session.Vm == nil ||
-			session.Vm.PrivateIP == nil {
-			continue
-		}
-
-		resp, err := very_quick_client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP, Httpport))
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		}
-
-		ss := packet.WorkerInfor{}
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		} else if resp.StatusCode != 200 {
-			log.PushLog("failed to request info %s", string(b))
-			continue
-		}
-
-		err = json.Unmarshal(b, &ss)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		} else if ss.PrivateIP == nil || ss.PublicIP == nil {
-			continue
-		}
-
-		session.Vm = &ss
+	resp, err := very_quick_client.Get(fmt.Sprintf("http://%s:%d/info", *session.Vm.PrivateIP, Httpport))
+	if err != nil {
+		return err
 	}
 
-	for _, node := range nodes {
-		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
-		if err != nil {
-			continue
-		}
-
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		} else if resp.StatusCode != 200 {
-			log.PushLog("failed to query info %s", string(b))
-			continue
-		}
-
-		ss := packet.WorkerInfor{}
-		err = json.Unmarshal(b, &ss)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		} else if ss.PrivateIP == nil || ss.PublicIP == nil {
-			continue
-		}
-
-		node.internal = ss
+	ss := packet.WorkerInfor{}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		return fmt.Errorf(string(b))
 	}
 
+	err = json.Unmarshal(b, &ss)
+	if err != nil {
+		return err
+	} else if ss.PrivateIP == nil || ss.PublicIP == nil {
+		return fmt.Errorf("nil ip")
+	}
+
+	session.Vm = &ss
+	return nil
+}
+
+func queryNode(node *Node) error {
+	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
+	if err != nil {
+		return err
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		return fmt.Errorf(string(b))
+	}
+
+	ss := packet.WorkerInfor{}
+	err = json.Unmarshal(b, &ss)
+	if err != nil {
+		return err
+	} else if ss.PrivateIP == nil || ss.PublicIP == nil {
+		return fmt.Errorf("nil ip")
+	}
+
+	node.internal = ss
+	return nil
+}
+
+func queryLocal(info *packet.WorkerInfor) error {
+	ipmap, volumemap := map[string]string{}, map[string]string{}
 	vms, err := virt.ListVMs()
 	if err != nil {
-		return
+		return fmt.Errorf("failed to query vms %s", err.Error())
 	}
-
-	in_use := []string{}
-	for _, vm := range vms {
-		if vm.Name == nil {
-			continue
-		}
-
-		ip, err := network.FindDomainIPs(vm)
-		if err != nil {
-			continue
-		} else if ip.Ip == nil {
-			continue
-		}
-
-		for _, model := range models {
-			if model.ID != *vm.Name {
-				continue
-			}
-
-			for _, vol := range model.BackingVolume {
-				for _, f := range vol.AllFiles() {
-					volume_id := strings.Split(filepath.Base(f), ".qcow2")[0]
-					if uuid.Validate(volume_id) != nil {
-						continue
-					}
-
-					in_use = append(in_use, volume_id)
-				}
-
-			}
-
-			var volume_id *string = nil
-			if len(model.BackingVolume) > 1 {
-				volume_id = &strings.Split(filepath.Base(model.BackingVolume[0].Path), ".qcow2")[0]
-			}
-
-			if volume_id == nil {
-				continue
-			}
-
-			for _, ss := range info.Sessions {
-				if ss.Vm == nil ||
-					ss.Vm.PrivateIP == nil ||
-					*ss.Vm.PrivateIP != *ip.Ip {
-					continue
-				}
-
-				ss.Vm.Volumes = []string{*volume_id}
-			}
-		}
+	gpus, err := virt.ListGPUs()
+	if err != nil {
+		return fmt.Errorf("failed to query gpus %s", err.Error())
 	}
-
 	files, err := os.ReadDir(child)
 	if err != nil {
-		log.PushLog(err.Error())
-		return
+		return fmt.Errorf("failed to query volumes %s", err.Error())
+	}
+	for _, vm := range vms {
+		if result, err := network.FindDomainIPs(vm); err != nil {
+			log.PushLog("failed to find domain ip %s", err.Error())
+		} else if result.Ip == nil {
+			log.PushLog("failed to find domain ip, ip is nil")
+		} else {
+			ipmap[*result.Ip] = *vm.Name
+		}
+	}
+	for _, vm := range vms {
+		var volume_id *string = nil
+		for _, model := range models {
+			if len(model.BackingVolume) == 0 || model.ID != *vm.Name {
+				continue
+			}
+
+			splits := strings.Split(filepath.Base(model.BackingVolume[0].Path), ".qcow2")
+			if len(splits) == 0 {
+				continue
+			}
+
+			volume_id = &splits[0]
+			break
+		}
+
+		if volume_id == nil {
+			break
+		}
+
+		volumemap[*vm.Name] = *volume_id
 	}
 
-	vols := []string{}
+	in_use, vols, gpuss, available := []string{}, []string{}, []string{}, []string{}
+	for _, volume := range volumemap {
+		in_use = append(in_use, volume)
+	}
+
 	for _, f := range files {
 		if f.IsDir() || !strings.Contains(f.Name(), "qcow2") {
 			continue
@@ -684,7 +661,6 @@ func QueryInfo(info *packet.WorkerInfor) {
 		vols = append(vols, volume_id)
 	}
 
-	available := []string{}
 	for _, vol := range vols {
 		found := false
 		for _, iu := range in_use {
@@ -699,10 +675,42 @@ func QueryInfo(info *packet.WorkerInfor) {
 		available = append(available, vol)
 	}
 
+	for _, g := range gpus {
+		if g.Active {
+			continue
+		}
+		gpuss = append(gpuss, g.Capability.Product.Val)
+	}
+
 	info.Volumes = available
+	info.GPUs = gpuss
+	for _, ss := range info.Sessions {
+		if ss.Vm == nil {
+			continue
+		}
+
+		ip := ss.Vm.PrivateIP
+		if ip == nil {
+			continue
+		}
+
+		name, ok := ipmap[*ip]
+		if !ok {
+			continue
+		}
+
+		volume_id, ok := volumemap[name]
+		if !ok {
+			continue
+		}
+
+		ss.Vm.Volumes = []string{volume_id}
+	}
+
+	return nil
 }
 
-func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+func infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	if !libvirt_available {
 		return cp
 	}
@@ -712,7 +720,59 @@ func InfoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
 		cp.Volumes = append(cp.Volumes, node.internal.Volumes...)
 	}
+
 	return cp
+}
+
+func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
+	if !libvirt_available {
+		return *info
+	}
+
+	local := make(chan error)
+	jobs := []chan error{local}
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				local <- fmt.Errorf("panic occurred: %v", err)
+			}
+		}()
+		local <- queryLocal(info)
+	}()
+
+	for _, session := range info.Sessions {
+		channel := make(chan error)
+		jobs = append(jobs, channel)
+		go func(s *packet.WorkerSession, c chan error) {
+			defer func() {
+				if err := recover(); err != nil {
+					c <- fmt.Errorf("panic occurred: %v", err)
+				}
+			}()
+			c <- querySession(s)
+		}(session, channel)
+	}
+
+	for _, node := range nodes {
+		channel := make(chan error)
+		jobs = append(jobs, channel)
+		go func(s *Node, c chan error) {
+			defer func() {
+				if err := recover(); err != nil {
+					c <- fmt.Errorf("panic occurred: %v", err)
+				}
+			}()
+			c <- queryNode(s)
+		}(node, channel)
+	}
+
+	for _, job := range jobs {
+		if err := <-job; err != nil {
+			log.PushLog("failed to execute job : %s", err.Error())
+		}
+	}
+
+	return infoBuilder(*info)
 }
 
 func prepareVolume(os, app string) ([]libvirt.Volume, error) {
@@ -756,23 +816,6 @@ func deinit() {
 		cancel := *node.cancel
 		cancel()
 	}
-}
-
-func update_gpu(daemon *Daemon) {
-	gpus, err := virt.ListGPUs()
-	if err != nil {
-		log.PushLog("failed to query gpus %s", err.Error())
-		return
-	}
-
-	gs := []string{}
-	for _, g := range gpus {
-		if g.Active {
-			return
-		}
-		gs = append(gs, g.Capability.Product.Val)
-	}
-	daemon.info.GPUs = gs
 }
 
 func fileTransfer(node *Node, rfile, lfile string, force bool) error {
@@ -849,7 +892,7 @@ func setupNode(node *Node) error {
 				client, err = goph.New(node.Username, node.Ip, goph.Password(node.Password))
 				if err != nil {
 					time.Sleep(time.Second)
-					log.PushLog("failed to connect ssh to node %s",err.Error())
+					log.PushLog("failed to connect ssh to node %s", err.Error())
 					continue
 				}
 

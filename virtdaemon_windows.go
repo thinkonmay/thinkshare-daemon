@@ -10,7 +10,6 @@ type ClusterConfig struct{}
 
 func deinit()                                                {}
 func QueryInfo(info *packet.WorkerInfor)                     {}
-func InfoBuilder(info packet.WorkerInfor) packet.WorkerInfor { return info }
 
 func (daemon *Daemon) HandleVirtdaemon(*ClusterConfig) {}
 func (daemon *Daemon) DeployVM(*packet.WorkerSession) (*packet.WorkerInfor, error) {

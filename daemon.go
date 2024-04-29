@@ -100,8 +100,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 	go daemon.HandleVirtdaemon(cluster)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		QueryInfo(&daemon.info)
-		result := InfoBuilder(daemon.info)
+		result := QueryInfo(&daemon.info)
 		return &result
 	})
 
