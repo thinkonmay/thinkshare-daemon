@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	dns_addr = "192.168.1.100"
+	dns_addr = "10.20.20.200"
 )
 
 func newNetwork(card string) string {
