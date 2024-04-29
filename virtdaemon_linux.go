@@ -85,6 +85,20 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) func() {
 		return func() {}
 	}
 
+	if vms, err := virt.ListVMs(); err == nil {
+		for _, vm := range vms {
+			found := false
+			for _, sidecar := range sidecars {
+				if sidecar == *vm.Name {
+					found = true
+				}
+			}
+			if !found && uuid.Validate(*vm.Name) == nil {
+				virt.DeleteVM(*vm.Name)
+			}
+		}
+	}
+
 	if cluster != nil {
 		for _, node := range cluster.Nodes {
 			err := setupNode(&node)
@@ -655,11 +669,10 @@ func queryLocal(info *packet.WorkerInfor) error {
 			break
 		}
 
-		if volume_id == nil {
-			break
+		if volume_id != nil {
+			vol := *volume_id
+			volumemap[*vm.Name] = vol
 		}
-
-		volumemap[*vm.Name] = *volume_id
 	}
 
 	in_use, vols, gpuss, available := []string{}, []string{}, []string{}, []string{}
@@ -711,16 +724,19 @@ func queryLocal(info *packet.WorkerInfor) error {
 
 		ip := ss.Vm.PrivateIP
 		if ip == nil {
+			log.PushLog("ip is nil")
 			continue
 		}
 
 		name, ok := ipmap[*ip]
 		if !ok {
+			log.PushLog("vm name not found %s", *ip)
 			continue
 		}
 
 		volume_id, ok := volumemap[name]
 		if !ok {
+			log.PushLog("volume map not found %v %s", volumemap, name)
 			continue
 		}
 
