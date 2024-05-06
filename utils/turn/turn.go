@@ -99,7 +99,7 @@ func SetupTurn(
 			return
 		}
 
-		time.Sleep(time.Hour * 48)
+		time.Sleep(time.Hour * 24)
 		t.Close()
 	}()
 
