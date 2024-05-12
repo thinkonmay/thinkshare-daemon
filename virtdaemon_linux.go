@@ -241,6 +241,9 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 		} else if inf.PrivateIP == nil || inf.PublicIP == nil {
 			log.PushLog("VM address is null, retry")
 			continue
+		} else if *inf.PrivateIP == "" || *inf.PublicIP == "" {
+			log.PushLog("VM address is empty, retry")
+			continue
 		}
 
 		log.PushLog("deployed a new worker %s", *addr.Ip)
