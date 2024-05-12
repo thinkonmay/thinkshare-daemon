@@ -28,20 +28,19 @@ type SysInfo struct {
 }
 
 // Get preferred outbound ip of this machine
-func GetPrivateIP() string {
+func GetPrivateIP() (string, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		log.PushLog(err.Error())
-		return ""
+		return "", err
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP.String()
+	return localAddr.IP.String(), nil
 }
 
-func GetPublicIPCurl() (result string) {
+func GetPublicIPCurl() (result string, err error) {
 	result = ""
 	if result == "" {
 		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
@@ -58,7 +57,11 @@ func GetPublicIPCurl() (result string) {
 	if result == "" {
 		result = getPublicIPSTUN()
 	}
-	return result
+	if result == "" {
+		return "", fmt.Errorf("worker is not connected to internet")
+	} else {
+		return result, nil
+	}
 }
 func getPublicIPCurl(url string) string {
 	resp, err := http.Get(url)
@@ -131,8 +134,14 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		return nil, err
 	}
 
-	public := GetPublicIPCurl()
-	private := GetPrivateIP()
+	public,err := GetPublicIPCurl()
+	if err != nil {
+		return nil, err
+	}
+	private, err := GetPrivateIP()
+	if err != nil {
+		return nil, err
+	}
 	ret := &packet.WorkerInfor{
 		CPU:  cpus.Processors[0].Model,
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
