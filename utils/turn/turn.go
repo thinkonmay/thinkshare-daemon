@@ -21,9 +21,13 @@ type TurnServer struct {
 }
 
 func Open(username, password string, min_port, max_port, port int) (*TurnServer, error) {
+	ip,err := system.GetPublicIPCurl()
+	if err != nil {
+		return nil ,err
+	}
 	s, err := SetupTurn(
 		username, password,
-		system.GetPublicIPCurl(),
+		ip,
 		port,
 		min_port,
 		max_port)
