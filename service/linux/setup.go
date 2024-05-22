@@ -98,6 +98,7 @@ func main() {
 		}
 
 		app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+			e.Router.POST("/_new", handle)
 			e.Router.POST("/new", handle)
 			e.Router.POST("/closed", handle)
 			e.Router.POST("/handshake/*", handle)

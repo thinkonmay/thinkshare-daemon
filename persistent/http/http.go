@@ -6,31 +6,42 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
+type deployment struct {
+	cancel    chan bool
+	timestamp time.Time
+}
 type GRPCclient struct {
 	logger          []string
 	worker_info     func() *packet.WorkerInfor
-	recv_session    func(*packet.WorkerSession) (*packet.WorkerSession, error)
+	recv_session    func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error)
 	closed_sesssion func(*packet.WorkerSession) error
+
+	pending map[string]*deployment
+
+	mut *sync.Mutex
 
 	done bool
 }
 
 func InitHttppServer() (ret *GRPCclient, err error) {
 	ret = &GRPCclient{
-		done: false,
+		done:    false,
+		pending: map[string]*deployment{},
+		mut:     &sync.Mutex{},
 
 		logger: []string{},
 		worker_info: func() *packet.WorkerInfor {
 			return &packet.WorkerInfor{}
 		},
 
-		recv_session: func(ws *packet.WorkerSession) (*packet.WorkerSession, error) {
+		recv_session: func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error) {
 			return nil, fmt.Errorf("handler not configured")
 		},
 		closed_sesssion: func(ws *packet.WorkerSession) error {
@@ -50,13 +61,57 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		func(conn string) ([]byte, error) {
 			return []byte(strings.Join(ret.logger, "\n")), nil
 		})
+	ret.wrapper("_new",
+		func(conn string) ([]byte, error) {
+			msg := &packet.WorkerSession{}
+			if err := json.Unmarshal([]byte(conn), msg); err != nil {
+				return nil, err
+			}
+
+			ret.mut.Lock()
+			deployment, found := ret.pending[msg.Id]
+			ret.mut.Unlock()
+			if !found {
+				return nil, fmt.Errorf("session not found")
+			}
+
+			deployment.timestamp = time.Now()
+			return []byte("{}"), nil
+		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
 			msg := &packet.WorkerSession{}
 			if err := json.Unmarshal([]byte(conn), msg); err != nil {
 				return nil, err
 			}
-			if resp, err := ret.recv_session(msg); err == nil {
+
+			deployment := &deployment{
+				cancel:    make(chan bool, 8),
+				timestamp: time.Now(),
+			}
+			ret.mut.Lock()
+			ret.pending[msg.Id] = deployment
+			ret.mut.Unlock()
+			running := true
+			defer func() {
+				running = false
+				ret.mut.Lock()
+				delete(ret.pending, msg.Id)
+				ret.mut.Unlock()
+				deployment.cancel <- true
+			}()
+
+			go func() {
+				for running {
+					time.Sleep(time.Second * 10)
+					now := time.Now()
+					if now.Unix()-deployment.timestamp.Unix() > 9 {
+						deployment.cancel <- true
+					}
+				}
+			}()
+
+			if resp, err := ret.recv_session(msg, deployment.cancel); err == nil {
 				b, _ := json.Marshal(resp)
 				return b, nil
 			} else {
@@ -112,7 +167,7 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
 	grpc.worker_info = fun
 }
-func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession) (*packet.WorkerSession, error)) {
+func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
 }
 func (grpc *GRPCclient) ClosedSession(fun func(*packet.WorkerSession) error) {

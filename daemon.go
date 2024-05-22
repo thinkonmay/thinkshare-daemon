@@ -105,7 +105,7 @@ func WebDaemon(persistent persistent.Persistent,
 		return &result
 	})
 
-	daemon.persist.RecvSession(func(ss *packet.WorkerSession) (*packet.WorkerSession, error) {
+	daemon.persist.RecvSession(func(ss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
 
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
@@ -152,19 +152,15 @@ func WebDaemon(persistent persistent.Persistent,
 		if ss.Vm != nil {
 			QueryInfo(&daemon.info)
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
-				var Vm *packet.WorkerInfor
-				Vm, err = daemon.DeployVM(ss)
-				if err != nil {
-					if err.Error() == "ran out of gpu" {
-						return daemon.DeployVMonAvailableNode(ss)
-					}
+				if Vm, err := daemon.DeployVM(ss, cancel); err != nil {
+					return nil, err
 				} else {
 					ss.Vm = Vm
 				}
 			} else {
 				var session *packet.WorkerSession
 				var inf *packet.WorkerInfor
-				session, inf, err = daemon.DeployVMwithVolume(ss)
+				session, inf, err = daemon.DeployVMwithVolume(ss, cancel)
 				if err != nil {
 					return nil, err
 				} else if session != nil {
@@ -291,7 +287,7 @@ func (daemon *Daemon) Close() {
 
 func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.ProcessID, *int, error) {
 	if daemon.mhandle == "empty" {
-		return nil,nil,fmt.Errorf("shared memory not working")
+		return nil, nil, fmt.Errorf("shared memory not working")
 	}
 	hub_path, err := path.FindProcessPath("hub")
 	if err != nil {

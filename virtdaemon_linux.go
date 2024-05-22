@@ -45,6 +45,7 @@ var (
 	very_quick_client = http.Client{Timeout: time.Second}
 	quick_client      = http.Client{Timeout: 5 * time.Second}
 	slow_client       = http.Client{Timeout: time.Minute * 3}
+	local_queue       = []string{}
 
 	libvirt_available = true
 	dir               = "."
@@ -116,30 +117,46 @@ func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) func() {
 	}
 }
 
-func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) (*packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	} else if session.Vm == nil {
 		return nil, fmt.Errorf("VM not specified")
 	}
 
-	var gpu *libvirt.GPU = nil
-	gpus, err := virt.ListGPUs()
-	if err != nil {
-		return nil, err
-	}
-	for _, candidate := range gpus {
-		if candidate.Active {
-			continue
+	wid := uuid.New().String()
+	local_queue = append(local_queue, wid)
+	for local_queue[0] != wid {
+		time.Sleep(3 * time.Second)
+		if len(cancel) > 0 {
+			// request is cancelled
+			replace := []string{}
+			for _, part := range local_queue {
+				if part == wid {
+					continue
+				}
+
+				replace = append(replace, part)
+			}
+			local_queue = replace
+			return nil, fmt.Errorf("deployment canceled")
 		}
-
-		gpu = &candidate
-		break
 	}
 
-	if gpu == nil {
-		return nil, fmt.Errorf("ran out of gpu")
+	gpu := (*libvirt.GPU)(nil)
+	for {
+		_gpu, found, err := takeGPU()
+		if err != nil {
+			return nil, err
+		} else if !found {
+			time.Sleep(time.Second)
+		} else {
+			gpu = _gpu
+			break
+		}
 	}
+
+	local_queue = local_queue[1:]
 
 	iface, err := network.CreateInterface(libvirt.Virtio)
 	if err != nil {
@@ -255,13 +272,24 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession) (*packet.WorkerInf
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
-func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	}
 
 	log.PushLog("deploying VM on node %s", node.Ip)
 	b, _ := json.Marshal(nss)
+
+	go func() {
+		for len(cancel) == 0 {
+			time.Sleep(time.Second * 3)
+			very_quick_client.Post(
+				fmt.Sprintf("http://%s:%d/_new", node.Ip, Httpport),
+				"application/json",
+				strings.NewReader(string(b)))
+		}
+	}()
+
 	resp, err := slow_client.Post(
 		fmt.Sprintf("http://%s:%d/new", node.Ip, Httpport),
 		"application/json",
@@ -285,54 +313,8 @@ func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession) (*pac
 
 	return &session, nil
 }
-func (daemon *Daemon) DeployVMonAvailableNode(nss *packet.WorkerSession) (*packet.WorkerSession, error) {
-	if !libvirt_available {
-		return nil, fmt.Errorf("libvirt not available")
-	}
 
-	var node *Node = nil
-	for _, n := range nodes {
-		resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", n.Ip, Httpport))
-		if err != nil {
-			continue
-		}
-
-		b, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		}
-		if resp.StatusCode != 200 {
-			log.PushLog("failed to request %s", string(b))
-			continue
-		}
-
-		info := packet.WorkerInfor{}
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		}
-		err = json.Unmarshal(b, &info)
-		if err != nil {
-			log.PushLog(err.Error())
-			continue
-		}
-
-		if len(info.GPUs) > 0 {
-			i := *n
-			node = &i
-			break
-		}
-	}
-
-	if node == nil {
-		return nil, fmt.Errorf("cluster ran out of gpu")
-	}
-
-	return daemon.DeployVMonNode(*node, nss)
-}
-
-func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.WorkerSession, *packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, *packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, nil, fmt.Errorf("libvirt not available")
 	} else if nss.Vm == nil {
@@ -344,7 +326,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 	volume_id := nss.Vm.Volumes[0]
 	for _, local := range daemon.info.Volumes {
 		if local == volume_id {
-			Vm, err := daemon.DeployVM(nss)
+			Vm, err := daemon.DeployVM(nss, cancel)
 			return nil, Vm, err
 		}
 	}
@@ -352,7 +334,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession) (*packet.Wor
 	for _, node := range nodes {
 		for _, remote := range node.internal.Volumes {
 			if remote == volume_id {
-				session, err := daemon.DeployVMonNode(*node, nss)
+				session, err := daemon.DeployVMonNode(*node, nss, cancel)
 				return session, nil, err
 			}
 		}
@@ -961,4 +943,26 @@ func setupNode(node *Node) error {
 		}
 	}()
 	return nil
+}
+
+func takeGPU() (*libvirt.GPU, bool, error) {
+	var gpu *libvirt.GPU = nil
+	gpus, err := virt.ListGPUs()
+	if err != nil {
+		return nil, false, err
+	}
+	for _, candidate := range gpus {
+		if candidate.Active {
+			continue
+		}
+
+		gpu = &candidate
+		break
+	}
+
+	if gpu == nil {
+		return nil, false, nil
+	}
+
+	return gpu, true, nil
 }
