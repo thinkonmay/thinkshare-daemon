@@ -111,7 +111,7 @@ func main() {
 			ShowStartBanner:    true,
 			HttpAddr:           "0.0.0.0:40080",
 			HttpsAddr:          "0.0.0.0:40443",
-			CertificateDomains: []string{"supabase.thinkmay.net"},
+			CertificateDomains: []string{"play.thinkmay.net"},
 		})
 
 		err = yaml.Unmarshal(files, cluster)
