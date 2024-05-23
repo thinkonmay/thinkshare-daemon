@@ -124,39 +124,10 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 		return nil, fmt.Errorf("VM not specified")
 	}
 
-	wid := uuid.New().String()
-	local_queue = append(local_queue, wid)
-	for local_queue[0] != wid {
-		time.Sleep(3 * time.Second)
-		if len(cancel) > 0 {
-			// request is cancelled
-			replace := []string{}
-			for _, part := range local_queue {
-				if part == wid {
-					continue
-				}
-
-				replace = append(replace, part)
-			}
-			local_queue = replace
-			return nil, fmt.Errorf("deployment canceled")
-		}
+	gpu,err := waitForGPU(cancel)
+	if err != nil {
+		return nil, err
 	}
-
-	gpu := (*libvirt.GPU)(nil)
-	for {
-		_gpu, found, err := takeGPU()
-		if err != nil {
-			return nil, err
-		} else if !found {
-			time.Sleep(time.Second)
-		} else {
-			gpu = _gpu
-			break
-		}
-	}
-
-	local_queue = local_queue[1:]
 
 	iface, err := network.CreateInterface(libvirt.Virtio)
 	if err != nil {
@@ -965,4 +936,42 @@ func takeGPU() (*libvirt.GPU, bool, error) {
 	}
 
 	return gpu, true, nil
+}
+
+func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
+	wid := uuid.New().String()
+	local_queue = append(local_queue, wid)
+	defer func() {
+		replace := []string{}
+		for _, part := range local_queue {
+			if part == wid {
+				continue
+			}
+
+			replace = append(replace, part)
+		}
+		local_queue = replace
+	}()
+
+	for local_queue[0] != wid {
+		time.Sleep(3 * time.Second)
+		if len(cancel) > 0 {
+			return nil, fmt.Errorf("deployment canceled")
+		}
+	}
+
+	gpu := (*libvirt.GPU)(nil)
+	for {
+		_gpu, found, err := takeGPU()
+		if err != nil {
+			return nil, err
+		} else if !found {
+			time.Sleep(time.Second)
+		} else {
+			gpu = _gpu
+			break
+		}
+	}
+
+	return gpu, nil
 }
