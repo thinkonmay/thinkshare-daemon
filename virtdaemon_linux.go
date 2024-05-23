@@ -44,7 +44,7 @@ type ClusterConfig struct {
 var (
 	very_quick_client = http.Client{Timeout: time.Second}
 	quick_client      = http.Client{Timeout: 5 * time.Second}
-	slow_client       = http.Client{Timeout: time.Minute * 3}
+	slow_client       = http.Client{Timeout: time.Hour * 24}
 	local_queue       = []string{}
 
 	libvirt_available = true
@@ -124,7 +124,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 		return nil, fmt.Errorf("VM not specified")
 	}
 
-	gpu,err := waitForGPU(cancel)
+	gpu, err := waitForGPU(cancel)
 	if err != nil {
 		return nil, err
 	}
@@ -941,7 +941,7 @@ func takeGPU() (*libvirt.GPU, bool, error) {
 func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 	wid := uuid.New().String()
 	local_queue = append(local_queue, wid)
-	log.PushLog("queued GPU claim request: %s",strings.Join(local_queue," -> "))
+	log.PushLog("queued GPU claim request: %s", strings.Join(local_queue, " -> "))
 	defer func() {
 		replace := []string{}
 		for _, part := range local_queue {
@@ -952,7 +952,7 @@ func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 			replace = append(replace, part)
 		}
 		local_queue = replace
-		log.PushLog("passed GPU claim request: %s",strings.Join(local_queue," -> "))
+		log.PushLog("passed GPU claim request: %s", strings.Join(local_queue, " -> "))
 	}()
 
 	for local_queue[0] != wid {

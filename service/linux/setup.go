@@ -62,7 +62,7 @@ func main() {
 		app := pocketbase.New()
 		app.Bootstrap()
 
-		client := http.Client{Timeout: 3 * time.Minute}
+		client := http.Client{Timeout: 24 * time.Hour}
 		handle := func(c echo.Context) (err error) {
 			body, _ := io.ReadAll(c.Request().Body)
 			req, _ := http.NewRequest(
