@@ -941,6 +941,7 @@ func takeGPU() (*libvirt.GPU, bool, error) {
 func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 	wid := uuid.New().String()
 	local_queue = append(local_queue, wid)
+	log.PushLog("queued GPU claim request: %s",strings.Join(local_queue," -> "))
 	defer func() {
 		replace := []string{}
 		for _, part := range local_queue {
@@ -951,6 +952,7 @@ func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 			replace = append(replace, part)
 		}
 		local_queue = replace
+		log.PushLog("passed GPU claim request: %s",strings.Join(local_queue," -> "))
 	}()
 
 	for local_queue[0] != wid {
