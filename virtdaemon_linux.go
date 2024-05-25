@@ -46,6 +46,7 @@ var (
 	quick_client      = http.Client{Timeout: 5 * time.Second}
 	slow_client       = http.Client{Timeout: time.Hour * 24}
 	local_queue       = []string{}
+	local_queue_mut   = &sync.Mutex{}
 
 	libvirt_available = true
 	dir               = "."
@@ -253,7 +254,7 @@ func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession, cance
 
 	go func() {
 		for len(cancel) == 0 {
-			time.Sleep(time.Second * 3)
+			time.Sleep(time.Second * 1)
 			very_quick_client.Post(
 				fmt.Sprintf("http://%s:%d/_new", node.Ip, Httpport),
 				"application/json",
@@ -938,12 +939,18 @@ func takeGPU() (*libvirt.GPU, bool, error) {
 	return gpu, true, nil
 }
 
-func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
+func waitForGPU(cancel chan bool) (gpu *libvirt.GPU, err error) {
 	wid := uuid.New().String()
+	local_queue_mut.Lock()
 	local_queue = append(local_queue, wid)
-	log.PushLog("queued GPU claim request: %s", strings.Join(local_queue, " -> "))
+	local_queue_mut.Unlock()
+
+	log.PushLog("queued GPU claim request : %s", wid)
+	log.PushLog("new GPU claim queue      : %s", strings.Join(local_queue, "->"))
 	defer func() {
 		replace := []string{}
+		local_queue_mut.Lock()
+		defer local_queue_mut.Unlock()
 		for _, part := range local_queue {
 			if part == wid {
 				continue
@@ -952,21 +959,32 @@ func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 			replace = append(replace, part)
 		}
 		local_queue = replace
-		log.PushLog("passed GPU claim request: %s", strings.Join(local_queue, " -> "))
+		if err != nil {
+			log.PushLog("cancel GPU claim request : %s", wid)
+		} else {
+			log.PushLog("passed GPU claim request : %s", wid)
+		}
+		log.PushLog("new GPU claim queue      : %s", strings.Join(local_queue, "->"))
 	}()
 
-	for local_queue[0] != wid {
+	for {
+		local_queue_mut.Lock()
+		ur_turn := local_queue[0] == wid
+		local_queue_mut.Unlock()
+		if ur_turn {
+			break
+		}
+
 		time.Sleep(3 * time.Second)
 		if len(cancel) > 0 {
 			return nil, fmt.Errorf("deployment canceled")
 		}
 	}
 
-	gpu := (*libvirt.GPU)(nil)
 	for {
-		_gpu, found, err := takeGPU()
-		if err != nil {
-			return nil, err
+		_gpu, found, er := takeGPU()
+		if er != nil {
+			return nil, er
 		} else if !found {
 			time.Sleep(time.Second)
 		} else {
@@ -974,6 +992,5 @@ func waitForGPU(cancel chan bool) (*libvirt.GPU, error) {
 			break
 		}
 	}
-
-	return gpu, nil
+	return
 }

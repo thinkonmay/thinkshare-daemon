@@ -13,9 +13,16 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
+const (
+	_new_timeout = 2 // second
+)
+var (
+	now = func() int { return int(time.Now().Unix()) }
+)
+
 type deployment struct {
 	cancel    chan bool
-	timestamp time.Time
+	timestamp int
 }
 type GRPCclient struct {
 	logger          []string
@@ -75,7 +82,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, fmt.Errorf("session not found")
 			}
 
-			deployment.timestamp = time.Now()
+			deployment.timestamp = now()
 			return []byte("{}"), nil
 		})
 	ret.wrapper("new",
@@ -87,7 +94,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 
 			deployment := &deployment{
 				cancel:    make(chan bool, 8),
-				timestamp: time.Now(),
+				timestamp: now(),
 			}
 			ret.mut.Lock()
 			ret.pending[msg.Id] = deployment
@@ -98,14 +105,12 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				ret.mut.Lock()
 				delete(ret.pending, msg.Id)
 				ret.mut.Unlock()
-				deployment.cancel <- true
 			}()
 
 			go func() {
 				for running {
-					time.Sleep(time.Second * 10)
-					now := time.Now()
-					if now.Unix()-deployment.timestamp.Unix() > 9 {
+					time.Sleep(time.Second * _new_timeout)
+					if now()-deployment.timestamp > _new_timeout {
 						deployment.cancel <- true
 					}
 				}

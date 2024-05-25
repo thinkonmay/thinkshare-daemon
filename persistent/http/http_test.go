@@ -3,6 +3,7 @@ package httpp
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestT(t *testing.T) {
 		panic(err)
 	}
 
-	go http.ListenAndServe(":60000", nil)
+	go http.ListenAndServe(":60001", nil)
 
 	client.RecvSession(func(ws *packet.WorkerSession, c chan bool) (*packet.WorkerSession, error) {
 		fmt.Printf("%s request\n", time.Now().Format(time.RFC3339))
@@ -32,16 +33,18 @@ func TestT(t *testing.T) {
 	})
 
 	go func() {
-		for i := 0; i < 10; i++ {
-			http.Post("http://localhost:60000/_new", "application/json", strings.NewReader(string(data)))
-			time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 1)
+		for i := 0; i < 5; i++ {
+			resp, _ := http.Post("http://localhost:60001/_new", "application/json", strings.NewReader(string(data)))
+			data, _ := io.ReadAll(resp.Body)
+			fmt.Printf("%s\n", string(data))
+			time.Sleep(time.Second * 2 + time.Millisecond * 100)
 		}
 
 		fmt.Printf("%s stop ping \n", time.Now().Format(time.RFC3339))
 	}()
 
 	fmt.Printf("%s make request \n", time.Now().Format(time.RFC3339))
-	http.Post("http://localhost:60000/new", "application/json", strings.NewReader(string(data)))
+	http.Post("http://localhost:60001/new", "application/json", strings.NewReader(string(data)))
 	fmt.Printf("%s done request \n", time.Now().Format(time.RFC3339))
-	time.Sleep(time.Minute)
 }
