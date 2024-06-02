@@ -49,8 +49,8 @@ var (
 	local_queue_mut   = &sync.Mutex{}
 
 	libvirt_available = true
-	dir               = "."
-	child             = "./child"
+	base_dir          = "."
+	child_dir         = "./child"
 	los               = "./os.qcow2"
 	lapp              = "./app.qcow2"
 	lbinary           = "./daemon"
@@ -65,11 +65,11 @@ var (
 
 func init() {
 	exe, _ := os.Executable()
-	dir, _ = filepath.Abs(filepath.Dir(exe))
-	child = fmt.Sprintf("%s/child", dir)
-	los = fmt.Sprintf("%s/os.qcow2", dir)
-	lapp = fmt.Sprintf("%s/app.qcow2", dir)
-	lbinary = fmt.Sprintf("%s/daemon", dir)
+	base_dir, _ = filepath.Abs(filepath.Dir(exe))
+	child_dir = fmt.Sprintf("%s/child", base_dir)
+	los = fmt.Sprintf("%s/os.qcow2", base_dir)
+	lapp = fmt.Sprintf("%s/app.qcow2", base_dir)
+	lbinary = fmt.Sprintf("%s/daemon", base_dir)
 }
 
 func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) func() {
@@ -137,7 +137,10 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 
 	os := los
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		os = fmt.Sprintf("%s/%s.qcow2", child, session.Vm.Volumes[0])
+		os,err = findVolumesInDir(child_dir,session.Vm.Volumes[0])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	vcpu := int64(16)
@@ -580,10 +583,6 @@ func queryLocal(info *packet.WorkerInfor) error {
 	if err != nil {
 		return fmt.Errorf("failed to query gpus %s", err.Error())
 	}
-	files, err := os.ReadDir(child)
-	if err != nil {
-		return fmt.Errorf("failed to query volumes %s", err.Error())
-	}
 	for _, vm := range vms {
 		if vm.Name == nil {
 			continue
@@ -632,23 +631,14 @@ func queryLocal(info *packet.WorkerInfor) error {
 		}
 	}
 
-	in_use, vols, gpuss, available := []string{}, []string{}, []string{}, []string{}
-	for _, volume := range volumemap {
-		in_use = append(in_use, volume)
+	vols, err := listVolumesInDir(child_dir)
+	if err != nil {
+		return err
 	}
 
-	for _, f := range files {
-		if f.IsDir() || !strings.Contains(f.Name(), "qcow2") {
-			continue
-		}
-
-		volume_id := strings.Split(filepath.Base(f.Name()), ".qcow2")[0]
-
-		if uuid.Validate(volume_id) != nil {
-			continue
-		}
-
-		vols = append(vols, volume_id)
+	in_use, gpuss, available := []string{}, []string{}, []string{}
+	for _, volume := range volumemap {
+		in_use = append(in_use, volume)
 	}
 
 	for _, vol := range vols {
@@ -853,27 +843,19 @@ func setupNode(node *Node) error {
 	}
 
 	node.client = client
-	binary := "~/thinkshare-daemon/daemon"
-	app := "~/thinkshare-daemon/app.qcow2"
-	os := "~/thinkshare-daemon/os.qcow2"
+	client.Run(fmt.Sprintf("mkdir -p %s",child_dir))
 
-	client.Run("mkdir ~/thinkshare-daemon")
-	client.Run("mkdir ~/thinkshare-daemon/child")
-
-	abs, _ := filepath.Abs(lbinary)
-	err = fileTransfer(node, binary, abs, true)
+	err = fileTransfer(node, lbinary, lbinary, true)
 	if err != nil {
 		return err
 	}
 
-	abs, _ = filepath.Abs(lapp)
-	err = fileTransfer(node, app, abs, true)
+	err = fileTransfer(node, lapp, lapp, true)
 	if err != nil {
 		return err
 	}
 
-	abs, _ = filepath.Abs(los)
-	err = fileTransfer(node, os, abs, false)
+	err = fileTransfer(node, los, los, false)
 	if err != nil {
 		return err
 	}
@@ -899,14 +881,14 @@ func setupNode(node *Node) error {
 
 	go func() {
 		for {
-			log.PushLog("start %s on %s", binary, node.Ip)
-			client.Run(fmt.Sprintf("chmod 777 %s", binary))
-			client.Run(fmt.Sprintf("chmod 777 %s", app))
+			log.PushLog("start %s on %s", lbinary, node.Ip)
+			client.Run(fmt.Sprintf("chmod 777 %s", lbinary))
+			client.Run(fmt.Sprintf("chmod 777 %s", lapp))
 
 			var ctx context.Context
 			ctx, cancel := context.WithCancel(context.Background())
 			node.cancel = &cancel
-			_, err = client.RunContext(ctx, binary)
+			_, err = client.RunContext(ctx, lbinary)
 			if err != nil {
 				log.PushLog(err.Error())
 			}
@@ -993,4 +975,63 @@ func waitForGPU(cancel chan bool) (gpu *libvirt.GPU, err error) {
 		}
 	}
 	return
+}
+
+func listVolumesInDir(dir string) ([]string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query volumes %s", err.Error())
+	}
+
+	vols := []string{}
+	for _, f := range files {
+		if f.IsDir() {
+			if subdirs, err := listVolumesInDir(fmt.Sprintf("%s/%s", dir, f.Name())); err == nil {
+				vols = append(vols, subdirs...)
+			} else {
+				return nil, err
+			}
+		}
+		if !strings.Contains(f.Name(), "qcow2") {
+			continue
+		}
+
+		volume_id := strings.Split(filepath.Base(f.Name()), ".qcow2")[0]
+
+		if uuid.Validate(volume_id) != nil {
+			continue
+		}
+
+		vols = append(vols, volume_id)
+	}
+	return vols, nil
+}
+
+func findVolumesInDir(dir, vol_id string) (string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("failed to query volumes %s", err.Error())
+	}
+
+
+	for _, f := range files {
+		if f.IsDir() {
+			if subdirs, err := findVolumesInDir(fmt.Sprintf("%s/%s", dir, f.Name()),vol_id); err == nil {
+				return subdirs, nil
+			}
+		}
+		if !strings.Contains(f.Name(), "qcow2") {
+			continue
+		}
+
+		volume_id := strings.Split(filepath.Base(f.Name()), ".qcow2")[0]
+		if uuid.Validate(volume_id) != nil {
+			continue
+		} else if volume_id == vol_id {
+			return fmt.Sprintf("%s/%s.qcow2", dir, volume_id), nil
+		}
+
+	}
+
+	return "", fmt.Errorf("volume not found")
 }

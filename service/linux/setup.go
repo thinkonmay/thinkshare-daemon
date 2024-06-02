@@ -2,25 +2,18 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v5"
 	daemon "github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon/pocketbase"
 	"github.com/thinkonmay/thinkshare-daemon/service/cmd"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"gopkg.in/yaml.v2"
-
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 func main() {
@@ -59,61 +52,7 @@ func main() {
 			}
 		}
 	} else {
-		app := pocketbase.New()
-		app.Bootstrap()
-
-		client := http.Client{Timeout: 24 * time.Hour}
-		handle := func(c echo.Context) (err error) {
-			body, _ := io.ReadAll(c.Request().Body)
-			req, _ := http.NewRequest(
-				c.Request().Method,
-				fmt.Sprintf("http://localhost:%d%s?%s",
-					daemon.Httpport,
-					c.Request().URL.Path,
-					c.Request().URL.RawQuery),
-				strings.NewReader(string(body)))
-
-			resp, err := client.Do(req)
-			if err != nil {
-				log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-				return err
-			}
-
-			body, err = io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			} else if resp.StatusCode != 200 {
-				c.Response().Status = resp.StatusCode
-			}
-
-			for k, v := range resp.Header {
-				if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
-					continue
-				}
-				c.Response().Header().Add(k, v[0])
-			}
-
-			c.Response().Write(body)
-			return nil
-		}
-
-		app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
-			e.Router.POST("/_new", handle)
-			e.Router.POST("/new", handle)
-			e.Router.POST("/closed", handle)
-			e.Router.POST("/handshake/*", handle)
-			e.Router.GET("/info", handle)
-			e.Router.GET("/*", apis.StaticDirectoryHandler(os.DirFS(fmt.Sprintf("%s/web/dist", dir)), true))
-			return nil
-		})
-
-		go apis.Serve(app, apis.ServeConfig{
-			ShowStartBanner:    true,
-			HttpAddr:           "0.0.0.0:40080",
-			HttpsAddr:          "0.0.0.0:40443",
-			CertificateDomains: []string{"play.thinkmay.net"},
-		})
-
+		pocketbase.StartPocketbase("./pb_data", []string{"play.thinkmay.net"})
 		err = yaml.Unmarshal(files, cluster)
 		if err != nil {
 			log.PushLog("failed to read cluster.yaml %s", err.Error())

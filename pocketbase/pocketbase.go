@@ -17,7 +17,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
-func StartPocketbase(dir string) error {
+func StartPocketbase(dir string, domain []string) {
 	app := pocketbase.New()
 	app.Bootstrap()
 
@@ -109,18 +109,25 @@ func StartPocketbase(dir string) error {
 		e.Router.POST("/new", handle)
 		e.Router.POST("/closed", handle)
 		e.Router.POST("/handshake/*", handle)
-		e.Router.GET("/_info", apis.RequireAdminAuth()(handle))
+		e.Router.GET("/_info", handle, apis.RequireAdminAuth())
 		e.Router.GET("/info", handleauth)
 		e.Router.GET("/*", apis.StaticDirectoryHandler(os.DirFS(fmt.Sprintf("%s/web/dist", dir)), true))
 		return nil
 	})
 
-	_, err := apis.Serve(app, apis.ServeConfig{
-		ShowStartBanner:    true,
-		HttpAddr:           "0.0.0.0:40080",
-		HttpsAddr:          "0.0.0.0:40443",
-		CertificateDomains: []string{"play.thinkmay.net"},
-	})
+	go func() {
+		for {
+			_, err := apis.Serve(app, apis.ServeConfig{
+				ShowStartBanner:    true,
+				HttpAddr:           "0.0.0.0:40080",
+				HttpsAddr:          "0.0.0.0:40443",
+				CertificateDomains: domain,
+			})
+			if err != nil {
+				log.PushLog("pocketbase error: %s",err.Error())
+			}
 
-	return err
+			time.Sleep(time.Second)
+		}
+	}()
 }
