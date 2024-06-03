@@ -52,7 +52,7 @@ func main() {
 			}
 		}
 	} else {
-		pocketbase.StartPocketbase("./pb_data", []string{"play.thinkmay.net"})
+		pocketbase.StartPocketbase(dir, []string{"play.thinkmay.net"})
 		err = yaml.Unmarshal(files, cluster)
 		if err != nil {
 			log.PushLog("failed to read cluster.yaml %s", err.Error())

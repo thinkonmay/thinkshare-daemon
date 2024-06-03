@@ -16,3 +16,4 @@ daemon
 cluster.yaml
 binary/pb_data/
 playground/
+pb_data

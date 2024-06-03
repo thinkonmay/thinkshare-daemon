@@ -1,10 +1,12 @@
 package pocketbase
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	daemon "github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
@@ -27,14 +30,21 @@ func StartPocketbase(dir string, domain []string) {
 			LocalID string `db:"local_id"`
 		}{}
 
+		user := c.Request().Header.Get("User")
+		log.PushLog("request from user %s", user)
 		err = app.App.Dao().ConcurrentDB().
 			Select("volumes.local_id").
 			From("volumes").
-			AndWhere(dbx.Like("user", c.Request().Header.Get("User"))).
+			Where(dbx.NewExp("user = {:id}", dbx.Params{"id": user})).
 			All(&volumes)
 		if err != nil {
 			log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
 			return err
+		}
+
+		vols := []string{}
+		for _, v := range volumes {
+			vols = append(vols, v.LocalID)
 		}
 
 		body, _ := io.ReadAll(c.Request().Body)
@@ -66,7 +76,49 @@ func StartPocketbase(dir string, domain []string) {
 			c.Response().Header().Add(k, v[0])
 		}
 
-		c.Response().Write(body)
+		data := packet.WorkerInfor{}
+		json.Unmarshal(body, &data)
+
+		newSessions := []*packet.WorkerSession{}
+		for _, session := range data.Sessions {
+			if session.Vm == nil || session.Vm.Volumes == nil {
+				continue
+			}
+
+			found := false
+			for _, volume := range session.Vm.Volumes {
+				for _, vol := range vols {
+					if vol == volume {
+						found = true
+					}
+				}
+			}
+
+			if found {
+				newSessions = append(newSessions, session)
+			}
+		}
+
+		data.Sessions = newSessions
+
+		newVolumes := []string{}
+		for _, volume := range data.Volumes {
+			found := false
+			for _, vol := range vols {
+				if vol == volume {
+					found = true
+				}
+			}
+
+			if found {
+				newVolumes = append(newVolumes, volume)
+			}
+		}
+
+		data.Volumes = newVolumes
+
+		out, _ := json.Marshal(&data)
+		c.Response().Write(out)
 		return nil
 	}
 
@@ -104,6 +156,9 @@ func StartPocketbase(dir string, domain []string) {
 		return nil
 	}
 
+	path, _ := filepath.Abs(fmt.Sprintf("%s/web/dist", dir))
+	log.PushLog("serving file content at %s", path)
+	dirfs := os.DirFS(path)
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		e.Router.POST("/_new", handle)
 		e.Router.POST("/new", handle)
@@ -111,7 +166,7 @@ func StartPocketbase(dir string, domain []string) {
 		e.Router.POST("/handshake/*", handle)
 		e.Router.GET("/_info", handle, apis.RequireAdminAuth())
 		e.Router.GET("/info", handleauth)
-		e.Router.GET("/*", apis.StaticDirectoryHandler(os.DirFS(fmt.Sprintf("%s/web/dist", dir)), true))
+		e.Router.GET("/*", apis.StaticDirectoryHandler(dirfs, true))
 		return nil
 	})
 
@@ -124,7 +179,7 @@ func StartPocketbase(dir string, domain []string) {
 				CertificateDomains: domain,
 			})
 			if err != nil {
-				log.PushLog("pocketbase error: %s",err.Error())
+				log.PushLog("pocketbase error: %s", err.Error())
 			}
 
 			time.Sleep(time.Second)
