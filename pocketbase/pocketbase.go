@@ -25,7 +25,7 @@ func StartPocketbase(dir string, domain []string) {
 	app.Bootstrap()
 
 	client := http.Client{Timeout: 24 * time.Hour}
-	handleauth := func(c echo.Context) (err error) {
+	infoauth := func(c echo.Context) (err error) {
 		volumes := []struct {
 			LocalID string `db:"local_id"`
 		}{}
@@ -123,12 +123,16 @@ func StartPocketbase(dir string, domain []string) {
 	}
 
 	handle := func(c echo.Context) (err error) {
+		path := c.Request().URL.Path
+		if path == "_info" {
+			path = "info"
+		}
+
 		body, _ := io.ReadAll(c.Request().Body)
 		req, _ := http.NewRequest(
 			c.Request().Method,
 			fmt.Sprintf("http://localhost:%d%s?%s",
-				daemon.Httpport,
-				c.Request().URL.Path,
+				daemon.Httpport, path,
 				c.Request().URL.RawQuery),
 			strings.NewReader(string(body)))
 
@@ -165,7 +169,7 @@ func StartPocketbase(dir string, domain []string) {
 		e.Router.POST("/closed", handle)
 		e.Router.POST("/handshake/*", handle)
 		e.Router.GET("/_info", handle, apis.RequireAdminAuth())
-		e.Router.GET("/info", handleauth)
+		e.Router.GET("/info", infoauth)
 		e.Router.GET("/*", apis.StaticDirectoryHandler(dirfs, true))
 		return nil
 	})

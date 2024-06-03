@@ -189,7 +189,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 
 	start := time.Now().UnixMilli()
 	for {
-		if time.Now().UnixMilli()-start > 3*60*1000 {
+		if time.Now().UnixMilli()-start > 10*60*1000 {
 			break
 		}
 
