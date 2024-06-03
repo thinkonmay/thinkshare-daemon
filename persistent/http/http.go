@@ -60,10 +60,6 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		func(conn string) ([]byte, error) {
 			return []byte("pong"), nil
 		})
-	ret.wrapper("_info",
-		func(conn string) ([]byte, error) {
-			return json.Marshal(ret.worker_info())
-		})
 	ret.wrapper("info",
 		func(conn string) ([]byte, error) {
 			return json.Marshal(ret.worker_info())
