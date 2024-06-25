@@ -163,7 +163,7 @@ func (procs *ChildProcesses) handleProcess(id ProcessID) error {
 
 func (procs *ChildProcesses) copyAndCapture(process, logtype string, r io.Reader) {
 	buf := make([]byte, 1024)
-	for {
+	for r != nil {
 		n, err := r.Read(buf[:])
 		if err != nil {
 			return
