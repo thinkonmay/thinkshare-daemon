@@ -37,10 +37,13 @@ features:
 cpu:
     mode: host-passthrough
     check: none
+    migratable: on
     topology:
-        socket: 1
+        sockets: 1
+        dies: 1
+        clusters: 1
         cores: 16
-        thread: 1
+        threads: 1
     feature:
         policy: disable
         name: hypervisor

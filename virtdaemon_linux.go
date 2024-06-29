@@ -591,8 +591,9 @@ func queryLocal(info *packet.WorkerInfor) error {
 		if result, err := network.FindDomainIPs(vm); err != nil {
 			found := false
 			for _, sidecar := range sidecars {
-				if sidecar == *vm.Name {
+				if strings.Contains(*vm.Name,sidecar)  {
 					found = true
+					break
 				}
 			}
 			if !found {
@@ -881,6 +882,12 @@ func setupNode(node *Node) error {
 
 	go func() {
 		for {
+			if client == nil {
+				log.PushLog("ssh client is nil, wait for 1 second")
+				time.Sleep(time.Second)
+				continue
+			}
+
 			log.PushLog("start %s on %s", lbinary, node.Ip)
 			client.Run(fmt.Sprintf("chmod 777 %s", lbinary))
 			client.Run(fmt.Sprintf("chmod 777 %s", lapp))

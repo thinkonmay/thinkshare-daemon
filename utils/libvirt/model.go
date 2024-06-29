@@ -25,19 +25,23 @@ type Vcpupin struct {
 }
 
 type CPU struct {
-	Mode     *string  `xml:"mode,attr"`
-	Check    *string  `xml:"check,attr"`
-	Topology Topology `xml:"topology"`
-	Feature  *struct {
+	Mode       *string  `xml:"mode,attr"`
+	Check      *string  `xml:"check,attr"`
+	Migratable *string  `xml:"migratable,attr"`
+	Topology   Topology `xml:"topology"`
+	Feature    *struct {
 		Policy *string `xml:"policy,attr"`
 		Name   *string `xml:"name,attr"`
 	} `xml:"feature"`
 }
 
 type Topology struct {
-	Socket int `xml:"sockets,attr"`
-	Cores  int `xml:"cores,attr"`
-	Thread int `xml:"threads,attr"`
+	Sockets  int `xml:"sockets,attr"`
+	Dies     int `xml:"dies,attr"`
+	// TODO : attempt this after virsh --version = 10.1.0
+	// Clusters int `xml:"clusters,attr"`
+	Cores    int `xml:"cores,attr"`
+	Threads  int `xml:"threads,attr"`
 }
 
 type Resource struct {
@@ -296,12 +300,12 @@ type Clock struct {
 }
 
 type Domain struct {
-	Running bool `xml:"-"`
+	Running bool     `xml:"-"`
 	XMLName xml.Name `xml:"domain" yaml:"domain,inline"`
 	Type    *string  `xml:"type,attr"`
 
-	Name    *string `xml:"name"`
-	Uuid    *string `xml:"uuid"`
+	Name *string `xml:"name"`
+	Uuid *string `xml:"uuid"`
 
 	NumaTune      *NumaTune `xml:"numatune"`
 	Memory        Memory    `xml:"memory"`

@@ -118,8 +118,10 @@ func (lv *Libvirt) CreateVM(id string,
 	dom.CurrentMemory.Value = ram * 1024 * 1024
 	dom.VCpu.Value = vcpus
 
-	dom.Cpu.Topology.Socket = 1
-	dom.Cpu.Topology.Thread = 2
+	dom.Cpu.Topology.Sockets = 1
+	// dom.Cpu.Topology.Clusters = 1
+	dom.Cpu.Topology.Dies = 1
+	dom.Cpu.Topology.Threads = 2
 	dom.Cpu.Topology.Cores = vcpus / 2
 	dom.Interfaces = ifaces
 
