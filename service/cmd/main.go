@@ -6,6 +6,7 @@ import (
 	"os"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
+	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 
@@ -14,7 +15,7 @@ import (
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 )
 
-func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
+func Start(cluster cluster.ClusterConfig, stop chan os.Signal) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
@@ -30,7 +31,7 @@ func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
 		ws.InitSignallingHttp("/handshake/server"),
 	)
 
-	srv := &http.Server{Addr: fmt.Sprintf(":%d",daemon.Httpport)}
+	srv := &http.Server{Addr: fmt.Sprintf(":%d", daemon.Httpport)}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.PushLog(err.Error())
@@ -42,5 +43,5 @@ func Start(cluster *daemon.ClusterConfig,stop chan os.Signal) {
 
 	dm := daemon.WebDaemon(grpc, signaling, cluster)
 	defer dm.Close()
-	stop<-<-stop
+	stop <- <-stop
 }

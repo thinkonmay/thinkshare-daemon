@@ -163,16 +163,11 @@ func StartPocketbase(dir string, domain []string) {
 
 	// Customize edit manage volume api external
 	handle_manage_volume := func(c echo.Context) (err error) {
-		path := c.Request().URL.Path
-		if path == "_info" {
-			path = "info"
-		}
-
 		body, _ := io.ReadAll(c.Request().Body)
 		req, _ := http.NewRequest(
 			c.Request().Method,
 			fmt.Sprintf("http://localhost:%d%s?%s",
-				9000, path,
+				9000, c.Request().URL.Path,
 				c.Request().URL.RawQuery),
 			strings.NewReader(string(body)))
 

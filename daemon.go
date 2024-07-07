@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
+	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
@@ -42,6 +43,7 @@ type Daemon struct {
 
 	signaling    *signaling.Signaling
 	childprocess *childprocess.ChildProcesses
+	cluster      cluster.ClusterConfig
 	persist      persistent.Persistent
 
 	mutex *sync.Mutex
@@ -52,7 +54,7 @@ type Daemon struct {
 
 func WebDaemon(persistent persistent.Persistent,
 	signaling *signaling.Signaling,
-	cluster *ClusterConfig,
+	cluster *cluster.ClusterConfigManifest,
 ) *Daemon {
 	i, err := system.GetInfor()
 	if err != nil {

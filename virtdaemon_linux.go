@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,31 +14,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/melbahja/goph"
+	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
-
-type Host struct {
-	Interface string `yaml:"interface"`
-}
-type Node struct {
-	Ip       string `yaml:"ip"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Role     string `yaml:"role"`
-
-	client *goph.Client
-	cancel *context.CancelFunc
-
-	internal packet.WorkerInfor
-}
-
-type ClusterConfig struct {
-	Nodes []Node `yaml:"nodes"`
-	Local Host   `yaml:"local"`
-}
 
 var (
 	very_quick_client = http.Client{Timeout: time.Second}
@@ -56,7 +35,6 @@ var (
 	lbinary           = "./daemon"
 	sidecars          = []string{"lancache", "do-not-delete"}
 	models            = []libvirt.VMLaunchModel{}
-	nodes             = []*Node{}
 	mut               = &sync.Mutex{}
 
 	virt    *libvirt.VirtDaemon
@@ -72,7 +50,7 @@ func init() {
 	lbinary = fmt.Sprintf("%s/daemon", base_dir)
 }
 
-func (daemon *Daemon) HandleVirtdaemon(cluster *ClusterConfig) func() {
+func (daemon *Daemon) HandleVirtdaemon(cluster cluster.ClusterConfig) func() {
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
@@ -137,7 +115,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 
 	os := los
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		os,err = findVolumesInDir(child_dir,session.Vm.Volumes[0])
+		os, err = findVolumesInDir(child_dir, session.Vm.Volumes[0])
 		if err != nil {
 			return nil, err
 		}
@@ -548,30 +526,6 @@ func querySession(session *packet.WorkerSession) error {
 	return nil
 }
 
-func queryNode(node *Node) error {
-	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
-	if err != nil {
-		return err
-	}
-
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	} else if resp.StatusCode != 200 {
-		return fmt.Errorf(string(b))
-	}
-
-	ss := packet.WorkerInfor{}
-	err = json.Unmarshal(b, &ss)
-	if err != nil {
-		return err
-	} else if ss.PrivateIP == nil || ss.PublicIP == nil {
-		return fmt.Errorf("nil ip")
-	}
-
-	node.internal = ss
-	return nil
-}
 
 func queryLocal(info *packet.WorkerInfor) error {
 	ipmap, volumemap := map[string]string{}, map[string]string{}
@@ -802,108 +756,6 @@ func deinit() {
 		cancel := *node.cancel
 		cancel()
 	}
-}
-
-func fileTransfer(node *Node, rfile, lfile string, force bool) error {
-	out, err := exec.Command("du", lfile).Output()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve file info %s", err.Error())
-	}
-
-	lsize := strings.Split(string(out), "\t")[0]
-	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
-	rsize := strings.Split(string(out), "\t")[0]
-	if err == nil && force {
-		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
-	}
-	if err != nil || force {
-		_, err := exec.Command("sshpass",
-			"-p", node.Password,
-			"scp", lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
-		).Output()
-		if err != nil {
-			return err
-		}
-
-		out, err := node.client.Run(fmt.Sprintf("du %s", rfile))
-		if err != nil {
-			return err
-		}
-
-		rsize = strings.Split(string(out), "\t")[0]
-	}
-
-	log.PushLog("%s : local file size %s, remote file size %s", rfile, lsize, rsize)
-	return nil
-}
-
-func setupNode(node *Node) error {
-	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
-	if err != nil {
-		return err
-	}
-
-	node.client = client
-	client.Run(fmt.Sprintf("mkdir -p %s",child_dir))
-
-	err = fileTransfer(node, lbinary, lbinary, true)
-	if err != nil {
-		return err
-	}
-
-	err = fileTransfer(node, lapp, lapp, true)
-	if err != nil {
-		return err
-	}
-
-	err = fileTransfer(node, los, los, false)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		for {
-			client.Conn.Wait()
-
-			time.Sleep(time.Second)
-			for {
-				client, err = goph.New(node.Username, node.Ip, goph.Password(node.Password))
-				if err != nil {
-					time.Sleep(time.Second)
-					log.PushLog("failed to connect ssh to node %s", err.Error())
-					continue
-				}
-
-				node.client = client
-				break
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			if client == nil {
-				log.PushLog("ssh client is nil, wait for 1 second")
-				time.Sleep(time.Second)
-				continue
-			}
-
-			log.PushLog("start %s on %s", lbinary, node.Ip)
-			client.Run(fmt.Sprintf("chmod 777 %s", lbinary))
-			client.Run(fmt.Sprintf("chmod 777 %s", lapp))
-
-			var ctx context.Context
-			ctx, cancel := context.WithCancel(context.Background())
-			node.cancel = &cancel
-			_, err = client.RunContext(ctx, lbinary)
-			if err != nil {
-				log.PushLog(err.Error())
-			}
-
-			time.Sleep(time.Second * 10)
-		}
-	}()
-	return nil
 }
 
 func takeGPU() (*libvirt.GPU, bool, error) {

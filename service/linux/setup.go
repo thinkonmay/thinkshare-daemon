@@ -34,8 +34,7 @@ func main() {
 	}
 
 	cluster := &daemon.ClusterConfig{}
-	files, err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml", dir))
-	if err != nil {
+	if files, err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml", dir)); err != nil {
 		log.PushLog("failed to read cluster.yaml %s", err.Error())
 		if ifaces, err := net.Interfaces(); err == nil {
 			for _, local_if := range ifaces {
