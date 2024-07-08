@@ -2,7 +2,6 @@ package ws
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -10,14 +9,13 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
-	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
 type WebSocketServer struct {
 	fun  protocol.OnTenantFunc
-	auth func(string) (*string,bool)
+	auth func(string) (*string, bool)
 	path string
 
 	mapid map[string]*HttpTenant
@@ -29,7 +27,7 @@ func (server *WebSocketServer) OnTenant(fun protocol.OnTenantFunc) {
 }
 func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Request) bool {
 	target := r.URL.Query().Get("target")
-	ip,remove_target := server.auth(target)
+	ip, remove_target := server.auth(target)
 	if target == "" || ip == nil {
 		return false
 	}
@@ -39,9 +37,14 @@ func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Requ
 		q.Del("target")
 	}
 
+	pre, err := url.Parse(*ip)
+	if err != nil {
+		return false
+	}
+
 	clone := url.URL{
-		Scheme:   "http",
-		Host:     fmt.Sprintf("%s:%d", *ip,daemon.Httpport),
+		Scheme:   pre.Scheme,
+		Host:     pre.Host,
 		Path:     r.URL.Path,
 		RawQuery: q.Encode(),
 	}
@@ -175,7 +178,7 @@ func InitSignallingHttp(path string) *WebSocketServer {
 	wsserver := &WebSocketServer{
 		mapid: map[string]*HttpTenant{},
 		fun:   func(protocol.Tenant) error { return nil },
-		auth:  func(s string) (*string,bool) { return nil,false },
+		auth:  func(s string) (*string, bool) { return nil, false },
 		path:  path,
 		mut:   &sync.Mutex{},
 	}
@@ -183,6 +186,6 @@ func InitSignallingHttp(path string) *WebSocketServer {
 	return wsserver
 }
 
-func (server *WebSocketServer) AuthHandler(auth func(string) (*string,bool)) {
+func (server *WebSocketServer) AuthHandler(auth func(string) (*string, bool)) {
 	server.auth = auth
 }

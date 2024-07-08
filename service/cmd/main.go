@@ -6,7 +6,6 @@ import (
 	"os"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
-	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	httpp "github.com/thinkonmay/thinkshare-daemon/persistent/http"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 
@@ -15,7 +14,7 @@ import (
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 )
 
-func Start(cluster cluster.ClusterConfig, stop chan os.Signal) {
+func Start(cluster_path string, stop chan os.Signal) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 

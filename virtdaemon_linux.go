@@ -50,7 +50,7 @@ func init() {
 	lbinary = fmt.Sprintf("%s/daemon", base_dir)
 }
 
-func (daemon *Daemon) HandleVirtdaemon(cluster cluster.ClusterConfig) func() {
+func (daemon *Daemon) HandleVirtdaemon() func() {
 	var err error
 	virt, err = libvirt.NewVirtDaemon()
 	if err != nil {
@@ -59,7 +59,7 @@ func (daemon *Daemon) HandleVirtdaemon(cluster cluster.ClusterConfig) func() {
 		return func() {}
 	}
 
-	network, err = libvirt.NewLibvirtNetwork(cluster.Local.Interface)
+	network, err = libvirt.NewLibvirtNetwork(daemon.cluster.Interface())
 	if err != nil {
 		log.PushLog("failed to start network %s", err.Error())
 		return func() {}
@@ -76,18 +76,6 @@ func (daemon *Daemon) HandleVirtdaemon(cluster cluster.ClusterConfig) func() {
 			if !found && uuid.Validate(*vm.Name) == nil {
 				virt.DeleteVM(*vm.Name)
 			}
-		}
-	}
-
-	if cluster != nil {
-		for _, node := range cluster.Nodes {
-			err := setupNode(&node)
-			if err != nil {
-				log.PushLog(err.Error())
-				continue
-			}
-
-			nodes = append(nodes, &node)
 		}
 	}
 
@@ -225,26 +213,26 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
-func (daemon *Daemon) DeployVMonNode(node Node, nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	}
 
-	log.PushLog("deploying VM on node %s", node.Ip)
+	log.PushLog("deploying VM on node %s", node.Name())
 	b, _ := json.Marshal(nss)
 
 	go func() {
 		for len(cancel) == 0 {
 			time.Sleep(time.Second * 1)
 			very_quick_client.Post(
-				fmt.Sprintf("http://%s:%d/_new", node.Ip, Httpport),
+				fmt.Sprintf("%s/_new", node.RequestBaseURL(), Httpport),
 				"application/json",
 				strings.NewReader(string(b)))
 		}
 	}()
 
 	resp, err := slow_client.Post(
-		fmt.Sprintf("http://%s:%d/new", node.Ip, Httpport),
+		fmt.Sprintf("%s/new", node.RequestBaseURL(), Httpport),
 		"application/json",
 		strings.NewReader(string(b)))
 	if err != nil {
@@ -284,10 +272,10 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan 
 		}
 	}
 
-	for _, node := range nodes {
-		for _, remote := range node.internal.Volumes {
+	for _, node := range daemon.cluster.Nodes() {
+		for _, remote := range node.Volumes() {
 			if remote == volume_id {
-				session, err := daemon.DeployVMonNode(*node, nss, cancel)
+				session, err := daemon.DeployVMonNode(node, nss, cancel)
 				return session, nil, err
 			}
 		}
@@ -344,17 +332,17 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 	}
 
 	if ss.Target == nil {
-		for _, node := range nodes {
-			for _, session := range node.internal.Sessions {
+		for _, node := range daemon.cluster.Nodes() {
+			for _, session := range node.Sessions() {
 				if session.Id != ss.Id {
 					continue
 				}
 
-				log.PushLog("forwarding command %s to node %s", command, node.Ip)
+				log.PushLog("forwarding command %s to node %s", command, node.Name())
 
 				b, _ := json.Marshal(ss)
 				resp, err := slow_client.Post(
-					fmt.Sprintf("http://%s:%d/%s", node.Ip, Httpport, command),
+					fmt.Sprintf("%s/%s", node.RequestBaseURL(), command),
 					"application/json",
 					strings.NewReader(string(b)))
 				if err != nil {
@@ -428,8 +416,8 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		return &worker_session, nil
 	}
 
-	for _, node := range nodes {
-		for _, session := range node.internal.Sessions {
+	for _, node := range daemon.cluster.Nodes() {
+		for _, session := range node.Sessions() {
 			if session == nil ||
 				session.Id != *ss.Target ||
 				session.Vm == nil ||
@@ -437,11 +425,11 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 				continue
 			}
 
-			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Ip, *session.Vm.PrivateIP)
+			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Name(), *session.Vm.PrivateIP)
 
 			b, _ := json.Marshal(ss)
 			resp, err := slow_client.Post(
-				fmt.Sprintf("http://%s:%d/%s", node.Ip, Httpport, command),
+				fmt.Sprintf("%s/%s", node.RequestBaseURL(), Httpport, command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
@@ -480,13 +468,15 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 
 	for _, s := range daemon.info.Sessions {
 		if s.Id == token && s.Vm != nil {
-			return s.Vm.PrivateIP, true
+			addr := fmt.Sprintf("http://%s:%d", s.Vm.PrivateIP, cluster.Httpport)
+			return &addr, true
 		}
 	}
-	for _, node := range nodes {
-		for _, s := range node.internal.Sessions {
+	for _, node := range daemon.cluster.Nodes() {
+		for _, s := range node.Sessions() {
 			if s.Id == token && s.Vm != nil {
-				return &node.Ip, false
+				addr := node.RequestBaseURL()
+				return &addr, false
 			}
 
 		}
@@ -526,7 +516,6 @@ func querySession(session *packet.WorkerSession) error {
 	return nil
 }
 
-
 func queryLocal(info *packet.WorkerInfor) error {
 	ipmap, volumemap := map[string]string{}, map[string]string{}
 	vms, err := virt.ListVMs()
@@ -545,7 +534,7 @@ func queryLocal(info *packet.WorkerInfor) error {
 		if result, err := network.FindDomainIPs(vm); err != nil {
 			found := false
 			for _, sidecar := range sidecars {
-				if strings.Contains(*vm.Name,sidecar)  {
+				if strings.Contains(*vm.Name, sidecar) {
 					found = true
 					break
 				}
@@ -648,21 +637,21 @@ func queryLocal(info *packet.WorkerInfor) error {
 	return nil
 }
 
-func infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	if !libvirt_available {
 		return cp
 	}
 
-	for _, node := range nodes {
-		cp.Sessions = append(cp.Sessions, node.internal.Sessions...)
-		cp.GPUs = append(cp.GPUs, node.internal.GPUs...)
-		cp.Volumes = append(cp.Volumes, node.internal.Volumes...)
+	for _, node := range daemon.cluster.Nodes() {
+		cp.Sessions = append(cp.Sessions, node.Sessions()...)
+		cp.GPUs = append(cp.GPUs, node.GPUs()...)
+		cp.Volumes = append(cp.Volumes, node.Volumes()...)
 	}
 
 	return cp
 }
 
-func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
+func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 	mut.Lock()
 	defer mut.Unlock()
 	if !libvirt_available {
@@ -693,16 +682,16 @@ func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		}(session, channel)
 	}
 
-	for _, node := range nodes {
+	for _, node := range daemon.cluster.Nodes() {
 		channel := make(chan error)
 		jobs = append(jobs, channel)
-		go func(s *Node, c chan error) {
+		go func(s cluster.Node, c chan error) {
 			defer func() {
 				if err := recover(); err != nil {
 					c <- fmt.Errorf("panic occurred: %v", err)
 				}
 			}()
-			c <- queryNode(s)
+			c <- node.Query()
 		}(node, channel)
 	}
 
@@ -712,7 +701,7 @@ func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		}
 	}
 
-	return infoBuilder(*info)
+	return daemon.infoBuilder(*info)
 }
 
 func prepareVolume(os, app string) ([]libvirt.Volume, error) {
@@ -749,13 +738,6 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 
 	chain_os.Disposable = false
 	return []libvirt.Volume{*chain_os, *chain_app}, nil
-}
-
-func deinit() {
-	for _, node := range nodes {
-		cancel := *node.cancel
-		cancel()
-	}
 }
 
 func takeGPU() (*libvirt.GPU, bool, error) {
@@ -872,10 +854,9 @@ func findVolumesInDir(dir, vol_id string) (string, error) {
 		return "", fmt.Errorf("failed to query volumes %s", err.Error())
 	}
 
-
 	for _, f := range files {
 		if f.IsDir() {
-			if subdirs, err := findVolumesInDir(fmt.Sprintf("%s/%s", dir, f.Name()),vol_id); err == nil {
+			if subdirs, err := findVolumesInDir(fmt.Sprintf("%s/%s", dir, f.Name()), vol_id); err == nil {
 				return subdirs, nil
 			}
 		}

@@ -54,13 +54,13 @@ type Daemon struct {
 
 func WebDaemon(persistent persistent.Persistent,
 	signaling *signaling.Signaling,
-	cluster *cluster.ClusterConfigManifest,
+	cluster_path string,
 ) *Daemon {
 	i, err := system.GetInfor()
 	if err != nil {
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent, signaling, cluster)
+		return WebDaemon(persistent, signaling, cluster_path)
 	}
 
 	daemon := &Daemon{
@@ -100,10 +100,10 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}
 
-	def := daemon.HandleVirtdaemon(cluster)
+	def := daemon.HandleVirtdaemon()
 	daemon.cleans = append(daemon.cleans, def)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		result := QueryInfo(&daemon.info)
+		result := daemon.QueryInfo(&daemon.info)
 		return &result
 	})
 
@@ -152,7 +152,7 @@ func WebDaemon(persistent persistent.Persistent,
 			process, channel, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
-			QueryInfo(&daemon.info)
+			daemon.QueryInfo(&daemon.info)
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
 				if Vm, err := daemon.DeployVM(ss, cancel); err != nil {
 					return nil, err
@@ -198,7 +198,7 @@ func WebDaemon(persistent persistent.Persistent,
 			return nil
 		}
 
-		QueryInfo(&daemon.info)
+		daemon.QueryInfo(&daemon.info)
 		log.PushLog("terminating session %s", ss)
 		keys := make([]string, 0, len(daemon.session))
 		for k, _ := range daemon.session {
@@ -260,7 +260,7 @@ func WebDaemon(persistent persistent.Persistent,
 }
 
 func (daemon *Daemon) Close() {
-	deinit()
+	daemon.cluster.Deinit()
 	for _, clean := range daemon.cleans {
 		clean()
 	}
