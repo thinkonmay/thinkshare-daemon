@@ -212,6 +212,7 @@ func StartPocketbase(dir string, domain []string) {
 		e.Router.POST("/volume_delete", handle_manage_volume, apis.RequireAdminAuth())
 		e.Router.POST("/create_volume", handle_manage_volume, apis.RequireAdminAuth())
 		e.Router.POST("/fetch_node_info", handle_manage_volume, apis.RequireAdminAuth())
+		e.Router.POST("/fetch_node_volume", handle_manage_volume, apis.RequireAdminAuth())
 
 
 		e.Router.GET("/*", apis.StaticDirectoryHandler(dirfs, true))
