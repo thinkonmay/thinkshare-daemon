@@ -6,26 +6,150 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/melbahja/goph"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	"gopkg.in/yaml.v2"
 )
 
+const (
+	Httpport = 60000
+)
+
+var (
+	very_quick_client = http.Client{Timeout: time.Second}
+	quick_client      = http.Client{Timeout: 5 * time.Second}
+	slow_client       = http.Client{Timeout: time.Hour * 24}
+	local_queue       = []string{}
+	local_queue_mut   = &sync.Mutex{}
+
+	libvirt_available = true
+	base_dir          = "."
+	child_dir         = "./child"
+	los               = "./os.qcow2"
+	lapp              = "./app.qcow2"
+	lbinary           = "./daemon"
+)
+
+func init() {
+	exe, _ := os.Executable()
+	base_dir, _ = filepath.Abs(filepath.Dir(exe))
+	child_dir = fmt.Sprintf("%s/child", base_dir)
+	los = fmt.Sprintf("%s/os.qcow2", base_dir)
+	lapp = fmt.Sprintf("%s/app.qcow2", base_dir)
+	lbinary = fmt.Sprintf("%s/daemon", base_dir)
+}
+
 type ClusterConfigManifest struct {
-	Nodes []Node `yaml:"nodes"`
-	Local Host   `yaml:"local"`
+	Nodes []NodeManifest `yaml:"nodes"`
+	Local Host           `yaml:"local"`
 }
 type ClusterConfigImpl struct {
 	ClusterConfigManifest
-	nodes []*NodeImpl
+	manifest_path string
+
+	nodes         []*NodeImpl
+	mut           *sync.Mutex
 }
 
 func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
-	return &ClusterConfigImpl{}, nil
+	impl := &ClusterConfigImpl{
+		nodes: []*NodeImpl{},
+	}
+
+	fetch_content := func() (ClusterConfigManifest, error) {
+		content, err := os.ReadFile(manifest_path)
+		if err != nil {
+			return ClusterConfigManifest{}, err
+		}
+
+		manifest := ClusterConfigManifest{}
+		err = yaml.Unmarshal(content, manifest)
+		return manifest, err
+	}
+
+	sync_nodes := func() error {
+		impl.mut.Lock()
+		defer impl.mut.Unlock()
+
+		desired := impl.ClusterConfigManifest.Nodes
+		current := impl.nodes
+
+
+		need_create := []NodeManifest{}
+		need_remove := []*NodeImpl{}
+		for _,manifest  := range desired {
+			found := false
+			for _,node  := range current {
+				if node.Ip == manifest.Ip {
+					found = true
+				}
+			}
+
+			if !found {
+				need_create = append(need_create, manifest)
+			}
+		}
+
+		for _,manifest  := range current {
+			found := false
+			for _,node  := range desired {
+				if node.Ip == manifest.Ip {
+					found = true
+				}
+			}
+
+			if !found {
+				need_remove = append(need_remove, manifest)
+			}
+		}
+
+		for _,create  := range need_create {
+			if node,err := NewNode(create); err != nil {
+				log.PushLog("failed to init node %s",err.Error())
+			} else {
+				impl.nodes = append(impl.nodes, node)
+			}
+		}
+		for _,rm := range need_remove {
+			if err := rm.Deinit(); err != nil {
+				log.PushLog("failed to deinit node %s",err.Error())
+			}
+			
+		}
+
+		return nil
+	}
+
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			if manifest, err := fetch_content(); err != nil {
+				log.PushLog("failed to fetch manifest %s", err.Error())
+			} else {
+				impl.ClusterConfigManifest = manifest
+			}
+
+			if err := sync_nodes(); err != nil {
+				log.PushLog("failed to sync node %s", err.Error())
+			}
+		}
+	}()
+
+	manifest, err := fetch_content()
+	if err != nil {
+		return nil, err
+	}
+
+	impl.ClusterConfigManifest = manifest
+	return impl, nil
 }
 
 func (impl *ClusterConfigImpl) Interface() string {
@@ -45,16 +169,35 @@ func (impl *ClusterConfigImpl) Deinit() {
 	}
 }
 
-type NodeImpl struct {
+type NodeManifest struct {
 	Ip       string `yaml:"ip"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 	Role     string `yaml:"role"`
+}
+
+type NodeImpl struct {
+	NodeManifest
 
 	client     *goph.Client
 	httpclient *http.Client
 	cancel     *context.CancelFunc
 	internal   packet.WorkerInfor
+}
+
+func NewNode(manifest NodeManifest) (*NodeImpl,error) {
+	impl := &NodeImpl{
+		NodeManifest: manifest,
+	}
+
+	if err := impl.setupNode();err != nil {
+		return nil,err
+	}
+
+	return impl,nil
+}
+func (impl *NodeImpl) Deinit() error {
+	return nil
 }
 
 // GPUs implements Node.
@@ -85,10 +228,6 @@ func (node *NodeImpl) Sessions() []*packet.WorkerSession {
 // Volumes implements Node.
 func (node *NodeImpl) Volumes() []string {
 	return node.internal.Volumes
-}
-
-func NewNode() (Node, error) {
-	return &NodeImpl{}, nil
 }
 
 func (node *NodeImpl) Query() error {
