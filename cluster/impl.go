@@ -55,8 +55,8 @@ type ClusterConfigImpl struct {
 	ClusterConfigManifest
 	manifest_path string
 
-	nodes         []*NodeImpl
-	mut           *sync.Mutex
+	nodes []*NodeImpl
+	mut   *sync.Mutex
 }
 
 func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
@@ -82,12 +82,11 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		desired := impl.ClusterConfigManifest.Nodes
 		current := impl.nodes
 
-
 		need_create := []NodeManifest{}
 		need_remove := []*NodeImpl{}
-		for _,manifest  := range desired {
+		for _, manifest := range desired {
 			found := false
-			for _,node  := range current {
+			for _, node := range current {
 				if node.Ip == manifest.Ip {
 					found = true
 				}
@@ -98,9 +97,9 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			}
 		}
 
-		for _,manifest  := range current {
+		for _, manifest := range current {
 			found := false
-			for _,node  := range desired {
+			for _, node := range desired {
 				if node.Ip == manifest.Ip {
 					found = true
 				}
@@ -111,18 +110,18 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			}
 		}
 
-		for _,create  := range need_create {
-			if node,err := NewNode(create); err != nil {
-				log.PushLog("failed to init node %s",err.Error())
+		for _, create := range need_create {
+			if node, err := NewNode(create); err != nil {
+				log.PushLog("failed to init node %s", err.Error())
 			} else {
 				impl.nodes = append(impl.nodes, node)
 			}
 		}
-		for _,rm := range need_remove {
+		for _, rm := range need_remove {
 			if err := rm.Deinit(); err != nil {
-				log.PushLog("failed to deinit node %s",err.Error())
+				log.PushLog("failed to deinit node %s", err.Error())
 			}
-			
+
 		}
 
 		return nil
@@ -179,24 +178,42 @@ type NodeManifest struct {
 type NodeImpl struct {
 	NodeManifest
 
+	active bool
+
 	client     *goph.Client
 	httpclient *http.Client
 	cancel     *context.CancelFunc
 	internal   packet.WorkerInfor
 }
 
-func NewNode(manifest NodeManifest) (*NodeImpl,error) {
+func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 	impl := &NodeImpl{
 		NodeManifest: manifest,
+		active:       true,
 	}
 
-	if err := impl.setupNode();err != nil {
-		return nil,err
+	if err := impl.setupNode(); err != nil {
+		return nil, err
 	}
 
-	return impl,nil
+	err := (error)(nil)
+	now := func() int64 { return time.Now().Unix() }
+	start := now()
+	for now()-start < 60 {
+		time.Sleep(time.Second)
+		if err = impl.Query(); err != nil {
+			log.PushLog("failed to query new node %s", err.Error())
+		} else {
+			log.PushLog("new node successfully")
+			return impl, nil
+		}
+	}
+
+	return nil, fmt.Errorf("timeout query new node")
 }
 func (impl *NodeImpl) Deinit() error {
+	(*impl.cancel)()
+	impl.active = false
 	return nil
 }
 
@@ -231,6 +248,10 @@ func (node *NodeImpl) Volumes() []string {
 }
 
 func (node *NodeImpl) Query() error {
+	if !node.active {
+		return fmt.Errorf("node is not active")
+	}
+
 	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
 	if err != nil {
 		return err
