@@ -77,7 +77,12 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 
 	sync_nodes := func() error {
 		impl.mut.Lock()
-		defer impl.mut.Unlock()
+		defer func() {
+			impl.mut.Unlock()
+			if err := recover(); err != nil {
+				log.PushLog("panic in sync_nodes thread : %v", err)
+			}
+		}()
 
 		desired := impl.ClusterConfigManifest.Nodes
 		current := impl.nodes
