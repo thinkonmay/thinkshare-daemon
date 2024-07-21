@@ -64,6 +64,7 @@ type ClusterConfigImpl struct {
 func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 	impl := &ClusterConfigImpl{
 		nodes: []*NodeImpl{},
+		mut:   &sync.Mutex{},
 	}
 
 	fetch_content := func() (ClusterConfigManifest, error) {
@@ -120,14 +121,27 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			if node, err := NewNode(create); err != nil {
 				log.PushLog("failed to init node %s", err.Error())
 			} else {
+				log.PushLog("new node successfully added %s", node.Name())
 				impl.nodes = append(impl.nodes, node)
 			}
 		}
 		for _, rm := range need_remove {
 			if err := rm.Deinit(); err != nil {
-				log.PushLog("failed to deinit node %s", err.Error())
+				log.PushLog("failed to deinit node %s %s", rm.Name(), err.Error())
+			} else {
+				log.PushLog("deinited node %s", rm.Name())
 			}
 
+			replace := []*NodeImpl{}
+			for _, node := range impl.nodes {
+				if node.Name() == rm.Name() {
+					continue
+				}
+
+				replace = append(replace, node)
+			}
+
+			impl.nodes = replace
 		}
 
 		return nil
@@ -170,16 +184,29 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 
 		for _, create := range need_create {
 			if node, err := NewPeer(create); err != nil {
-				log.PushLog("failed to init node %s", err.Error())
+				log.PushLog("failed to init peer %s", err.Error())
 			} else {
+				log.PushLog("new node successfully added %s", node.Name())
 				impl.peers = append(impl.peers, node)
 			}
 		}
 		for _, rm := range need_remove {
 			if err := rm.Deinit(); err != nil {
-				log.PushLog("failed to deinit node %s", err.Error())
+				log.PushLog("failed to deinit peer %s %s", rm.Name(), err.Error())
+			} else {
+				log.PushLog("deinited peer %s", rm.Name())
 			}
 
+			replace := []*PeerImpl{}
+			for _, node := range impl.peers {
+				if node.Name() == rm.Name() {
+					continue
+				}
+
+				replace = append(replace, node)
+			}
+
+			impl.peers = replace
 		}
 
 		return nil
@@ -204,12 +231,20 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		}
 	}()
 
-	manifest, err := fetch_content()
+	err := (error)(nil)
+	impl.ClusterConfigManifest, err = fetch_content()
 	if err != nil {
 		return nil, err
 	}
 
-	impl.ClusterConfigManifest = manifest
+	if err := sync_nodes(); err != nil {
+		return nil, err
+	}
+
+	if err := sync_peers(); err != nil {
+		return nil, err
+	}
+
 	return impl, nil
 }
 
@@ -224,6 +259,10 @@ func (impl *ClusterConfigImpl) Nodes() (ns []Node) {
 	return
 }
 func (impl *ClusterConfigImpl) Peers() (ns []Peer) {
+	ns = []Peer{}
+	for _, n := range impl.peers {
+		ns = append(ns, n)
+	}
 	return
 }
 
@@ -238,7 +277,6 @@ type NodeManifest struct {
 	Ip       string `yaml:"ip"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
-	Role     string `yaml:"role"`
 }
 type PeerManifest struct {
 	Ip string `yaml:"ip"`
@@ -273,7 +311,6 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 		if err = impl.Query(); err != nil {
 			log.PushLog("failed to query new node %s", err.Error())
 		} else {
-			log.PushLog("new node successfully")
 			return impl, nil
 		}
 	}
@@ -469,7 +506,6 @@ func NewPeer(manifest PeerManifest) (*PeerImpl, error) {
 		if err = impl.Query(); err != nil {
 			log.PushLog("failed to query new node %s", err.Error())
 		} else {
-			log.PushLog("new node successfully")
 			return impl, nil
 		}
 	}
