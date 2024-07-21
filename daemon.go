@@ -81,6 +81,10 @@ func WebDaemon(persistent persistent.Persistent,
 		}),
 	}
 
+	if daemon.cluster, err = cluster.NewClusterConfig(cluster_path); err != nil {
+		log.PushLog("fail to config cluster %s", err.Error())
+	}
+
 	if memory, handle, def, err := AllocateSharedMemory(); err != nil {
 		log.PushLog("fail to create shared memory %s", err.Error())
 	} else {

@@ -221,14 +221,14 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 		for len(cancel) == 0 {
 			time.Sleep(time.Second * 1)
 			very_quick_client.Post(
-				fmt.Sprintf("%s/_new", node.RequestBaseURL(), Httpport),
+				fmt.Sprintf("%s/_new", node.RequestBaseURL()),
 				"application/json",
 				strings.NewReader(string(b)))
 		}
 	}()
 
 	resp, err := slow_client.Post(
-		fmt.Sprintf("%s/new", node.RequestBaseURL(), Httpport),
+		fmt.Sprintf("%s/new", node.RequestBaseURL()),
 		"application/json",
 		strings.NewReader(string(b)))
 	if err != nil {
@@ -425,7 +425,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 
 			b, _ := json.Marshal(ss)
 			resp, err := slow_client.Post(
-				fmt.Sprintf("%s/%s", node.RequestBaseURL(), Httpport, command),
+				fmt.Sprintf("%s/%s", node.RequestBaseURL(), command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
