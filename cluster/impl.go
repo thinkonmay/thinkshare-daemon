@@ -49,6 +49,7 @@ func init() {
 
 type ClusterConfigManifest struct {
 	Nodes []NodeManifest `yaml:"nodes"`
+	Peers []PeerManifest `yaml:"peers"`
 	Local Host           `yaml:"local"`
 }
 type ClusterConfigImpl struct {
@@ -166,6 +167,10 @@ func (impl *ClusterConfigImpl) Nodes() (ns []Node) {
 	}
 	return
 }
+func (impl *ClusterConfigImpl) Peers() (ns []Peer) {
+	return
+}
+
 func (impl *ClusterConfigImpl) Deinit() {
 	for _, node := range impl.nodes {
 		cancel := *node.cancel
@@ -178,6 +183,9 @@ type NodeManifest struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 	Role     string `yaml:"role"`
+}
+type PeerManifest struct {
+	Ip string `yaml:"ip"`
 }
 
 type NodeImpl struct {
@@ -379,5 +387,99 @@ func (node *NodeImpl) setupNode() error {
 			time.Sleep(time.Second * 10)
 		}
 	}()
+	return nil
+}
+
+type PeerImpl struct {
+	NodeManifest
+
+	active bool
+
+	httpclient *http.Client
+	internal   packet.WorkerInfor
+}
+
+func NewPeer(manifest NodeManifest) (*PeerImpl, error) {
+	impl := &PeerImpl{
+		NodeManifest: manifest,
+		active:       true,
+	}
+
+	err := (error)(nil)
+	now := func() int64 { return time.Now().Unix() }
+	start := now()
+	for now()-start < 60 {
+		time.Sleep(time.Second)
+		if err = impl.Query(); err != nil {
+			log.PushLog("failed to query new node %s", err.Error())
+		} else {
+			log.PushLog("new node successfully")
+			return impl, nil
+		}
+	}
+
+	return nil, fmt.Errorf("timeout query new node")
+}
+func (impl *PeerImpl) Deinit() error {
+	impl.active = false
+	return nil
+}
+
+// GPUs implements Node.
+func (node *PeerImpl) GPUs() []string {
+	return node.internal.GPUs
+}
+
+// Name implements Node.
+func (node *PeerImpl) Name() string {
+	return node.Ip
+}
+
+// RequestBaseURL implements Node.
+func (node *PeerImpl) RequestBaseURL() string {
+	return fmt.Sprintf("http://%s:%d", node.Ip, Httpport)
+}
+
+// RequestClient implements Node.
+func (node *PeerImpl) RequestClient() *http.Client {
+	return node.httpclient
+}
+
+// Sessions implements Node.
+func (node *PeerImpl) Sessions() []*packet.WorkerSession {
+	return node.internal.Sessions
+}
+
+// Volumes implements Node.
+func (node *PeerImpl) Volumes() []string {
+	return node.internal.Volumes
+}
+
+func (node *PeerImpl) Query() error {
+	if !node.active {
+		return fmt.Errorf("node is not active")
+	}
+
+	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
+	if err != nil {
+		return err
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		return fmt.Errorf(string(b))
+	}
+
+	ss := packet.WorkerInfor{}
+	err = json.Unmarshal(b, &ss)
+	if err != nil {
+		return err
+	} else if ss.PrivateIP == nil || ss.PublicIP == nil {
+		return fmt.Errorf("nil ip")
+	}
+
+	node.internal = ss
 	return nil
 }
