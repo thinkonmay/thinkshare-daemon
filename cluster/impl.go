@@ -57,6 +57,7 @@ type ClusterConfigImpl struct {
 	manifest_path string
 
 	nodes []*NodeImpl
+	peers []*PeerImpl
 	mut   *sync.Mutex
 }
 
@@ -72,10 +73,9 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		}
 
 		manifest := ClusterConfigManifest{}
-		err = yaml.Unmarshal(content, manifest)
+		err = yaml.Unmarshal(content, &manifest)
 		return manifest, err
 	}
-
 	sync_nodes := func() error {
 		impl.mut.Lock()
 		defer func() {
@@ -133,6 +133,58 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		return nil
 	}
 
+	sync_peers := func() error {
+		impl.mut.Lock()
+		defer impl.mut.Unlock()
+
+		desired := impl.ClusterConfigManifest.Peers
+		current := impl.peers
+
+		need_create := []PeerManifest{}
+		need_remove := []*PeerImpl{}
+		for _, manifest := range desired {
+			found := false
+			for _, node := range current {
+				if node.Ip == manifest.Ip {
+					found = true
+				}
+			}
+
+			if !found {
+				need_create = append(need_create, manifest)
+			}
+		}
+
+		for _, manifest := range current {
+			found := false
+			for _, node := range desired {
+				if node.Ip == manifest.Ip {
+					found = true
+				}
+			}
+
+			if !found {
+				need_remove = append(need_remove, manifest)
+			}
+		}
+
+		for _, create := range need_create {
+			if node, err := NewPeer(create); err != nil {
+				log.PushLog("failed to init node %s", err.Error())
+			} else {
+				impl.peers = append(impl.peers, node)
+			}
+		}
+		for _, rm := range need_remove {
+			if err := rm.Deinit(); err != nil {
+				log.PushLog("failed to deinit node %s", err.Error())
+			}
+
+		}
+
+		return nil
+	}
+
 	go func() {
 		for {
 			time.Sleep(time.Second)
@@ -143,6 +195,10 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			}
 
 			if err := sync_nodes(); err != nil {
+				log.PushLog("failed to sync node %s", err.Error())
+			}
+
+			if err := sync_peers(); err != nil {
 				log.PushLog("failed to sync node %s", err.Error())
 			}
 		}
@@ -391,7 +447,7 @@ func (node *NodeImpl) setupNode() error {
 }
 
 type PeerImpl struct {
-	NodeManifest
+	PeerManifest
 
 	active bool
 
@@ -399,9 +455,9 @@ type PeerImpl struct {
 	internal   packet.WorkerInfor
 }
 
-func NewPeer(manifest NodeManifest) (*PeerImpl, error) {
+func NewPeer(manifest PeerManifest) (*PeerImpl, error) {
 	impl := &PeerImpl{
-		NodeManifest: manifest,
+		PeerManifest: manifest,
 		active:       true,
 	}
 
