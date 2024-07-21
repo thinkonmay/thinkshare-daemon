@@ -11,21 +11,21 @@ type Host struct {
 }
 type Node interface {
 	Name() string
-	RequestClient() *http.Client
-	RequestBaseURL() string
-	Volumes() []string
-	GPUs() []string
-	Sessions() []*packet.WorkerSession
+	RequestClient() (*http.Client, error)
+	RequestBaseURL() (string, error)
+	Volumes() ([]string, error)
+	GPUs() ([]string, error)
+	Sessions() ([]*packet.WorkerSession, error)
 	Query() error
 }
 
 type Peer interface {
 	Name() string
-	RequestClient() *http.Client
-	RequestBaseURL() string
-	Volumes() []string
-	GPUs() []string
-	Sessions() []*packet.WorkerSession
+	RequestClient() (*http.Client, error)
+	RequestBaseURL() (string, error)
+	Volumes() ([]string, error)
+	GPUs() ([]string, error)
+	Sessions() ([]*packet.WorkerSession, error)
 	Query() error
 }
 

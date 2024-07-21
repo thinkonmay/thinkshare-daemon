@@ -25,13 +25,19 @@ func TestCluster(t *testing.T) {
 	for {
 		for _, node := range config.Nodes() {
 			node.Query()
-			gpus := node.GPUs()
-			fmt.Printf("%v\n", gpus)
+			if gpus, err := node.GPUs(); err != nil {
+				fmt.Printf("%v\n", err.Error())
+			} else {
+				fmt.Printf("%v\n", gpus)
+			}
 		}
 		for _, node := range config.Peers() {
 			node.Query()
-			gpus := node.GPUs()
-			fmt.Printf("%v\n", gpus)
+			if gpus, err := node.GPUs(); err != nil {
+				fmt.Printf("%v\n", err.Error())
+			} else {
+				fmt.Printf("%v\n", gpus)
+			}
 		}
 		time.Sleep(time.Second)
 	}

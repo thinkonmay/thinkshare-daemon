@@ -285,7 +285,8 @@ type PeerManifest struct {
 type NodeImpl struct {
 	NodeManifest
 
-	active bool
+	active       bool
+	connectError error
 
 	client     *goph.Client
 	httpclient *http.Client
@@ -324,8 +325,11 @@ func (impl *NodeImpl) Deinit() error {
 }
 
 // GPUs implements Node.
-func (node *NodeImpl) GPUs() []string {
-	return node.internal.GPUs
+func (node *NodeImpl) GPUs() ([]string, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to get gpu: connection Error %s", node.connectError)
+	}
+	return node.internal.GPUs, nil
 }
 
 // Name implements Node.
@@ -334,29 +338,43 @@ func (node *NodeImpl) Name() string {
 }
 
 // RequestBaseURL implements Node.
-func (node *NodeImpl) RequestBaseURL() string {
-	return fmt.Sprintf("http://%s:%d", node.Ip, Httpport)
+func (node *NodeImpl) RequestBaseURL() (string, error) {
+	if node.connectError != nil {
+		return "", fmt.Errorf("failed to get base URL : connection Error %s", node.connectError)
+	}
+	return fmt.Sprintf("http://%s:%d", node.Ip, Httpport), nil
 }
 
 // RequestClient implements Node.
-func (node *NodeImpl) RequestClient() *http.Client {
-	return node.httpclient
+func (node *NodeImpl) RequestClient() (*http.Client, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to request client: connection Error %s", node.connectError)
+	}
+	return node.httpclient, nil
 }
 
 // Sessions implements Node.
-func (node *NodeImpl) Sessions() []*packet.WorkerSession {
-	return node.internal.Sessions
+func (node *NodeImpl) Sessions() ([]*packet.WorkerSession, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to get sessions : connection Error %s", node.connectError)
+	}
+	return node.internal.Sessions, nil
 }
 
 // Volumes implements Node.
-func (node *NodeImpl) Volumes() []string {
-	return node.internal.Volumes
+func (node *NodeImpl) Volumes() ([]string, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to volumes : connection Error %s", node.connectError)
+	}
+	return node.internal.Volumes, nil
 }
 
-func (node *NodeImpl) Query() error {
+func (node *NodeImpl) Query() (err error) {
 	if !node.active {
 		return fmt.Errorf("node is not active")
 	}
+
+	defer func() { node.connectError = err }()
 
 	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
 	if err != nil {
@@ -486,7 +504,8 @@ func (node *NodeImpl) setupNode() error {
 type PeerImpl struct {
 	PeerManifest
 
-	active bool
+	active       bool
+	connectError error
 
 	httpclient *http.Client
 	internal   packet.WorkerInfor
@@ -504,7 +523,7 @@ func NewPeer(manifest PeerManifest) (*PeerImpl, error) {
 	for now()-start < 60 {
 		time.Sleep(time.Second)
 		if err = impl.Query(); err != nil {
-			log.PushLog("failed to query new node %s", err.Error())
+			log.PushLog("failed to query new peer %s", err.Error())
 		} else {
 			return impl, nil
 		}
@@ -518,8 +537,12 @@ func (impl *PeerImpl) Deinit() error {
 }
 
 // GPUs implements Node.
-func (node *PeerImpl) GPUs() []string {
-	return node.internal.GPUs
+func (node *PeerImpl) GPUs() ([]string, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to get gpus : connection Error %s", node.connectError)
+	}
+
+	return node.internal.GPUs, nil
 }
 
 // Name implements Node.
@@ -528,29 +551,43 @@ func (node *PeerImpl) Name() string {
 }
 
 // RequestBaseURL implements Node.
-func (node *PeerImpl) RequestBaseURL() string {
-	return fmt.Sprintf("http://%s:%d", node.Ip, Httpport)
+func (node *PeerImpl) RequestBaseURL() (string, error) {
+	if node.connectError != nil {
+		return "", fmt.Errorf("failed to getBaseURL : connection Error %s", node.connectError)
+	}
+	return fmt.Sprintf("http://%s:%d", node.Ip, Httpport), nil
 }
 
 // RequestClient implements Node.
-func (node *PeerImpl) RequestClient() *http.Client {
-	return node.httpclient
+func (node *PeerImpl) RequestClient() (*http.Client, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to request client: connection Error %s", node.connectError)
+	}
+	return node.httpclient, nil
 }
 
 // Sessions implements Node.
-func (node *PeerImpl) Sessions() []*packet.WorkerSession {
-	return node.internal.Sessions
+func (node *PeerImpl) Sessions() ([]*packet.WorkerSession, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to list volumes: connection Error %s", node.connectError)
+	}
+	return node.internal.Sessions, nil
 }
 
 // Volumes implements Node.
-func (node *PeerImpl) Volumes() []string {
-	return node.internal.Volumes
+func (node *PeerImpl) Volumes() ([]string, error) {
+	if node.connectError != nil {
+		return nil, fmt.Errorf("failed to list volumes: connection Error %s", node.connectError)
+	}
+	return node.internal.Volumes, nil
 }
 
-func (node *PeerImpl) Query() error {
+func (node *PeerImpl) Query() (err error) {
 	if !node.active {
 		return fmt.Errorf("node is not active")
 	}
+
+	defer func() { node.connectError = err }()
 
 	resp, err := quick_client.Get(fmt.Sprintf("http://%s:%d/info", node.Ip, Httpport))
 	if err != nil {

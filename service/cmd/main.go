@@ -14,7 +14,11 @@ import (
 	ws "github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol/websocket"
 )
 
-func Start(cluster_path string, stop chan os.Signal) {
+const (
+	manifest = "./cluster.yaml"
+)
+
+func Start(stop chan os.Signal) {
 	media.ActivateVirtualDriver()
 	defer media.DeactivateVirtualDriver()
 
@@ -40,7 +44,7 @@ func Start(cluster_path string, stop chan os.Signal) {
 
 	log.PushLog("starting worker daemon")
 
-	dm := daemon.WebDaemon(grpc, signaling, cluster)
+	dm := daemon.WebDaemon(grpc, signaling, manifest)
 	defer dm.Close()
 	stop <- <-stop
 }

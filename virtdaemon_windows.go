@@ -7,8 +7,8 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
-func deinit()                                               {}
-func QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor { return *info }
+func deinit()                                                                {}
+func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor { return *info }
 
 func (daemon *Daemon) HandleVirtdaemon(cluster.ClusterConfig) func() { return func() {} }
 func (daemon *Daemon) DeployVM(*packet.WorkerSession, chan bool) (*packet.WorkerInfor, error) {

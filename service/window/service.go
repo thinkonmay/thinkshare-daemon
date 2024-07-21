@@ -156,7 +156,7 @@ func (p *program) Start() error {
 	// The Start method must not block, or Windows may assume your service failed
 	// to start. Launch a Goroutine here to do something interesting/blocking.
 
-	go cmd.Start(nil, p.exit)
+	go cmd.Start(p.exit)
 	return nil
 }
 

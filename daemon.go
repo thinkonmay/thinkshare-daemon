@@ -104,7 +104,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}
 
-	def := daemon.HandleVirtdaemon()
+	def := daemon.HandleVirtdaemon(daemon.cluster)
 	daemon.cleans = append(daemon.cleans, def)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
 		result := daemon.QueryInfo(&daemon.info)
