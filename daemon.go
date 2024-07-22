@@ -63,7 +63,7 @@ type Daemon struct {
 
 func WebDaemon(persistent persistent.Persistent,
 	signaling *signaling.Signaling,
-	cluster_path string,
+	cluster_path, web_path string,
 ) *Daemon {
 	i := (*packet.WorkerInfor)(nil)
 	err := (error)(nil)
@@ -99,7 +99,7 @@ func WebDaemon(persistent persistent.Persistent,
 	}
 
 	if domain := daemon.cluster.Domain(); domain != nil {
-		pocketbase.StartPocketbase(".", []string{*domain})
+		pocketbase.StartPocketbase(web_path, []string{*domain})
 	}
 
 	if memory, handle, def, err := AllocateSharedMemory(); err != nil {

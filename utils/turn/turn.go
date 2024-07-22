@@ -2,6 +2,7 @@ package turn
 
 import (
 	"flag"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -21,9 +22,9 @@ type TurnServer struct {
 }
 
 func Open(username, password string, min_port, max_port, port int) (*TurnServer, error) {
-	ip,err := system.GetPublicIPCurl()
+	ip, err := system.GetPublicIPCurl()
 	if err != nil {
-		return nil ,err
+		return nil, err
 	}
 	s, err := SetupTurn(
 		username, password,
@@ -89,8 +90,7 @@ func SetupTurn(
 	// this allows us to add logging, storage or modify inbound/outbound traffic
 	udpListener, err := net.ListenPacket("udp4", "0.0.0.0:"+strconv.Itoa(port))
 	if err != nil {
-		log.PushLog("Failed to create TURN server listener: %s", err)
-		return nil, err
+		return nil, fmt.Errorf("Failed to create TURN server listener: %s", err)
 	}
 
 	// Cache -users flag for easy lookup later
@@ -113,7 +113,7 @@ func SetupTurn(
 		// This is called every time a user tries to authenticate with the TURN server
 		// Return the key for that user, or false when no user is found
 		AuthHandler: func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
-			log.PushLog("[%s] Incoming TURN: Request from %s", time.Now().Format(time.RFC850), srcAddr.String())
+			// log.PushLog("[%s] Incoming TURN: Request from %s", time.Now().Format(time.RFC850), srcAddr.String())
 			if key, ok := usersMap[username]; ok {
 				return key, true
 			}

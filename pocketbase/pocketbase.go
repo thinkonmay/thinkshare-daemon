@@ -197,7 +197,7 @@ func StartPocketbase(dir string, domain []string) {
 		return nil
 	}
 
-	path, _ := filepath.Abs(fmt.Sprintf("%s/web/dist", dir))
+	path, _ := filepath.Abs(dir)
 	log.PushLog("serving file content at %s", path)
 	dirfs := os.DirFS(path)
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {

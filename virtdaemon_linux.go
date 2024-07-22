@@ -31,7 +31,6 @@ var (
 	lapp              = "./app.qcow2"
 	sidecars          = []string{"lancache", "do-not-delete"}
 	models            = []libvirt.VMLaunchModel{}
-	mut               = &sync.Mutex{}
 
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network

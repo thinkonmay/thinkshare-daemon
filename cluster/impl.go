@@ -211,6 +211,20 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		return nil
 	}
 
+	err := (error)(nil)
+	impl.ClusterConfigManifest, err = fetch_content()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := sync_nodes(); err != nil {
+		return nil, err
+	}
+
+	if err := sync_peers(); err != nil {
+		return nil, err
+	}
+
 	go func() {
 		for {
 			time.Sleep(time.Second)
@@ -225,24 +239,10 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			}
 
 			if err := sync_peers(); err != nil {
-				log.PushLog("failed to sync node %s", err.Error())
+				log.PushLog("failed to sync peer %s", err.Error())
 			}
 		}
 	}()
-
-	err := (error)(nil)
-	impl.ClusterConfigManifest, err = fetch_content()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := sync_nodes(); err != nil {
-		return nil, err
-	}
-
-	if err := sync_peers(); err != nil {
-		return nil, err
-	}
 
 	return impl, nil
 }
@@ -310,7 +310,7 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 	err := (error)(nil)
 	now := func() int64 { return time.Now().Unix() }
 	start := now()
-	for now()-start < 60 {
+	for now()-start < 3*60 {
 		time.Sleep(time.Second)
 		if err = impl.Query(); err != nil {
 			log.PushLog("failed to query new node %s", err.Error())
@@ -412,6 +412,7 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
 	rsize := strings.Split(string(out), "\t")[0]
 	if err == nil && force {
+		log.PushLog("node %s compare   %s : local file size %s, remote file size %s", node.Name(), rfile, lsize, rsize)
 		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
 	}
 	if err != nil || force {
@@ -429,9 +430,9 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 		}
 
 		rsize = strings.Split(string(out), "\t")[0]
+		log.PushLog("node %s overrided %s : local file size %s, remote file size %s", node.Name(), rfile, lsize, rsize)
 	}
 
-	log.PushLog("%s : local file size %s, remote file size %s", rfile, lsize, rsize)
 	return nil
 }
 
