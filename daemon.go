@@ -17,6 +17,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	"github.com/thinkonmay/thinkshare-daemon/persistent"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/pocketbase"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
@@ -85,6 +86,10 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("fail to config cluster %s", err.Error())
 	}
 
+	if domain := daemon.cluster.Domain(); domain != nil {
+		pocketbase.StartPocketbase(".", []string{*domain})
+	}
+
 	if memory, handle, def, err := AllocateSharedMemory(); err != nil {
 		log.PushLog("fail to create shared memory %s", err.Error())
 	} else {
@@ -104,7 +109,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}
 
-	def := daemon.HandleVirtdaemon(daemon.cluster)
+	def := daemon.HandleVirtdaemon()
 	daemon.cleans = append(daemon.cleans, def)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
 		result := daemon.QueryInfo(&daemon.info)

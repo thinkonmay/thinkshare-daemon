@@ -15,9 +15,12 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
-	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+)
+
+const (
+	Httpport = 60000
 )
 
 func StartPocketbase(dir string, domain []string) {
@@ -51,7 +54,7 @@ func StartPocketbase(dir string, domain []string) {
 		req, _ := http.NewRequest(
 			c.Request().Method,
 			fmt.Sprintf("http://localhost:%d%s?%s",
-				daemon.Httpport,
+				Httpport,
 				c.Request().URL.Path,
 				c.Request().URL.RawQuery),
 			strings.NewReader(string(body)))
@@ -132,7 +135,7 @@ func StartPocketbase(dir string, domain []string) {
 		req, _ := http.NewRequest(
 			c.Request().Method,
 			fmt.Sprintf("http://localhost:%d%s?%s",
-				daemon.Httpport, path,
+				Httpport, path,
 				c.Request().URL.RawQuery),
 			strings.NewReader(string(body)))
 
@@ -159,7 +162,6 @@ func StartPocketbase(dir string, domain []string) {
 		c.Response().Write(body)
 		return nil
 	}
-
 
 	// Customize edit manage volume api external
 	handle_manage_volume := func(c echo.Context) (err error) {
@@ -213,7 +215,6 @@ func StartPocketbase(dir string, domain []string) {
 		e.Router.POST("/create_volume", handle_manage_volume, apis.RequireAdminAuth())
 		e.Router.POST("/fetch_node_info", handle_manage_volume, apis.RequireAdminAuth())
 		e.Router.POST("/fetch_node_volume", handle_manage_volume, apis.RequireAdminAuth())
-
 
 		e.Router.GET("/*", apis.StaticDirectoryHandler(dirfs, true))
 		return nil

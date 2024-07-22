@@ -251,6 +251,10 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 func (impl *ClusterConfigImpl) Interface() string {
 	return impl.ClusterConfigManifest.Local.Interface
 }
+func (impl *ClusterConfigImpl) Domain() *string {
+	return impl.ClusterConfigManifest.Local.Domain
+}
+
 func (impl *ClusterConfigImpl) Nodes() (ns []Node) {
 	ns = []Node{}
 	for _, n := range impl.nodes {

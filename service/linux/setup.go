@@ -2,18 +2,14 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
 
-	daemon "github.com/thinkonmay/thinkshare-daemon"
-	"github.com/thinkonmay/thinkshare-daemon/pocketbase"
 	"github.com/thinkonmay/thinkshare-daemon/service/cmd"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-	"gopkg.in/yaml.v2"
 )
 
 func main() {
@@ -33,34 +29,8 @@ func main() {
 		defer log.RemoveCallback(i)
 	}
 
-	cluster := &daemon.ClusterConfig{}
-	if files, err := os.ReadFile(fmt.Sprintf("%s/cluster.yaml", dir)); err != nil {
-		log.PushLog("failed to read cluster.yaml %s", err.Error())
-		if ifaces, err := net.Interfaces(); err == nil {
-			for _, local_if := range ifaces {
-				if local_if.Flags&net.FlagLoopback > 0 ||
-					local_if.Flags&net.FlagRunning == 0 {
-					continue
-				}
-
-				cluster = &daemon.ClusterConfig{
-					Nodes: []daemon.Node{},
-					Local: daemon.Host{Interface: local_if.Name},
-				}
-				break
-			}
-		}
-	} else {
-		pocketbase.StartPocketbase(dir, []string{"play.thinkmay.net"})
-		err = yaml.Unmarshal(files, cluster)
-		if err != nil {
-			log.PushLog("failed to read cluster.yaml %s", err.Error())
-			cluster = nil
-		}
-	}
-
 	chann := make(chan os.Signal, 16)
-	go cmd.Start(cluster, chann)
+	go cmd.Start(chann)
 
 	signal.Notify(chann, syscall.SIGTERM, os.Interrupt)
 	chann <- <-chann

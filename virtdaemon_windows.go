@@ -3,14 +3,13 @@ package daemon
 import (
 	"fmt"
 
-	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
 func deinit()                                                                {}
 func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor { return *info }
 
-func (daemon *Daemon) HandleVirtdaemon(cluster.ClusterConfig) func() { return func() {} }
+func (daemon *Daemon) HandleVirtdaemon() func() { return func() {} }
 func (daemon *Daemon) DeployVM(*packet.WorkerSession, chan bool) (*packet.WorkerInfor, error) {
 	return nil, fmt.Errorf("window VM not available")
 }

@@ -217,18 +217,23 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 	log.PushLog("deploying VM on node %s", node.Name())
 	b, _ := json.Marshal(nss)
 
+	url, err := node.RequestBaseURL()
+	if err != nil {
+		return nil, err
+	}
+
 	go func() {
 		for len(cancel) == 0 {
 			time.Sleep(time.Second * 1)
 			very_quick_client.Post(
-				fmt.Sprintf("%s/_new", node.RequestBaseURL()),
+				fmt.Sprintf("%s/_new", url),
 				"application/json",
 				strings.NewReader(string(b)))
 		}
 	}()
 
 	resp, err := slow_client.Post(
-		fmt.Sprintf("%s/new", node.RequestBaseURL()),
+		fmt.Sprintf("%s/new", url),
 		"application/json",
 		strings.NewReader(string(b)))
 	if err != nil {
@@ -269,7 +274,12 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan 
 	}
 
 	for _, node := range daemon.cluster.Nodes() {
-		for _, remote := range node.Volumes() {
+		volumes, err := node.Volumes()
+		if err != nil {
+			log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+			continue
+		}
+		for _, remote := range volumes {
 			if remote == volume_id {
 				session, err := daemon.DeployVMonNode(node, nss, cancel)
 				return session, nil, err
@@ -329,7 +339,13 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 
 	if ss.Target == nil {
 		for _, node := range daemon.cluster.Nodes() {
-			for _, session := range node.Sessions() {
+			sessions, err := node.Sessions()
+			if err != nil {
+				log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+				continue
+			}
+
+			for _, session := range sessions {
 				if session.Id != ss.Id {
 					continue
 				}
@@ -337,8 +353,15 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 				log.PushLog("forwarding command %s to node %s", command, node.Name())
 
 				b, _ := json.Marshal(ss)
+
+				url, err := node.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+					continue
+				}
+
 				resp, err := slow_client.Post(
-					fmt.Sprintf("%s/%s", node.RequestBaseURL(), command),
+					fmt.Sprintf("%s/%s", url, command),
 					"application/json",
 					strings.NewReader(string(b)))
 				if err != nil {
@@ -413,7 +436,13 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 	}
 
 	for _, node := range daemon.cluster.Nodes() {
-		for _, session := range node.Sessions() {
+		sessions, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+			return nil, err
+		}
+
+		for _, session := range sessions {
 			if session == nil ||
 				session.Id != *ss.Target ||
 				session.Vm == nil ||
@@ -424,8 +453,15 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Name(), *session.Vm.PrivateIP)
 
 			b, _ := json.Marshal(ss)
+
+			url, err := node.RequestBaseURL()
+			if err != nil {
+				log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+				continue
+			}
+
 			resp, err := slow_client.Post(
-				fmt.Sprintf("%s/%s", node.RequestBaseURL(), command),
+				fmt.Sprintf("%s/%s", url, command),
 				"application/json",
 				strings.NewReader(string(b)))
 			if err != nil {
@@ -469,9 +505,20 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 		}
 	}
 	for _, node := range daemon.cluster.Nodes() {
-		for _, s := range node.Sessions() {
+		sessions, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore signaling session on node %s %s", node.Name(), err.Error())
+			continue
+		}
+
+		for _, s := range sessions {
 			if s.Id == token && s.Vm != nil {
-				addr := node.RequestBaseURL()
+				addr, err := node.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore signaling session on node %s %s", node.Name(), err.Error())
+					continue
+				}
+
 				return &addr, false
 			}
 
@@ -639,9 +686,25 @@ func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 
 	for _, node := range daemon.cluster.Nodes() {
-		cp.Sessions = append(cp.Sessions, node.Sessions()...)
-		cp.GPUs = append(cp.GPUs, node.GPUs()...)
-		cp.Volumes = append(cp.Volumes, node.Volumes()...)
+		ss, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		gpus, err := node.GPUs()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		volumes, err := node.Volumes()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+
+		cp.Sessions = append(cp.Sessions, ss...)
+		cp.GPUs = append(cp.GPUs, gpus...)
+		cp.Volumes = append(cp.Volumes, volumes...)
 	}
 
 	return cp

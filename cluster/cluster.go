@@ -7,7 +7,8 @@ import (
 )
 
 type Host struct {
-	Interface string `yaml:"interface"`
+	Interface string  `yaml:"interface"`
+	Domain    *string `yaml:"domain"`
 }
 type Node interface {
 	Name() string
@@ -31,6 +32,7 @@ type Peer interface {
 
 type ClusterConfig interface {
 	Interface() string
+	Domain() *string
 	Nodes() []Node
 	Peers() []Peer
 	Deinit()
