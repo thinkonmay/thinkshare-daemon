@@ -464,6 +464,19 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		}(session, channel)
 	}
 
+	for _, peer := range daemon.cluster.Peers() {
+		channel := make(chan error)
+		jobs = append(jobs, channel)
+		go func(s cluster.Node, c chan error) {
+			defer func() {
+				if err := recover(); err != nil {
+					c <- fmt.Errorf("panic occurred: %v", err)
+				}
+			}()
+			c <- peer.Query()
+		}(peer, channel)
+	}
+
 	for _, node := range daemon.cluster.Nodes() {
 		channel := make(chan error)
 		jobs = append(jobs, channel)
@@ -587,6 +600,59 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 				return &nss, nil
 			}
 		}
+
+		for _, peer := range daemon.cluster.Peers() {
+			sessions, err := peer.Sessions()
+			if err != nil {
+				log.PushLog("ignore session fwd on peer %s %s", peer.Name(), err.Error())
+				continue
+			}
+
+			for _, session := range sessions {
+				if session.Id != ss.Id {
+					continue
+				}
+
+				log.PushLog("forwarding command %s to peer %s", command, peer.Name())
+
+				b, _ := json.Marshal(ss)
+
+				url, err := peer.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore session fwd on peer %s %s", peer.Name(), err.Error())
+					continue
+				}
+
+				resp, err := slow_client.Post(
+					fmt.Sprintf("%s/%s", url, command),
+					"application/json",
+					strings.NewReader(string(b)))
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				b, err = io.ReadAll(resp.Body)
+				if err != nil {
+					log.PushLog(err.Error())
+					continue
+				}
+				if resp.StatusCode != 200 {
+					log.PushLog("failed to request %s", string(b))
+					continue
+				}
+
+				nss := packet.WorkerSession{}
+				err = json.Unmarshal(b, &nss)
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				return &nss, nil
+			}
+		}
+
 		return nil, fmt.Errorf("no session found on any node")
 	}
 
@@ -655,6 +721,61 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			url, err := node.RequestBaseURL()
 			if err != nil {
 				log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+				continue
+			}
+
+			resp, err := slow_client.Post(
+				fmt.Sprintf("%s/%s", url, command),
+				"application/json",
+				strings.NewReader(string(b)))
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			b, err = io.ReadAll(resp.Body)
+			if err != nil {
+				log.PushLog("failed to parse request %s", err.Error())
+				continue
+			}
+			if resp.StatusCode != 200 {
+				log.PushLog("failed to request %s", string(b))
+				continue
+			}
+
+			nss := packet.WorkerSession{}
+			err = json.Unmarshal(b, &nss)
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			return &nss, nil
+		}
+	}
+
+	for _, peer := range daemon.cluster.Peers() {
+		sessions, err := peer.Sessions()
+		if err != nil {
+			log.PushLog("ignore session fwd on node %s %s", peer.Name(), err.Error())
+			return nil, err
+		}
+
+		for _, session := range sessions {
+			if session == nil ||
+				session.Id != *ss.Target ||
+				session.Vm == nil ||
+				session.Vm.PrivateIP == nil {
+				continue
+			}
+
+			log.PushLog("forwarding command %s to node %s, vm %s", command, peer.Name(), *session.Vm.PrivateIP)
+
+			b, _ := json.Marshal(ss)
+
+			url, err := peer.RequestBaseURL()
+			if err != nil {
+				log.PushLog("ignore session fwd on node %s %s", peer.Name(), err.Error())
 				continue
 			}
 
