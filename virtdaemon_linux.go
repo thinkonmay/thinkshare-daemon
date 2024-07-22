@@ -22,7 +22,6 @@ import (
 
 var (
 	very_quick_client = http.Client{Timeout: time.Second}
-	slow_client       = http.Client{Timeout: time.Hour * 24}
 	local_queue       = []string{}
 	local_queue_mut   = &sync.Mutex{}
 
@@ -332,8 +331,6 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 	return fmt.Errorf("vm not found")
 }
 
-
-
 func querySession(session *packet.WorkerSession) error {
 	if session == nil ||
 		session.Vm == nil ||
@@ -485,8 +482,6 @@ func queryLocal(info *packet.WorkerInfor) error {
 
 	return nil
 }
-
-
 
 func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 	chain_app := libvirt.NewVolume(app)

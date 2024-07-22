@@ -26,7 +26,6 @@ const (
 var (
 	very_quick_client = http.Client{Timeout: time.Second}
 	quick_client      = http.Client{Timeout: 5 * time.Second}
-	slow_client       = http.Client{Timeout: time.Hour * 24}
 	local_queue       = []string{}
 	local_queue_mut   = &sync.Mutex{}
 

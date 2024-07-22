@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os/exec"
 	"strings"
 	"sync"
@@ -31,6 +32,10 @@ import (
 
 const (
 	Httpport = 60000
+)
+
+var (
+	slow_client = http.Client{Timeout: time.Hour * 24}
 )
 
 type internalWorkerSession struct {
@@ -382,10 +387,6 @@ func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childproc
 }
 
 func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
-	if !libvirt_available {
-		return nil, false
-	}
-
 	for _, s := range daemon.WorkerInfor.Sessions {
 		if s.Id == token && s.Vm != nil {
 			addr := fmt.Sprintf("http://%s:%d", *s.Vm.PrivateIP, cluster.Httpport)
@@ -439,12 +440,6 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 }
 
 func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
-	mut.Lock()
-	defer mut.Unlock()
-	if !libvirt_available {
-		return *info
-	}
-
 	local := make(chan error)
 	jobs := []chan error{local}
 	go func() {
