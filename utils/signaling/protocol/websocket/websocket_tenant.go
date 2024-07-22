@@ -1,8 +1,6 @@
 package ws
 
 import (
-	"fmt"
-
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
 )
 
@@ -29,10 +27,9 @@ func (tenant *HttpTenant) Receive() *packet.SignalingMessage {
 }
 
 func (tenant *HttpTenant) Exit() {
-	fmt.Printf("websocket tenant closed\n")
 	tenant.exited = true
-	tenant.Incoming<-nil
+	tenant.Incoming <- nil
 }
 func (tenant *HttpTenant) IsExited() bool {
-	return tenant.exited 
+	return tenant.exited
 }

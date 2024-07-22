@@ -412,7 +412,6 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
 	rsize := strings.Split(string(out), "\t")[0]
 	if err == nil && force {
-		log.PushLog("node %s compare   %s : local file size %s, remote file size %s", node.Name(), rfile, lsize, rsize)
 		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
 	}
 	if err != nil || force {
@@ -431,6 +430,8 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 
 		rsize = strings.Split(string(out), "\t")[0]
 		log.PushLog("node %s overrided %s : local file size %s, remote file size %s", node.Name(), rfile, lsize, rsize)
+	} else {
+		log.PushLog("node %s compare   %s : local file size %s, remote file size %s", node.Name(), rfile, lsize, rsize)
 	}
 
 	return nil

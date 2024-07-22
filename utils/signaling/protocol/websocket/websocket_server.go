@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkremote-rtchub/signalling/gRPC/packet"
-	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling/protocol"
 )
 
@@ -94,7 +93,6 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 	wsserver.mut.Unlock()
 
 	if !found {
-		log.PushLog("New signaling tenant %s", token)
 		tenant := NewWsTenant(uniqueid)
 		wsserver.mut.Lock()
 		wsserver.mapid[uniqueid] = tenant
