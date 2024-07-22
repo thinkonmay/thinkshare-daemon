@@ -6,8 +6,11 @@ package daemon
 */
 import "C"
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -37,7 +40,7 @@ type internalWorkerSession struct {
 }
 
 type Daemon struct {
-	info    packet.WorkerInfor
+	packet.WorkerInfor
 	memory  *SharedMemory
 	mhandle string
 	cleans  []func()
@@ -57,22 +60,26 @@ func WebDaemon(persistent persistent.Persistent,
 	signaling *signaling.Signaling,
 	cluster_path string,
 ) *Daemon {
-	i, err := system.GetInfor()
-	if err != nil {
+	i := (*packet.WorkerInfor)(nil)
+	err := (error)(nil)
+	for {
+		if i, err = system.GetInfor(); err == nil {
+			break
+		}
+
 		log.PushLog("failed to get info %s", err.Error())
 		time.Sleep(time.Second)
-		return WebDaemon(persistent, signaling, cluster_path)
 	}
 
 	daemon := &Daemon{
-		mhandle:   "empty",
-		memory:    &SharedMemory{},
-		info:      *i,
-		mutex:     &sync.Mutex{},
-		cleans:    []func(){},
-		session:   map[string]*internalWorkerSession{},
-		persist:   persistent,
-		signaling: signaling,
+		mhandle:     "empty",
+		memory:      &SharedMemory{},
+		WorkerInfor: *i,
+		mutex:       &sync.Mutex{},
+		cleans:      []func(){},
+		session:     map[string]*internalWorkerSession{},
+		persist:     persistent,
+		signaling:   signaling,
 		childprocess: childprocess.NewChildProcessSystem(func(proc, log string) {
 			fmt.Println(proc + " : " + log)
 			persistent.Log(proc, "childprocess", log)
@@ -112,7 +119,7 @@ func WebDaemon(persistent persistent.Persistent,
 	def := daemon.HandleVirtdaemon()
 	daemon.cleans = append(daemon.cleans, def)
 	daemon.persist.Infor(func() *packet.WorkerInfor {
-		result := daemon.QueryInfo(&daemon.info)
+		result := daemon.QueryInfo(&daemon.WorkerInfor)
 		return &result
 	})
 
@@ -161,7 +168,7 @@ func WebDaemon(persistent persistent.Persistent,
 			process, channel, err = daemon.handleHub(ss)
 		}
 		if ss.Vm != nil {
-			daemon.QueryInfo(&daemon.info)
+			daemon.QueryInfo(&daemon.WorkerInfor)
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
 				if Vm, err := daemon.DeployVM(ss, cancel); err != nil {
 					return nil, err
@@ -197,7 +204,7 @@ func WebDaemon(persistent persistent.Persistent,
 			memory_channel: channel,
 		}
 
-		daemon.info.Sessions = append(daemon.info.Sessions, ss)
+		daemon.WorkerInfor.Sessions = append(daemon.WorkerInfor.Sessions, ss)
 		return ss, nil
 	})
 
@@ -207,7 +214,7 @@ func WebDaemon(persistent persistent.Persistent,
 			return nil
 		}
 
-		daemon.QueryInfo(&daemon.info)
+		daemon.QueryInfo(&daemon.WorkerInfor)
 		log.PushLog("terminating session %s", ss)
 		keys := make([]string, 0, len(daemon.session))
 		for k, _ := range daemon.session {
@@ -224,7 +231,7 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 
 		wss := []*packet.WorkerSession{}
-		for _, v := range daemon.info.Sessions {
+		for _, v := range daemon.WorkerInfor.Sessions {
 			if ss.Id == v.Id {
 				ws = v
 			} else {
@@ -232,7 +239,7 @@ func WebDaemon(persistent persistent.Persistent,
 			}
 		}
 
-		daemon.info.Sessions = wss
+		daemon.WorkerInfor.Sessions = wss
 
 		if ws != nil {
 			if ws.Display != nil {
@@ -275,7 +282,7 @@ func (daemon *Daemon) Close() {
 	}
 	daemon.childprocess.CloseAll()
 	log.RemoveCallback(daemon.log)
-	for _, ws := range daemon.info.Sessions {
+	for _, ws := range daemon.WorkerInfor.Sessions {
 		if ws.Display != nil {
 			if ws.Display.DisplayIndex != nil {
 				media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
@@ -372,4 +379,319 @@ func (daemon *Daemon) handleSunshine(current *packet.WorkerSession) ([]childproc
 	}
 
 	return []childprocess.ProcessID{id}, nil
+}
+
+func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
+	if !libvirt_available {
+		return nil, false
+	}
+
+	for _, s := range daemon.WorkerInfor.Sessions {
+		if s.Id == token && s.Vm != nil {
+			addr := fmt.Sprintf("http://%s:%d", *s.Vm.PrivateIP, cluster.Httpport)
+			return &addr, true
+		}
+	}
+
+	for _, node := range daemon.cluster.Nodes() {
+		sessions, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore signaling session on node %s %s", node.Name(), err.Error())
+			continue
+		}
+
+		for _, s := range sessions {
+			if s.Id == token && s.Vm != nil {
+				addr, err := node.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore signaling session on node %s %s", node.Name(), err.Error())
+					continue
+				}
+
+				return &addr, false
+			}
+
+		}
+	}
+
+	for _, peer := range daemon.cluster.Peers() {
+		sessions, err := peer.Sessions()
+		if err != nil {
+			log.PushLog("ignore signaling session on node %s %s", peer.Name(), err.Error())
+			continue
+		}
+
+		for _, s := range sessions {
+			if s.Id == token && s.Vm != nil {
+				addr, err := peer.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore signaling session on node %s %s", peer.Name(), err.Error())
+					continue
+				}
+
+				return &addr, false
+			}
+
+		}
+	}
+
+	return nil, false
+}
+
+func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
+	mut.Lock()
+	defer mut.Unlock()
+	if !libvirt_available {
+		return *info
+	}
+
+	local := make(chan error)
+	jobs := []chan error{local}
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				local <- fmt.Errorf("panic occurred: %v", err)
+			}
+		}()
+		local <- queryLocal(info)
+	}()
+
+	for _, session := range info.Sessions {
+		channel := make(chan error)
+		jobs = append(jobs, channel)
+		go func(s *packet.WorkerSession, c chan error) {
+			defer func() {
+				if err := recover(); err != nil {
+					c <- fmt.Errorf("panic occurred: %v", err)
+				}
+			}()
+			c <- querySession(s)
+		}(session, channel)
+	}
+
+	for _, node := range daemon.cluster.Nodes() {
+		channel := make(chan error)
+		jobs = append(jobs, channel)
+		go func(s cluster.Node, c chan error) {
+			defer func() {
+				if err := recover(); err != nil {
+					c <- fmt.Errorf("panic occurred: %v", err)
+				}
+			}()
+			c <- node.Query()
+		}(node, channel)
+	}
+
+	for _, job := range jobs {
+		if err := <-job; err != nil {
+			log.PushLog("failed to execute job : %s", err.Error())
+		}
+	}
+
+	return daemon.infoBuilder(*info)
+}
+
+func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+	for _, node := range daemon.cluster.Nodes() {
+		ss, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		gpus, err := node.GPUs()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		volumes, err := node.Volumes()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+
+		cp.Sessions = append(cp.Sessions, ss...)
+		cp.GPUs = append(cp.GPUs, gpus...)
+		cp.Volumes = append(cp.Volumes, volumes...)
+	}
+
+	for _, node := range daemon.cluster.Peers() {
+		ss, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		gpus, err := node.GPUs()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+		volumes, err := node.Volumes()
+		if err != nil {
+			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
+			continue
+		}
+
+		cp.Sessions = append(cp.Sessions, ss...)
+		cp.GPUs = append(cp.GPUs, gpus...)
+		cp.Volumes = append(cp.Volumes, volumes...)
+	}
+
+	return cp
+}
+
+func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {
+	if ss.Target == nil {
+		for _, node := range daemon.cluster.Nodes() {
+			sessions, err := node.Sessions()
+			if err != nil {
+				log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+				continue
+			}
+
+			for _, session := range sessions {
+				if session.Id != ss.Id {
+					continue
+				}
+
+				log.PushLog("forwarding command %s to node %s", command, node.Name())
+
+				b, _ := json.Marshal(ss)
+
+				url, err := node.RequestBaseURL()
+				if err != nil {
+					log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+					continue
+				}
+
+				resp, err := slow_client.Post(
+					fmt.Sprintf("%s/%s", url, command),
+					"application/json",
+					strings.NewReader(string(b)))
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				b, err = io.ReadAll(resp.Body)
+				if err != nil {
+					log.PushLog(err.Error())
+					continue
+				}
+				if resp.StatusCode != 200 {
+					log.PushLog("failed to request %s", string(b))
+					continue
+				}
+
+				nss := packet.WorkerSession{}
+				err = json.Unmarshal(b, &nss)
+				if err != nil {
+					log.PushLog("failed to request %s", err.Error())
+					continue
+				}
+
+				return &nss, nil
+			}
+		}
+		return nil, fmt.Errorf("no session found on any node")
+	}
+
+	for _, session := range daemon.WorkerInfor.Sessions {
+		if session == nil ||
+			ss.Target == nil ||
+			session.Id != *ss.Target ||
+			session.Vm == nil ||
+			session.Vm.PrivateIP == nil {
+			continue
+		}
+
+		log.PushLog("forwarding command %s to vm %s", command, *session.Vm.PrivateIP)
+
+		nss := *ss
+		nss.Target = nil
+		b, _ := json.Marshal(nss)
+		resp, err := slow_client.Post(
+			fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP, Httpport, command),
+			"application/json",
+			strings.NewReader(string(b)))
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		b, err = io.ReadAll(resp.Body)
+		if err != nil {
+			log.PushLog("failed to parse request %s", err.Error())
+			continue
+		}
+		if resp.StatusCode != 200 {
+			log.PushLog("failed to request %s", string(b))
+			continue
+		}
+
+		worker_session := packet.WorkerSession{}
+		err = json.Unmarshal(b, &worker_session)
+		if err != nil {
+			log.PushLog("failed to request %s", err.Error())
+			continue
+		}
+
+		return &worker_session, nil
+	}
+
+	for _, node := range daemon.cluster.Nodes() {
+		sessions, err := node.Sessions()
+		if err != nil {
+			log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+			return nil, err
+		}
+
+		for _, session := range sessions {
+			if session == nil ||
+				session.Id != *ss.Target ||
+				session.Vm == nil ||
+				session.Vm.PrivateIP == nil {
+				continue
+			}
+
+			log.PushLog("forwarding command %s to node %s, vm %s", command, node.Name(), *session.Vm.PrivateIP)
+
+			b, _ := json.Marshal(ss)
+
+			url, err := node.RequestBaseURL()
+			if err != nil {
+				log.PushLog("ignore session fwd on node %s %s", node.Name(), err.Error())
+				continue
+			}
+
+			resp, err := slow_client.Post(
+				fmt.Sprintf("%s/%s", url, command),
+				"application/json",
+				strings.NewReader(string(b)))
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			b, err = io.ReadAll(resp.Body)
+			if err != nil {
+				log.PushLog("failed to parse request %s", err.Error())
+				continue
+			}
+			if resp.StatusCode != 200 {
+				log.PushLog("failed to request %s", string(b))
+				continue
+			}
+
+			nss := packet.WorkerSession{}
+			err = json.Unmarshal(b, &nss)
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				continue
+			}
+
+			return &nss, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no receiver detected")
 }
