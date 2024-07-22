@@ -6,6 +6,14 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 )
 
+type NodeManifest struct {
+	Ip       string `yaml:"ip"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+type PeerManifest struct {
+	Ip string `yaml:"ip"`
+}
 type Host struct {
 	Interface string  `yaml:"interface"`
 	Domain    *string `yaml:"domain"`

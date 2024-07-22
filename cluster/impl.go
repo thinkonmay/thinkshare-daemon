@@ -276,14 +276,6 @@ func (impl *ClusterConfigImpl) Deinit() {
 	}
 }
 
-type NodeManifest struct {
-	Ip       string `yaml:"ip"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-}
-type PeerManifest struct {
-	Ip string `yaml:"ip"`
-}
 
 type NodeImpl struct {
 	NodeManifest
@@ -310,7 +302,7 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 	err := (error)(nil)
 	now := func() int64 { return time.Now().Unix() }
 	start := now()
-	for now()-start < 3*60 {
+	for now()-start < 60 {
 		time.Sleep(time.Second)
 		if err = impl.Query(); err != nil {
 			log.PushLog("failed to query new node %s", err.Error())

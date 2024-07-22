@@ -1,4 +1,4 @@
-set -e
+set -x
 go build -o ./binary/daemon ./service/linux/
 echo "[Unit]
 Description=
