@@ -33,9 +33,7 @@ type Peer interface {
 	Name() string
 	RequestClient() (*http.Client, error)
 	RequestBaseURL() (string, error)
-	Volumes() ([]string, error)
-	GPUs() ([]string, error)
-	Sessions() ([]*packet.WorkerSession, error)
+	Info() (*packet.WorkerInfor,error)
 	Query() error
 }
 

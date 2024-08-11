@@ -537,12 +537,12 @@ func (impl *PeerImpl) Deinit() error {
 }
 
 // GPUs implements Node.
-func (node *PeerImpl) GPUs() ([]string, error) {
+func (node *PeerImpl) Info() (*packet.WorkerInfor, error) {
 	if node.connectError != nil {
 		return nil, fmt.Errorf("failed to get gpus : connection Error %s", node.connectError)
 	}
 
-	return node.internal.GPUs, nil
+	return &node.internal, nil
 }
 
 // Name implements Node.
@@ -564,22 +564,6 @@ func (node *PeerImpl) RequestClient() (*http.Client, error) {
 		return nil, fmt.Errorf("failed to request client: connection Error %s", node.connectError)
 	}
 	return node.httpclient, nil
-}
-
-// Sessions implements Node.
-func (node *PeerImpl) Sessions() ([]*packet.WorkerSession, error) {
-	if node.connectError != nil {
-		return nil, fmt.Errorf("failed to list volumes: connection Error %s", node.connectError)
-	}
-	return node.internal.Sessions, nil
-}
-
-// Volumes implements Node.
-func (node *PeerImpl) Volumes() ([]string, error) {
-	if node.connectError != nil {
-		return nil, fmt.Errorf("failed to list volumes: connection Error %s", node.connectError)
-	}
-	return node.internal.Volumes, nil
 }
 
 func (node *PeerImpl) Query() (err error) {

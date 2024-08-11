@@ -416,23 +416,14 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 	}
 
 	for _, peer := range daemon.cluster.Peers() {
-		sessions, err := peer.Sessions()
-		if err != nil {
-			log.PushLog("ignore signaling session on node %s %s", peer.Name(), err.Error())
-			continue
-		}
-
-		for _, s := range sessions {
-			if s.Id == token && s.Vm != nil {
-				addr, err := peer.RequestBaseURL()
-				if err != nil {
-					log.PushLog("ignore signaling session on node %s %s", peer.Name(), err.Error())
-					continue
-				}
-
-				return &addr, false
+		if peer.Name() == token {
+			addr, err := peer.RequestBaseURL()
+			if err != nil {
+				log.PushLog("ignore signaling session on node %s %s", peer.Name(), err.Error())
+				continue
 			}
 
+			return &addr, true
 		}
 	}
 
@@ -467,7 +458,7 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 	for _, peer := range daemon.cluster.Peers() {
 		channel := make(chan error)
 		jobs = append(jobs, channel)
-		go func(s cluster.Node, c chan error) {
+		go func(s cluster.Peer, c chan error) {
 			defer func() {
 				if err := recover(); err != nil {
 					c <- fmt.Errorf("panic occurred: %v", err)
@@ -523,25 +514,12 @@ func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 	}
 
 	for _, node := range daemon.cluster.Peers() {
-		ss, err := node.Sessions()
-		if err != nil {
-			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
-			continue
+		node.Query()
+		if info, err := node.Info(); err != nil {
+			log.PushLog("failed to query info %s", err.Error())
+		} else {
+			cp.Peers = append(cp.Peers, info)
 		}
-		gpus, err := node.GPUs()
-		if err != nil {
-			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
-			continue
-		}
-		volumes, err := node.Volumes()
-		if err != nil {
-			log.PushLog("ignore info from node %s %s", node.Name(), err.Error())
-			continue
-		}
-
-		cp.Sessions = append(cp.Sessions, ss...)
-		cp.GPUs = append(cp.GPUs, gpus...)
-		cp.Volumes = append(cp.Volumes, volumes...)
 	}
 
 	return cp
@@ -602,13 +580,13 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		}
 
 		for _, peer := range daemon.cluster.Peers() {
-			sessions, err := peer.Sessions()
+			info, err := peer.Info()
 			if err != nil {
 				log.PushLog("ignore session fwd on peer %s %s", peer.Name(), err.Error())
 				continue
 			}
 
-			for _, session := range sessions {
+			for _, session := range info.Sessions {
 				if session.Id != ss.Id {
 					continue
 				}
@@ -760,7 +738,9 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		}
 
 		log.PushLog("forwarding command %s to peer %s", command, peer.Name())
-		b, _ := json.Marshal(ss)
+		nss := *ss
+		nss.Target = nil
+		b, _ := json.Marshal(nss)
 
 		url, err := peer.RequestBaseURL()
 		if err != nil {
@@ -787,7 +767,7 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 			continue
 		}
 
-		nss := packet.WorkerSession{}
+		nss = packet.WorkerSession{}
 		err = json.Unmarshal(b, &nss)
 		if err != nil {
 			log.PushLog("failed to request %s", err.Error())
