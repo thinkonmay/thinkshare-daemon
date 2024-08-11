@@ -247,6 +247,9 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 	return impl, nil
 }
 
+func (impl *ClusterConfigImpl) DNSserver() string {
+	return impl.ClusterConfigManifest.Local.DNS
+}
 func (impl *ClusterConfigImpl) Interface() string {
 	return impl.ClusterConfigManifest.Local.Interface
 }
@@ -275,7 +278,6 @@ func (impl *ClusterConfigImpl) Deinit() {
 		cancel()
 	}
 }
-
 
 type NodeImpl struct {
 	NodeManifest
@@ -511,6 +513,7 @@ type PeerImpl struct {
 func NewPeer(manifest PeerManifest) (*PeerImpl, error) {
 	impl := &PeerImpl{
 		PeerManifest: manifest,
+		httpclient:   &http.Client{},
 		active:       true,
 	}
 

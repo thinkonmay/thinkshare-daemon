@@ -1,6 +1,8 @@
 package libvirt
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type VirtDaemon struct {
 	libvirt *Libvirt
@@ -138,7 +140,7 @@ func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) (Domain, error) {
 		})
 	}
 
-	dom,err :=  daemon.libvirt.CreateVM(
+	dom, err := daemon.libvirt.CreateVM(
 		server.ID,
 		server.VCPU,
 		server.RAM,
@@ -150,18 +152,18 @@ func (daemon *VirtDaemon) DeployVM(server VMLaunchModel) (Domain, error) {
 		return Domain{}, err
 	}
 
-	doms,err := daemon.libvirt.ListDomains()
+	doms, err := daemon.libvirt.ListDomains()
 	if err != nil {
 		return Domain{}, err
 	}
 
-	for _,d  := range doms {
+	for _, d := range doms {
 		if *d.Name == dom.Name {
-			return d,nil
+			return d, nil
 		}
 	}
 
-	return Domain{},fmt.Errorf("domain not found")
+	return Domain{}, fmt.Errorf("domain not found")
 }
 
 func (daemon *VirtDaemon) DeleteVM(name string) error {
@@ -188,6 +190,10 @@ func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
 
 	result := []GPU{}
 	for _, g := range gpus {
+		if g.Driver.Name != "vfio-pci" {
+			continue
+		}
+
 		for _, d := range domains {
 			if !d.Running {
 				continue

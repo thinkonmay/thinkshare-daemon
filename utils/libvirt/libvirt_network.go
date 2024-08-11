@@ -13,11 +13,7 @@ import (
 	"github.com/digitalocean/go-libvirt/socket/dialers"
 )
 
-const (
-	dns_addr = "10.20.20.200"
-)
-
-func newNetwork(card string) string {
+func newNetwork(card, dns string) string {
 	rand := rand.IntN(63) + 1
 	ip := fmt.Sprintf("10.10.%d.1", rand)
 	endip := fmt.Sprintf("10.10.%d.254", rand)
@@ -38,7 +34,7 @@ func newNetwork(card string) string {
 			</dhcp>
 		</ip>
 	</network>
-	`, card, card, card, card, dns_addr, ip, ip, endip)
+	`, card, card, card, card, dns, ip, ip, endip)
 }
 
 type LibvirtNetwork struct {
@@ -49,7 +45,7 @@ func isIPv4(address string) bool {
 	return strings.Count(address, ":") < 2
 }
 
-func NewLibvirtNetwork(iface string) (Network, error) {
+func NewLibvirtNetwork(iface, dns string) (Network, error) {
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 2*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial libvirt: %v", err)
@@ -91,7 +87,7 @@ func NewLibvirtNetwork(iface string) (Network, error) {
 		return nil, fmt.Errorf("no network interface was found")
 	}
 
-	_, err = ret.conn.NetworkCreateXML(newNetwork(iface))
+	_, err = ret.conn.NetworkCreateXML(newNetwork(iface, dns))
 	if err != nil {
 		return nil, err
 	}

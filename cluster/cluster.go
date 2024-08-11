@@ -16,6 +16,7 @@ type PeerManifest struct {
 }
 type Host struct {
 	Interface string  `yaml:"interface"`
+	DNS       string  `yaml:"dns"`
 	Domain    *string `yaml:"domain"`
 }
 type Node interface {
@@ -40,6 +41,7 @@ type Peer interface {
 
 type ClusterConfig interface {
 	Interface() string
+	DNSserver() string
 	Domain() *string
 	Nodes() []Node
 	Peers() []Peer

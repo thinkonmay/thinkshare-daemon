@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/jaypipes/ghw"
@@ -113,6 +114,12 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
+	pci, err := ghw.PCI()
+	if err != nil {
+		log.PushLog("unable to get information from system: %s", err.Error())
+		return nil, err
+	}
+
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
@@ -134,7 +141,7 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		return nil, err
 	}
 
-	public,err := GetPublicIPCurl()
+	public, err := GetPublicIPCurl()
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +169,20 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		hostStat.KernelArch,
 		hostStat.KernelVersion,
 		hostStat.PlatformVersion)
+
+	for _, i := range pci.Devices {
+		if addr := strings.Split(i.Address, ":"); len(addr) == 3 {
+			res, err := os.ReadFile(fmt.Sprintf("/sys/class/pci_bus/%s/device/%s/driver_override", strings.Join(addr[:2], ":"), i.Address))
+			if err != nil {
+				return nil, err
+			} else if !strings.Contains(string(res), "vfio-pci") {
+			} else if !strings.Contains(string(i.Vendor.Name), "NVIDIA") {
+			} else if strings.Contains(string(i.Product.Name), "Audio") {
+			} else {
+				ret.GPUs = append(ret.GPUs, i.Product.Name)
+			}
+		}
+	}
 
 	for _, i := range gpu.GraphicsCards {
 		ret.GPUs = append(ret.GPUs, i.DeviceInfo.Product.Name)

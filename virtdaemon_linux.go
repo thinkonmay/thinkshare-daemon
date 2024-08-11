@@ -53,7 +53,7 @@ func (daemon *Daemon) HandleVirtdaemon() func() {
 		return func() {}
 	}
 
-	network, err = libvirt.NewLibvirtNetwork(daemon.cluster.Interface())
+	network, err = libvirt.NewLibvirtNetwork(daemon.cluster.Interface(),daemon.cluster.DNSserver())
 	if err != nil {
 		log.PushLog("failed to start network %s", err.Error())
 		return func() {}

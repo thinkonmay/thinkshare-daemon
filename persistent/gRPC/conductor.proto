@@ -12,7 +12,8 @@ message WorkerInfor{
 	optional string   MacAddr  = 8;
 
 	repeated string GPUs    = 9;
-	repeated WorkerSession Sessions    = 11;
+	repeated WorkerSession Sessions    = 10;
+	repeated WorkerInfor Peers    = 11;
 	repeated string Volumes = 12;
 }
 
