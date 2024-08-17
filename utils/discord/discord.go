@@ -1,31 +1,83 @@
 package discord
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"time"
+
 	"github.com/hugolgst/rich-go/client"
 )
 
-func Init(app_id string) error {
-	return client.Login(app_id)
+type ClientActivityStruct struct {
+	State      string `json:"state"`
+	Details    string `json:"details"`
+	LargeImage string `json:"largeImage"`
+	LargeText  string `json:"largeText"`
+	SmallImage string `json:"smallImage"`
+	SmallText  string `json:"smallText"`
+	Buttons    []client.Button `json:"buttons"`
 }
 
+func EncodeActivity(activity ClientActivityStruct) string {
+	encoded, err := json.Marshal(activity)
+	if err != nil {
+		panic(err)
+	}
 
-func StartSession() error {
+	encodedBase64 := string(base64.StdEncoding.EncodeToString(encoded))
+
+	return encodedBase64
+}
+
+func DecodeActivity(encoded string) ClientActivityStruct {
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		panic(err)
+	}
+
+	var activity ClientActivityStruct
+	err = json.Unmarshal(decoded, &activity)
+	if err != nil {
+		panic(err)
+	}
+
+	return activity
+}
+
+func StartSession(app_id string, activity string) error {
+	{
+		err := client.Login(app_id)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	activityStruct := DecodeActivity(activity)
+
 	now := time.Now()
-	return client.SetActivity(client.Activity{	
-		State:      "Heyy!!!",	
-		Details:    "I'm running on rich-go :)",	
-		LargeImage: "largeimageid",	
-		LargeText:  "This is the large image :D",	
-		SmallImage: "smallimageid",	
-		SmallText:  "And this is the small image",	
-		Party: &client.Party{		
-			ID:         "-1",		
-			Players:    15,		
-			MaxPlayers: 24,	
-		},	
-		Timestamps: &client.Timestamps{		
-			Start: &now,	
+	err := client.SetActivity(client.Activity{	
+		State:      activityStruct.State,
+		Details:    activityStruct.Details,
+		LargeImage: activityStruct.LargeImage,
+		LargeText:  activityStruct.LargeText,
+		SmallImage: activityStruct.SmallImage,
+		SmallText:  activityStruct.SmallText,
+		// Party: &client.Party{// },
+		Timestamps: &client.Timestamps{
+			Start: &now,
+		},
+		Buttons: []*client.Button{
+			&client.Button{
+				Label: activityStruct.Buttons[0].Label,
+				Url: activityStruct.Buttons[0].Url,
+			},
 		},
 	})
+
+	if err != nil {
+		fmt.Print(err)
+		panic(err)
+	}
+	return nil
 }
