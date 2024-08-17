@@ -489,10 +489,10 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 		return []libvirt.Volume{}, err
 	}
 
-	result, err := exec.Command("qemu-img", "info", os, "--output", "json").Output()
+	result, err := exec.Command("qemu-img", "info", os, "--output", "json").CombinedOutput()
 	if err != nil {
 		chain_app.PopChain()
-		return []libvirt.Volume{}, fmt.Errorf("failed to retrieve disk info %s", err.Error())
+		return []libvirt.Volume{}, fmt.Errorf("failed toF retrieve disk info %s %s", err.Error(),string(result))
 	}
 
 	var chain_os *libvirt.Volume = nil

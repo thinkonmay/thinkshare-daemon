@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -436,7 +437,7 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				local <- fmt.Errorf("panic occurred: %v", err)
+				local <- fmt.Errorf("panic occurred in local query: %s", debug.Stack())
 			}
 		}()
 		local <- queryLocal(info)
@@ -448,7 +449,7 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		go func(s *packet.WorkerSession, c chan error) {
 			defer func() {
 				if err := recover(); err != nil {
-					c <- fmt.Errorf("panic occurred: %v", err)
+					c <- fmt.Errorf("panic occurred in vm query: %s", debug.Stack())
 				}
 			}()
 			c <- querySession(s)
@@ -461,7 +462,7 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		go func(s cluster.Peer, c chan error) {
 			defer func() {
 				if err := recover(); err != nil {
-					c <- fmt.Errorf("panic occurred: %v", err)
+					c <- fmt.Errorf("panic occurred in peer query: %s", debug.Stack())
 				}
 			}()
 			c <- peer.Query()
@@ -474,7 +475,7 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		go func(s cluster.Node, c chan error) {
 			defer func() {
 				if err := recover(); err != nil {
-					c <- fmt.Errorf("panic occurred: %v", err)
+					c <- fmt.Errorf("panic occurred in node query: %s", debug.Stack())
 				}
 			}()
 			c <- node.Query()

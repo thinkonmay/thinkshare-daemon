@@ -38,11 +38,11 @@ func (chain *Volume) PushChain(size int) error {
 	now := uuid.NewString()
 	dir := filepath.Dir(chain.Path)
 	path := fmt.Sprintf("%s/child/%s.qcow2", dir, now)
-	_, err = exec.Command("qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-o",
+	res, err := exec.Command("qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-o",
 		fmt.Sprintf("backing_file=%s", chain.Path), path,
-		fmt.Sprintf("%dG", size)).Output()
+		fmt.Sprintf("%dG", size)).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create volume %s",err.Error())
+		return fmt.Errorf("failed to create volume %s %s", err.Error(), string(res))
 	}
 
 	copy := *chain

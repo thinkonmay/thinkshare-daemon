@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		defer func() {
 			impl.mut.Unlock()
 			if err := recover(); err != nil {
-				log.PushLog("panic in sync_nodes thread : %v", err)
+				log.PushLog("panic in sync_nodes thread : %s", debug.Stack())
 			}
 		}()
 
