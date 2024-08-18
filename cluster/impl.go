@@ -251,6 +251,15 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 func (impl *ClusterConfigImpl) DNSserver() string {
 	return impl.ClusterConfigManifest.Local.DNS
 }
+func (impl *ClusterConfigImpl) Log() (ip, id string, exists bool) {
+	if impl.ClusterConfigManifest.Local.Log == nil {
+		return "", "", false
+	} else {
+		return impl.ClusterConfigManifest.Local.Log.IP,
+			impl.ClusterConfigManifest.Local.Log.ID,
+			true
+	}
+}
 func (impl *ClusterConfigImpl) Interface() string {
 	return impl.ClusterConfigManifest.Local.Interface
 }

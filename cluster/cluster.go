@@ -18,6 +18,10 @@ type Host struct {
 	Interface string  `yaml:"interface"`
 	DNS       string  `yaml:"dns"`
 	Domain    *string `yaml:"domain"`
+	Log       *struct {
+		IP string `yaml:"ip"`
+		ID string `yaml:"id"`
+	} `yaml:"log"`
 }
 type Node interface {
 	Name() string
@@ -33,13 +37,14 @@ type Peer interface {
 	Name() string
 	RequestClient() (*http.Client, error)
 	RequestBaseURL() (string, error)
-	Info() (*packet.WorkerInfor,error)
+	Info() (*packet.WorkerInfor, error)
 	Query() error
 }
 
 type ClusterConfig interface {
 	Interface() string
 	DNSserver() string
+	Log() (ip, id string, exists bool)
 	Domain() *string
 	Nodes() []Node
 	Peers() []Peer

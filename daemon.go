@@ -99,6 +99,18 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("fail to config cluster %s", err.Error())
 	}
 
+	if ip, id, exists := daemon.cluster.Log(); exists {
+		client := http.Client{Timeout: time.Second}
+		i := log.TakeLog(func(log string) {
+			client.Post(fmt.Sprintf("http://%s:60000/_log", ip),
+				"application/text",
+				strings.NewReader(fmt.Sprintf("%s : %s", id, log)))
+		})
+		daemon.cleans = append(daemon.cleans, func() {
+			log.RemoveCallback(i)
+		})
+	}
+
 	if domain := daemon.cluster.Domain(); domain != nil {
 		pocketbase.StartPocketbase(web_path, []string{*domain})
 	}
