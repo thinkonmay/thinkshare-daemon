@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/jaypipes/ghw"
@@ -170,18 +169,7 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		hostStat.KernelVersion,
 		hostStat.PlatformVersion)
 
-	for _, i := range pci.Devices {
-		if addr := strings.Split(i.Address, ":"); len(addr) == 3 {
-			res, err := os.ReadFile(fmt.Sprintf("/sys/class/pci_bus/%s/device/%s/driver_override", strings.Join(addr[:2], ":"), i.Address))
-			if err != nil {
-				return nil, err
-			} else if !strings.Contains(string(res), "vfio-pci") {
-			} else if !strings.Contains(string(i.Vendor.Name), "NVIDIA") {
-			} else if strings.Contains(string(i.Product.Name), "Audio") {
-			} else {
-				ret.GPUs = append(ret.GPUs, i.Product.Name)
-			}
-		}
+	for _, _ = range pci.Devices {
 	}
 
 	for _, i := range gpu.GraphicsCards {

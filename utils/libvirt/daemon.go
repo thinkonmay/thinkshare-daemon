@@ -2,6 +2,10 @@ package libvirt
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 type VirtDaemon struct {
@@ -190,7 +194,36 @@ func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
 
 	result := []GPU{}
 	for _, g := range gpus {
-		if g.Driver.Name != "vfio-pci" {
+		skip := false
+		for _, a := range g.Capability.IommuGroup.Address {
+			dom, bus, slot, fun := strings.Split(a.Domain, "x"),
+				strings.Split(a.Bus, "x"),
+				strings.Split(a.Slot, "x"),
+				strings.Split(a.Function, "x")
+
+			if len(dom) != 1 ||
+				len(bus) != 1 ||
+				len(slot) != 1 ||
+				len(fun) != 1 {
+				skip = true
+				break
+			}
+
+			devid := fmt.Sprintf("%s:%s:%s.%s", dom[0], bus[0], slot[0], fun[0])
+			if result, err := exec.Command("lspci", "-vvv", devid, "-mm").Output(); err != nil {
+				for _, line := range strings.Split(string(result), "\n") {
+					if words := strings.Split(line, ":"); len(words) == 2 {
+						if strings.Contains(words[0], "Rev") && strings.Contains(words[1], "ff") {
+							skip = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if skip {
+			log.PushLog("device %s is having bad header", g.Name)
 			continue
 		}
 
