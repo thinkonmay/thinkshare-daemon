@@ -3,10 +3,16 @@ package libvirt
 import (
 	"fmt"
 	"testing"
+
+	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
 func TestPCIE(t *testing.T) {
-	lv, err := NewLibvirt()
+	log.TakeLog(func(log string) {
+		fmt.Println(log)
+	})
+
+	lv, err := NewVirtDaemon()
 	if err != nil {
 		panic(err)
 	}
@@ -17,6 +23,6 @@ func TestPCIE(t *testing.T) {
 	}
 
 	for _, g := range gs {
-		fmt.Printf("%v\n", g)
+		fmt.Printf("%v\n", g.Name)
 	}
 }

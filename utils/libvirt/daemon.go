@@ -201,16 +201,19 @@ func (daemon *VirtDaemon) ListGPUs() ([]GPU, error) {
 				strings.Split(a.Slot, "x"),
 				strings.Split(a.Function, "x")
 
-			if len(dom) != 1 ||
-				len(bus) != 1 ||
-				len(slot) != 1 ||
-				len(fun) != 1 {
+			if len(dom) != 2 ||
+				len(bus) != 2 ||
+				len(slot) != 2 ||
+				len(fun) != 2 {
 				skip = true
 				break
 			}
 
-			devid := fmt.Sprintf("%s:%s:%s.%s", dom[0], bus[0], slot[0], fun[0])
-			if result, err := exec.Command("lspci", "-vvv", devid, "-mm").Output(); err != nil {
+			devid := fmt.Sprintf("%s:%s:%s.%s", dom[1], bus[1], slot[1], fun[0])
+			if result, err := exec.Command("lspci", "-vvv","-s" ,devid, "-mm").CombinedOutput(); err != nil {
+				log.PushLog("device %s is having bad response %s", devid,result)
+				skip = true
+			} else {
 				for _, line := range strings.Split(string(result), "\n") {
 					if words := strings.Split(line, ":"); len(words) == 2 {
 						if strings.Contains(words[0], "Rev") && strings.Contains(words[1], "ff") {
