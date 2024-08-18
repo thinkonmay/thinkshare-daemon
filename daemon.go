@@ -661,12 +661,27 @@ func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command str
 		nss := *ss
 		nss.Target = nil
 		b, _ := json.Marshal(nss)
-		resp, err := slow_client.Post(
-			fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP, Httpport, command),
-			"application/json",
-			strings.NewReader(string(b)))
-		if err != nil {
-			log.PushLog("failed to request %s", err.Error())
+
+		resp := (*http.Response)(nil)
+		err := (error)(nil)
+		count := 0
+		for count < 5 {
+			resp, err = slow_client.Post(
+				fmt.Sprintf("http://%s:%d/%s", *session.Vm.PrivateIP, Httpport, command),
+				"application/json",
+				strings.NewReader(string(b)))
+			if err != nil {
+				log.PushLog("failed to request %s", err.Error())
+				time.Sleep(time.Second * 5)
+				count++
+				continue
+			} else {
+				break
+			}
+		}
+
+		if count == 5 {
+			log.PushLog("giving up doing request %s to VM %s", command, *session.Vm.PrivateIP)
 			continue
 		}
 

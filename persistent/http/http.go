@@ -158,7 +158,7 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 
 		resp, err := fun(string(b))
 		if err != nil {
-			log.PushLog("request failed : %s", err.Error())
+			log.PushLog("request failed %s %s => %s",url, string(b), err.Error())
 			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
