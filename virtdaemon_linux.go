@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,7 +54,7 @@ func (daemon *Daemon) HandleVirtdaemon() func() {
 		return func() {}
 	}
 
-	network, err = libvirt.NewLibvirtNetwork(daemon.cluster.Interface(),daemon.cluster.DNSserver())
+	network, err = libvirt.NewLibvirtNetwork(daemon.cluster.Interface(), daemon.cluster.DNSserver())
 	if err != nil {
 		log.PushLog("failed to start network %s", err.Error())
 		libvirt_available = false
@@ -79,7 +80,7 @@ func (daemon *Daemon) HandleVirtdaemon() func() {
 	}
 }
 
-func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) (*packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive chan bool) (_ *packet.WorkerInfor, funerr error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	} else if session.Vm == nil {
@@ -148,6 +149,27 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 		return nil, err
 	}
 
+	// TODO: AKF system
+	defer func() {
+		if funerr != nil {
+			return
+		}
+
+		go func() {
+			defer recover()
+			for {
+				time.Sleep(3 * time.Second)
+				if len(keepalive) == 0 {
+					continue
+				}
+
+				log.PushLog("VM %s is deleted by keepalive timeout", model.ID)
+				virt.DeleteVM(model.ID)
+				break
+			}
+		}()
+	}()
+
 	start := time.Now().UnixMilli()
 	for {
 		if time.Now().UnixMilli()-start > 10*60*1000 {
@@ -208,13 +230,16 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel chan bool) 
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
-func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
+func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	}
 
 	log.PushLog("deploying VM on node %s", node.Name())
-	b, _ := json.Marshal(nss)
+	reqbody, err := json.Marshal(nss)
+	if err != nil {
+		return nil, err
+	}
 
 	url, err := node.RequestBaseURL()
 	if err != nil {
@@ -227,27 +252,45 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 			very_quick_client.Post(
 				fmt.Sprintf("%s/_new", url),
 				"application/json",
-				strings.NewReader(string(b)))
+				strings.NewReader(string(reqbody)))
+		}
+	}()
+	go func() {
+		for len(keepalive) == 0 {
+			id := ""
+			if nss.Vm != nil && nss.Vm.Volumes != nil && len(nss.Vm.Volumes) > 0 {
+				id = nss.Vm.Volumes[0]
+			} else {
+				id = nss.Id
+			}
+
+			data, _ := json.Marshal(id)
+			time.Sleep(time.Second * 1)
+			very_quick_client.Post(
+				fmt.Sprintf("%s/_use", url),
+				"application/json",
+				bytes.NewReader(data))
 		}
 	}()
 
 	resp, err := slow_client.Post(
 		fmt.Sprintf("%s/new", url),
 		"application/json",
-		strings.NewReader(string(b)))
+		strings.NewReader(string(reqbody)))
 	if err != nil {
 		return nil, err
 	}
-	b, err = io.ReadAll(resp.Body)
+
+	respbody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf(string(b))
+		return nil, fmt.Errorf(string(respbody))
 	}
 
 	session := packet.WorkerSession{}
-	err = json.Unmarshal(b, &session)
+	err = json.Unmarshal(respbody, &session)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +298,7 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 	return &session, nil
 }
 
-func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, *packet.WorkerInfor, error) {
+func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, *packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, nil, fmt.Errorf("libvirt not available")
 	} else if nss.Vm == nil {
@@ -267,7 +310,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan 
 	volume_id := nss.Vm.Volumes[0]
 	for _, local := range daemon.WorkerInfor.Volumes {
 		if local == volume_id {
-			Vm, err := daemon.DeployVM(nss, cancel)
+			Vm, err := daemon.DeployVM(nss, cancel, keepalive)
 			return nil, Vm, err
 		}
 	}
@@ -280,7 +323,7 @@ func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel chan 
 		}
 		for _, remote := range volumes {
 			if remote == volume_id {
-				session, err := daemon.DeployVMonNode(node, nss, cancel)
+				session, err := daemon.DeployVMonNode(node, nss, cancel, keepalive)
 				return session, nil, err
 			}
 		}
@@ -493,7 +536,7 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 	result, err := exec.Command("qemu-img", "info", os, "--output", "json").CombinedOutput()
 	if err != nil {
 		chain_app.PopChain()
-		return []libvirt.Volume{}, fmt.Errorf("failed toF retrieve disk info %s %s", err.Error(),string(result))
+		return []libvirt.Volume{}, fmt.Errorf("failed toF retrieve disk info %s %s", err.Error(), string(result))
 	}
 
 	var chain_os *libvirt.Volume = nil

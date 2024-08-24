@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	_new_timeout = 2 // second
+	_new_timeout = 5       // second
+	_use_timeout = 10 * 60 // minutes
 )
+
 var (
 	now = func() int { return int(time.Now().Unix()) }
 )
@@ -27,10 +29,11 @@ type deployment struct {
 type GRPCclient struct {
 	logger          []string
 	worker_info     func() *packet.WorkerInfor
-	recv_session    func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error)
+	recv_session    func(*packet.WorkerSession, chan bool, chan bool) (*packet.WorkerSession, error)
 	closed_sesssion func(*packet.WorkerSession) error
 
-	pending map[string]*deployment
+	pending    map[string]*deployment
+	keepalives map[string]*deployment
 
 	mut *sync.Mutex
 
@@ -39,16 +42,17 @@ type GRPCclient struct {
 
 func InitHttppServer() (ret *GRPCclient, err error) {
 	ret = &GRPCclient{
-		done:    false,
-		pending: map[string]*deployment{},
-		mut:     &sync.Mutex{},
+		done:       false,
+		pending:    map[string]*deployment{},
+		keepalives: map[string]*deployment{},
+		mut:        &sync.Mutex{},
 
 		logger: []string{},
 		worker_info: func() *packet.WorkerInfor {
 			return &packet.WorkerInfor{}
 		},
 
-		recv_session: func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error) {
+		recv_session: func(*packet.WorkerSession, chan bool, chan bool) (*packet.WorkerSession, error) {
 			return nil, fmt.Errorf("handler not configured")
 		},
 		closed_sesssion: func(ws *packet.WorkerSession) error {
@@ -77,6 +81,23 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			log.PushLog(conn)
 			return []byte{}, nil
 		})
+	ret.wrapper("_use",
+		func(conn string) ([]byte, error) {
+			msg := ""
+			if err := json.Unmarshal([]byte(conn), &msg); err != nil {
+				return nil, err
+			}
+
+			ret.mut.Lock()
+			keepalive, found := ret.keepalives[msg]
+			ret.mut.Unlock()
+			if !found {
+				return nil, fmt.Errorf("_use session not found")
+			}
+
+			keepalive.timestamp = now()
+			return []byte("{}"), nil
+		})
 	ret.wrapper("_new",
 		func(conn string) ([]byte, error) {
 			msg := &packet.WorkerSession{}
@@ -88,7 +109,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			deployment, found := ret.pending[msg.Id]
 			ret.mut.Unlock()
 			if !found {
-				return nil, fmt.Errorf("session not found")
+				return nil, fmt.Errorf("_new session not found")
 			}
 
 			deployment.timestamp = now()
@@ -101,31 +122,55 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, err
 			}
 
-			deployment := &deployment{
-				cancel:    make(chan bool, 8),
-				timestamp: now(),
+			deployment, keepalive :=
+				&deployment{
+					cancel:    make(chan bool, 8),
+					timestamp: now(),
+				}, &deployment{
+					cancel:    make(chan bool, 8),
+					timestamp: now(),
+				}
+
+			keepaliveid := ""
+			if msg.Vm != nil && msg.Vm.Volumes != nil && len(msg.Vm.Volumes) > 0 {
+				keepaliveid = msg.Vm.Volumes[0]
+			} else {
+				keepaliveid = msg.Id
 			}
+
 			ret.mut.Lock()
 			ret.pending[msg.Id] = deployment
+			ret.keepalives[keepaliveid] = keepalive
 			ret.mut.Unlock()
 			running := true
 			defer func() {
 				running = false
 				ret.mut.Lock()
+				deployment.cancel <- true
 				delete(ret.pending, msg.Id)
 				ret.mut.Unlock()
 			}()
-
 			go func() {
 				for running {
-					time.Sleep(time.Second * _new_timeout)
+					time.Sleep(time.Second)
 					if now()-deployment.timestamp > _new_timeout {
 						deployment.cancel <- true
 					}
 				}
 			}()
+			go func() {
+				for {
+					time.Sleep(time.Second)
+					if now()-keepalive.timestamp > _use_timeout {
+						ret.mut.Lock()
+						keepalive.cancel <- true
+						ret.mut.Unlock()
+						return
+					}
+				}
+			}()
 
-			if resp, err := ret.recv_session(msg, deployment.cancel); err == nil {
+			if resp, err := ret.recv_session(msg, deployment.cancel, keepalive.cancel); err == nil {
 				b, _ := json.Marshal(resp)
 				return b, nil
 			} else {
@@ -158,7 +203,7 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 
 		resp, err := fun(string(b))
 		if err != nil {
-			log.PushLog("request failed %s %s => %s",url, string(b), err.Error())
+			log.PushLog("request failed %s %s => %s", url, string(b), err.Error())
 			w.WriteHeader(503)
 			w.Write([]byte(err.Error()))
 			return
@@ -180,7 +225,7 @@ func (grpc *GRPCclient) Log(source string, level string, log string) {
 func (grpc *GRPCclient) Infor(fun func() *packet.WorkerInfor) {
 	grpc.worker_info = fun
 }
-func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession, chan bool) (*packet.WorkerSession, error)) {
+func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession, chan bool, chan bool) (*packet.WorkerSession, error)) {
 	grpc.recv_session = fun
 }
 func (grpc *GRPCclient) ClosedSession(fun func(*packet.WorkerSession) error) {

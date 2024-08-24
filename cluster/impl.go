@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -107,7 +106,7 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		for _, manifest := range current {
 			found := false
 			for _, node := range desired {
-				if node.Ip == manifest.Ip {
+				if node.Ip == manifest.Name() {
 					found = true
 				}
 			}
@@ -186,7 +185,7 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 			if node, err := NewPeer(create); err != nil {
 				log.PushLog("failed to init peer %s", err.Error())
 			} else {
-				log.PushLog("new node successfully added %s", node.Name())
+				log.PushLog("new peer successfully added %s", node.Name())
 				impl.peers = append(impl.peers, node)
 			}
 		}
@@ -284,8 +283,7 @@ func (impl *ClusterConfigImpl) Peers() (ns []Peer) {
 
 func (impl *ClusterConfigImpl) Deinit() {
 	for _, node := range impl.nodes {
-		cancel := *node.cancel
-		cancel()
+		node.Deinit()
 	}
 }
 
@@ -297,7 +295,6 @@ type NodeImpl struct {
 
 	client     *goph.Client
 	httpclient *http.Client
-	cancel     *context.CancelFunc
 	internal   packet.WorkerInfor
 }
 
@@ -326,7 +323,6 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 	return nil, fmt.Errorf("timeout query new node")
 }
 func (impl *NodeImpl) Deinit() error {
-	(*impl.cancel)()
 	impl.active = false
 	return nil
 }
@@ -442,7 +438,11 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 }
 
 func (node *NodeImpl) setupNode() error {
-	client, err := goph.New(node.Username, node.Ip, goph.Password(node.Password))
+	allocate := func() (*goph.Client, error) {
+		return goph.New(node.Username, node.Ip, goph.Password(node.Password))
+	}
+
+	client, err := allocate()
 	if err != nil {
 		return err
 	}
@@ -466,44 +466,18 @@ func (node *NodeImpl) setupNode() error {
 	}
 
 	go func() {
-		for {
-			client.Conn.Wait()
-
-			time.Sleep(time.Second)
-			for {
-				client, err = goph.New(node.Username, node.Ip, goph.Password(node.Password))
-				if err != nil {
-					time.Sleep(time.Second)
-					log.PushLog("failed to connect ssh to node %s", err.Error())
-					continue
-				}
-
-				node.client = client
-				break
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			if client == nil {
-				log.PushLog("ssh client is nil, wait for 1 second")
+		for node.active {
+			rclient, err := allocate()
+			if err != nil {
+				log.PushLog("failed to connect ssh %s", err.Error())
 				time.Sleep(time.Second)
 				continue
 			}
 
 			log.PushLog("start %s on %s", lbinary, node.Ip)
-			client.Run(fmt.Sprintf("chmod 777 %s", lbinary))
-			client.Run(fmt.Sprintf("chmod 777 %s", lapp))
-
-			var ctx context.Context
-			ctx, cancel := context.WithCancel(context.Background())
-			node.cancel = &cancel
-			_, err = client.RunContext(ctx, lbinary)
-			if err != nil {
-				log.PushLog(err.Error())
-			}
-
+			rclient.Run(fmt.Sprintf("chmod 777 %s", lbinary))
+			rclient.Run(fmt.Sprintf("chmod 777 %s", lapp))
+			rclient.Run(lbinary)
 			time.Sleep(time.Second * 10)
 		}
 	}()

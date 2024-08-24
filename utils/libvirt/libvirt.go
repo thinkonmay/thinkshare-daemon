@@ -207,6 +207,7 @@ func (lv *Libvirt) DeleteVM(name string) error {
 	for _, d := range doms {
 		if d.Name == name {
 			dom = d
+			break
 		}
 	}
 

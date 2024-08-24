@@ -18,3 +18,4 @@ binary/pb_data/
 playground/
 pb_data
 *.iso
+binary/log.*

@@ -6,7 +6,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	daemon "github.com/thinkonmay/thinkshare-daemon"
 	"github.com/thinkonmay/thinkshare-daemon/cluster"
@@ -37,8 +40,16 @@ func Start(stop chan os.Signal) {
 
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", daemon.Httpport)}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
-			log.PushLog(err.Error())
+		if pid, found := findPreviousPID(daemon.Httpport); found {
+			log.PushLog("kill previous child process %s", pid)
+			exec.Command("kill", pid).Run()
+			time.Sleep(time.Second * 5)
+		}
+
+		for {
+			if err := srv.ListenAndServe(); err != nil {
+				log.PushLog(err.Error())
+			}
 		}
 	}()
 	defer srv.Close()
@@ -80,4 +91,30 @@ func Start(stop chan os.Signal) {
 	dm := daemon.WebDaemon(grpc, signaling, manifest, fmt.Sprintf("%s/web/dist", base_dir))
 	defer dm.Close()
 	stop <- <-stop
+}
+
+func findPreviousPID(port int) (string, bool) {
+	out, err := exec.Command("lsof", "-i", fmt.Sprintf(":%d", port)).Output()
+	if err != nil {
+		return "", false
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "(LISTEN)") {
+			continue
+		}
+
+		pos := 1
+		for _, word := range strings.Split(line, " ") {
+			if len(word) == 0 {
+				continue
+			}
+			if pos == 2 {
+				return word, true
+			}
+			pos++
+		}
+	}
+
+	return "", false
 }

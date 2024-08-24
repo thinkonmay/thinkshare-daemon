@@ -141,7 +141,7 @@ func WebDaemon(persistent persistent.Persistent,
 		return &result
 	})
 
-	daemon.persist.RecvSession(func(ss *packet.WorkerSession, cancel chan bool) (*packet.WorkerSession, error) {
+	daemon.persist.RecvSession(func(ss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
 
 		process := []childprocess.ProcessID{}
 		var t *turn.TurnServer = nil
@@ -188,7 +188,7 @@ func WebDaemon(persistent persistent.Persistent,
 		if ss.Vm != nil {
 			daemon.QueryInfo(&daemon.WorkerInfor)
 			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
-				if Vm, err := daemon.DeployVM(ss, cancel); err != nil {
+				if Vm, err := daemon.DeployVM(ss, cancel, keepalive); err != nil {
 					return nil, err
 				} else {
 					ss.Vm = Vm
@@ -196,7 +196,7 @@ func WebDaemon(persistent persistent.Persistent,
 			} else {
 				var session *packet.WorkerSession
 				var inf *packet.WorkerInfor
-				session, inf, err = daemon.DeployVMwithVolume(ss, cancel)
+				session, inf, err = daemon.DeployVMwithVolume(ss, cancel, keepalive)
 				if err != nil {
 					return nil, err
 				} else if session != nil {

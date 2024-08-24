@@ -21,7 +21,7 @@ func TestT(t *testing.T) {
 
 	go http.ListenAndServe(":60001", nil)
 
-	client.RecvSession(func(ws *packet.WorkerSession, c chan bool) (*packet.WorkerSession, error) {
+	client.RecvSession(func(ws *packet.WorkerSession, c chan bool, d chan bool) (*packet.WorkerSession, error) {
 		fmt.Printf("%s request\n", time.Now().Format(time.RFC3339))
 		<-c
 		fmt.Printf("%s cancel\n", time.Now().Format(time.RFC3339))
