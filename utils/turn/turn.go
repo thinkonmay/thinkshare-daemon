@@ -99,7 +99,7 @@ func SetupTurn(
 	usersMap[username] = turn.GenerateAuthKey(username, realm, password)
 
 	go func() {
-		if err != nil {
+		if err != nil || t == nil {
 			return
 		}
 

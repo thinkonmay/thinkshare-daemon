@@ -124,10 +124,10 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 
 			deployment, keepalive :=
 				&deployment{
-					cancel:    make(chan bool, 8),
+					cancel:    make(chan bool, 4096),
 					timestamp: now(),
 				}, &deployment{
-					cancel:    make(chan bool, 8),
+					cancel:    make(chan bool, 4096),
 					timestamp: now(),
 				}
 
@@ -145,8 +145,8 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			running := true
 			defer func() {
 				running = false
-				ret.mut.Lock()
 				deployment.cancel <- true
+				ret.mut.Lock()
 				delete(ret.pending, msg.Id)
 				ret.mut.Unlock()
 			}()
@@ -155,6 +155,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 					time.Sleep(time.Second)
 					if now()-deployment.timestamp > _new_timeout {
 						deployment.cancel <- true
+						return
 					}
 				}
 			}()
@@ -162,9 +163,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				for {
 					time.Sleep(time.Second)
 					if now()-keepalive.timestamp > _use_timeout {
-						ret.mut.Lock()
 						keepalive.cancel <- true
-						ret.mut.Unlock()
 						return
 					}
 				}
