@@ -80,7 +80,7 @@ func (daemon *Daemon) HandleVirtdaemon() func() {
 	}
 }
 
-func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive chan bool) (_ *packet.WorkerInfor, funerr error) {
+func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive chan bool) (funinfo *packet.WorkerInfor, funerr error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	} else if session.Vm == nil {
@@ -151,7 +151,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 
 	// TODO: AKF system
 	defer func() {
-		if funerr != nil {
+		if funerr != nil || funinfo != nil {
 			return
 		}
 
@@ -164,7 +164,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 				}
 
 				log.PushLog("VM %s is deleted by keepalive timeout", model.ID)
-				virt.DeleteVM(model.ID)
+				daemon.ShutdownVM(funinfo)
 				break
 			}
 		}()
