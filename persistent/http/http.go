@@ -81,6 +81,23 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			log.PushLog(conn)
 			return []byte{}, nil
 		})
+	ret.wrapper("_used",
+		func(conn string) ([]byte, error) {
+			msg := ""
+			if err := json.Unmarshal([]byte(conn), &msg); err != nil {
+				return nil, err
+			}
+
+			ret.mut.Lock()
+			keepalive, found := ret.keepalives[msg]
+			ret.mut.Unlock()
+			if !found {
+				return nil, fmt.Errorf("_used session not found")
+			}
+
+			keepalive.timestamp = now() - _new_timeout
+			return []byte("{}"), nil
+		})
 	ret.wrapper("_use",
 		func(conn string) ([]byte, error) {
 			msg := ""
@@ -161,8 +178,12 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			}()
 			go func() {
 				for {
-					time.Sleep(time.Second)
-					if now()-keepalive.timestamp > _use_timeout {
+					time.Sleep(time.Minute)
+					timeout := now() - keepalive.timestamp
+					if timeout > 60 {
+						log.PushLog("session %s has timeout value %d", msg.Id, timeout)
+					}
+					if timeout > _use_timeout {
 						keepalive.cancel <- true
 						return
 					}

@@ -34,7 +34,6 @@ func StartPocketbase(dir string, domain []string) {
 		}{}
 
 		user := c.Request().Header.Get("User")
-		log.PushLog("request from user %s", user)
 		err = app.App.Dao().ConcurrentDB().
 			Select("volumes.local_id").
 			From("volumes").

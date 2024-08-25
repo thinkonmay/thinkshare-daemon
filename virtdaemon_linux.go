@@ -256,21 +256,25 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 		}
 	}()
 	go func() {
-		for len(keepalive) == 0 {
-			id := ""
-			if nss.Vm != nil && nss.Vm.Volumes != nil && len(nss.Vm.Volumes) > 0 {
-				id = nss.Vm.Volumes[0]
-			} else {
-				id = nss.Id
-			}
+		id := ""
+		if nss.Vm != nil && nss.Vm.Volumes != nil && len(nss.Vm.Volumes) > 0 {
+			id = nss.Vm.Volumes[0]
+		} else {
+			id = nss.Id
+		}
 
-			data, _ := json.Marshal(id)
+		data, _ := json.Marshal(id)
+		for len(keepalive) == 0 {
 			time.Sleep(time.Second * 1)
 			very_quick_client.Post(
 				fmt.Sprintf("%s/_use", url),
 				"application/json",
 				bytes.NewReader(data))
 		}
+		very_quick_client.Post(
+			fmt.Sprintf("%s/_used", url),
+			"application/json",
+			bytes.NewReader(data))
 	}()
 
 	resp, err := slow_client.Post(
