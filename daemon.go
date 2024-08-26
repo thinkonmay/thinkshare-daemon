@@ -226,71 +226,72 @@ func WebDaemon(persistent persistent.Persistent,
 		return ss, nil
 	})
 
-	daemon.persist.ClosedSession(func(ss *packet.WorkerSession) error {
-		_, err := daemon.HandleSessionForward(ss, "closed")
-		if err == nil {
-			return nil
-		}
-
-		daemon.QueryInfo(&daemon.WorkerInfor)
-		log.PushLog("terminating session %s", ss)
-		keys := make([]string, 0, len(daemon.session))
-		for k, _ := range daemon.session {
-			keys = append(keys, k)
-		}
-
-		var ws *packet.WorkerSession = nil
-		var iws *internalWorkerSession = nil
-		for _, v := range keys {
-			if ss.Id == v {
-				iws = daemon.session[v]
-				delete(daemon.session, v)
-			}
-		}
-
-		wss := []*packet.WorkerSession{}
-		for _, v := range daemon.WorkerInfor.Sessions {
-			if ss.Id == v.Id {
-				ws = v
-			} else {
-				wss = append(wss, v)
-			}
-		}
-
-		daemon.WorkerInfor.Sessions = wss
-
-		if ws != nil {
-			if ws.Display != nil {
-				if ws.Display.DisplayIndex != nil {
-					media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
-				}
-			}
-			if ws.Vm != nil {
-				daemon.ShutdownVM(ws.Vm)
-			}
-			if ws.Thinkmay != nil {
-				daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.VideoToken)
-				daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.AudioToken)
-			}
-		}
-		if iws != nil {
-			if iws.turn_server != nil {
-				iws.turn_server.Close()
-			}
-			if iws.memory_channel != nil {
-				daemon.memory.queues[*iws.memory_channel].metadata.active = 0
-			}
-			for _, pi := range iws.childprocess {
-				daemon.childprocess.CloseID(pi)
-			}
-		}
-
-		return nil
-	})
-
+	daemon.persist.ClosedSession(daemon.CloseSession)
 	daemon.signaling.AuthHandler(daemon.HandleSignaling)
 
 	return daemon
+}
+
+func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
+	_, err := daemon.HandleSessionForward(ss, "closed")
+	if err == nil {
+		return nil
+	}
+
+	daemon.QueryInfo(&daemon.WorkerInfor)
+	log.PushLog("terminating session %s", ss)
+	keys := make([]string, 0, len(daemon.session))
+	for k, _ := range daemon.session {
+		keys = append(keys, k)
+	}
+
+	var ws *packet.WorkerSession = nil
+	var iws *internalWorkerSession = nil
+	for _, v := range keys {
+		if ss.Id == v {
+			iws = daemon.session[v]
+			delete(daemon.session, v)
+		}
+	}
+
+	wss := []*packet.WorkerSession{}
+	for _, v := range daemon.WorkerInfor.Sessions {
+		if ss.Id == v.Id {
+			ws = v
+		} else {
+			wss = append(wss, v)
+		}
+	}
+
+	daemon.WorkerInfor.Sessions = wss
+
+	if ws != nil {
+		if ws.Display != nil {
+			if ws.Display.DisplayIndex != nil {
+				media.RemoveVirtualDisplay(int(*ws.Display.DisplayIndex))
+			}
+		}
+		if ws.Vm != nil {
+			daemon.ShutdownVM(ws.Vm)
+		}
+		if ws.Thinkmay != nil {
+			daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.VideoToken)
+			daemon.signaling.RemoveSignalingChannel(*ws.Thinkmay.AudioToken)
+		}
+	}
+	if iws != nil {
+		if iws.turn_server != nil {
+			iws.turn_server.Close()
+		}
+		if iws.memory_channel != nil {
+			daemon.memory.queues[*iws.memory_channel].metadata.active = 0
+		}
+		for _, pi := range iws.childprocess {
+			daemon.childprocess.CloseID(pi)
+		}
+	}
+
+	return nil
 }
 
 func (daemon *Daemon) Close() {

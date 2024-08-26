@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -151,12 +152,18 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 
 	// TODO: AKF system
 	defer func() {
-		if funerr != nil || funinfo != nil {
+		if funerr != nil {
 			return
 		}
 
 		go func() {
-			defer recover()
+			defer func() {
+				if err := recover(); err != nil {
+					fmt.Errorf("panic occurred in ping session: %s", debug.Stack())
+				}
+			}()
+
+			log.PushLog("keepalive thread for %s is initiated", model.ID)
 			for {
 				time.Sleep(3 * time.Second)
 				if len(keepalive) == 0 {
@@ -164,7 +171,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 				}
 
 				log.PushLog("VM %s is deleted by keepalive timeout", model.ID)
-				daemon.ShutdownVM(funinfo)
+				daemon.CloseSession(session)
 				break
 			}
 		}()
@@ -271,6 +278,8 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 				"application/json",
 				bytes.NewReader(data))
 		}
+
+		log.PushLog("keepalive thread for %s stopped, _used signal sent",id)
 		very_quick_client.Post(
 			fmt.Sprintf("%s/_used", url),
 			"application/json",

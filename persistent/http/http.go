@@ -95,7 +95,8 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, fmt.Errorf("_used session not found")
 			}
 
-			keepalive.timestamp = now() - _new_timeout
+			log.PushLog("receive _used signal for session %s",msg)
+			keepalive.timestamp = now() - _use_timeout
 			return []byte("{}"), nil
 		})
 	ret.wrapper("_use",
@@ -181,7 +182,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 					time.Sleep(time.Minute)
 					timeout := now() - keepalive.timestamp
 					if timeout > 60 {
-						log.PushLog("session %s has timeout value %d", msg.Id, timeout)
+						log.PushLog("session %s has timeout value %d", keepaliveid, timeout)
 					}
 					if timeout > _use_timeout {
 						keepalive.cancel <- true
