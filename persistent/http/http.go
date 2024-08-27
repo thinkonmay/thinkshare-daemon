@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
@@ -95,7 +96,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, fmt.Errorf("_used session not found")
 			}
 
-			log.PushLog("receive _used signal for session %s",msg)
+			log.PushLog("receive _used signal for session %s", msg)
 			keepalive.timestamp = now() - _use_timeout
 			return []byte("{}"), nil
 		})
@@ -149,13 +150,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 					timestamp: now(),
 				}
 
-			keepaliveid := ""
-			if msg.Vm != nil && msg.Vm.Volumes != nil && len(msg.Vm.Volumes) > 0 {
-				keepaliveid = msg.Vm.Volumes[0]
-			} else {
-				keepaliveid = msg.Id
-			}
-
+			keepaliveid := app.GetKeepaliveID(msg)
 			ret.mut.Lock()
 			ret.pending[msg.Id] = deployment
 			ret.keepalives[keepaliveid] = keepalive

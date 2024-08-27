@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/cluster"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
+	"github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -81,7 +82,7 @@ func (daemon *Daemon) HandleVirtdaemon() func() {
 	}
 }
 
-func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive chan bool) (funinfo *packet.WorkerInfor, funerr error) {
+func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerInfor, error) {
 	if !libvirt_available {
 		return nil, fmt.Errorf("libvirt not available")
 	} else if session.Vm == nil {
@@ -150,33 +151,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		return nil, err
 	}
 
-	// TODO: AKF system
-	defer func() {
-		if funerr != nil {
-			return
-		}
-
-		go func() {
-			defer func() {
-				if err := recover(); err != nil {
-					fmt.Errorf("panic occurred in ping session: %s", debug.Stack())
-				}
-			}()
-
-			log.PushLog("keepalive thread for %s is initiated", model.ID)
-			for {
-				time.Sleep(3 * time.Second)
-				if len(keepalive) == 0 {
-					continue
-				}
-
-				log.PushLog("VM %s is deleted by keepalive timeout", model.ID)
-				daemon.CloseSession(session)
-				break
-			}
-		}()
-	}()
-
 	start := time.Now().UnixMilli()
 	for {
 		if time.Now().UnixMilli()-start > 10*60*1000 {
@@ -228,7 +202,27 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 			continue
 		}
 
-		log.PushLog("deployed a new worker %s", *addr.Ip)
+		go func() {
+			defer func() {
+				if err := recover(); err != nil {
+					fmt.Errorf("panic occurred in ping session: %s", debug.Stack())
+				}
+			}()
+
+			keepaliveid := app.GetKeepaliveID(session)
+			log.PushLog("deployed a new worker %s", *addr.Ip)
+			log.PushLog("keepalive thread for %s is initiated", keepaliveid)
+			for {
+				time.Sleep(3 * time.Second)
+				if len(keepalive) == 0 {
+					continue
+				}
+
+				log.PushLog("VM %s is deleted by keepalive timeout", keepaliveid)
+				daemon.CloseSession(session)
+				break
+			}
+		}()
 		return &inf, nil
 	}
 
@@ -263,13 +257,7 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 		}
 	}()
 	go func() {
-		id := ""
-		if nss.Vm != nil && nss.Vm.Volumes != nil && len(nss.Vm.Volumes) > 0 {
-			id = nss.Vm.Volumes[0]
-		} else {
-			id = nss.Id
-		}
-
+		id := app.GetKeepaliveID(nss)
 		data, _ := json.Marshal(id)
 		for len(keepalive) == 0 {
 			time.Sleep(time.Second * 1)
@@ -279,7 +267,7 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 				bytes.NewReader(data))
 		}
 
-		log.PushLog("keepalive thread for %s stopped, _used signal sent",id)
+		log.PushLog("keepalive thread for %s stopped, _used signal sent", id)
 		very_quick_client.Post(
 			fmt.Sprintf("%s/_used", url),
 			"application/json",
