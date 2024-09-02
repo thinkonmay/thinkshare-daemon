@@ -305,6 +305,7 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 	}
 
 	if err := impl.setupNode(); err != nil {
+		impl.active = false
 		return nil, err
 	}
 
@@ -320,6 +321,7 @@ func NewNode(manifest NodeManifest) (*NodeImpl, error) {
 		}
 	}
 
+	impl.active = false
 	return nil, fmt.Errorf("timeout query new node")
 }
 func (impl *NodeImpl) Deinit() error {

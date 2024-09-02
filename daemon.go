@@ -40,8 +40,8 @@ var (
 )
 
 type internalWorkerSession struct {
+	*packet.WorkerSession
 	childprocess   []childprocess.ProcessID
-	turn_server    *turn.TurnServer
 	memory_channel *int
 }
 
@@ -55,6 +55,7 @@ type Daemon struct {
 	childprocess *childprocess.ChildProcesses
 	cluster      cluster.ClusterConfig
 	persist      persistent.Persistent
+	turn         *turn.TurnServer
 
 	mutex *sync.Mutex
 
@@ -97,6 +98,10 @@ func WebDaemon(persistent persistent.Persistent,
 
 	if daemon.cluster, err = cluster.NewClusterConfig(cluster_path); err != nil {
 		log.PushLog("fail to config cluster %s", err.Error())
+	}
+
+	if daemon.turn, err = turn.NewServer(3000, 65535, 1000); err != nil {
+		log.PushLog("fail to setup turn server %s", err.Error())
 	}
 
 	if ip, id, exists := daemon.cluster.Log(); exists {
@@ -142,22 +147,12 @@ func WebDaemon(persistent persistent.Persistent,
 	})
 
 	daemon.persist.RecvSession(func(ss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
-
 		process := []childprocess.ProcessID{}
-		var t *turn.TurnServer = nil
 		var channel *int = nil
 
 		err := fmt.Errorf("no session configured")
 		if ss.Turn != nil {
-			if t, err = turn.Open(
-				ss.Turn.Username,
-				ss.Turn.Password,
-				int(ss.Turn.MinPort),
-				int(ss.Turn.MaxPort),
-				int(ss.Turn.Port),
-			); err != nil {
-				return nil, err
-			}
+			daemon.turn.AllocateUser(ss.Turn.Username, ss.Turn.Password)
 		}
 
 		if ss.Target != nil {
@@ -217,7 +212,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 		log.PushLog("session creation successful")
 		daemon.session[ss.Id] = &internalWorkerSession{
-			turn_server:    t,
+			WorkerSession:  ss,
 			childprocess:   process,
 			memory_channel: channel,
 		}
@@ -280,8 +275,8 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 		}
 	}
 	if iws != nil {
-		if iws.turn_server != nil {
-			iws.turn_server.Close()
+		if iws.Turn != nil {
+			daemon.turn.DeallocateUser(iws.Turn.Username)
 		}
 		if iws.memory_channel != nil {
 			daemon.memory.queues[*iws.memory_channel].metadata.active = 0
@@ -296,6 +291,7 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 
 func (daemon *Daemon) Close() {
 	daemon.cluster.Deinit()
+	daemon.turn.Close()
 	for _, clean := range daemon.cleans {
 		clean()
 	}
@@ -313,9 +309,6 @@ func (daemon *Daemon) Close() {
 	}
 
 	for _, ws := range daemon.session {
-		if ws.turn_server != nil {
-			ws.turn_server.Close()
-		}
 		for _, pi := range ws.childprocess {
 			daemon.childprocess.CloseID(pi)
 		}

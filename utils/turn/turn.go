@@ -1,135 +1,109 @@
 package turn
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"net"
 	"strconv"
-	"time"
+	"sync"
+	"syscall"
 
-	"github.com/pion/stun/v2"
 	"github.com/pion/turn/v3"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-	"github.com/thinkonmay/thinkshare-daemon/utils/system"
+	"golang.org/x/sys/unix"
 )
 
 const (
-	realm = "thinkmay.net"
+	realm     = "thinkmay.net"
+	threadNum = 16
 )
 
 type TurnServer struct {
-	s *turn.Server
+	*turn.Server
+	mut      *sync.Mutex
+	usersMap map[string][]byte
 }
 
-func Open(username, password string, min_port, max_port, port int) (*TurnServer, error) {
-	ip, err := system.GetPublicIPCurl()
+func NewServer(min_port, max_port, port int) (*TurnServer, error) {
+	ret := &TurnServer{
+		mut:      &sync.Mutex{},
+		usersMap: map[string][]byte{},
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", "0.0.0.0:"+strconv.Itoa(port))
 	if err != nil {
 		return nil, err
 	}
-	s, err := SetupTurn(
-		username, password,
-		ip,
-		port,
-		min_port,
-		max_port)
-	if err != nil {
-		log.PushLog("failed to setup turn account: %s", err.Error())
-		return nil, err
-	}
 
-	return &TurnServer{s}, nil
-}
-
-func (t *TurnServer) Close() {
-	t.s.Close()
-}
-
-// stunLogger wraps a PacketConn and prints incoming/outgoing STUN packets
-// This pattern could be used to capture/inspect/modify data as well
-type stunLogger struct {
-	net.PacketConn
-}
-
-func (s *stunLogger) WriteTo(p []byte, addr net.Addr) (n int, err error) {
-	if n, err = s.PacketConn.WriteTo(p, addr); err == nil && stun.IsMessage(p) {
-		msg := &stun.Message{Raw: p}
-		if err = msg.Decode(); err != nil {
-			return
-		}
-
-		// log.PushLog("[%s] Outbound STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
-	}
-
-	return
-}
-
-func (s *stunLogger) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
-	if n, addr, err = s.PacketConn.ReadFrom(p); err == nil && stun.IsMessage(p) {
-		msg := &stun.Message{Raw: p}
-		if err = msg.Decode(); err != nil {
-			return
-		}
-
-		// log.PushLog("[%s] Inbound  STUN to %s: %s", time.Now().Format(time.RFC850), addr.String(), msg.String())
-	}
-
-	return
-}
-
-func SetupTurn(
-	username string,
-	password string,
-	publicip string,
-	port int,
-	min int,
-	max int) (t *turn.Server, err error) {
-	flag.Parse()
-
-	// Create a UDP listener to pass into pion/turn
+	// Create `numThreads` UDP listeners to pass into pion/turn
 	// pion/turn itself doesn't allocate any UDP sockets, but lets the user pass them in
 	// this allows us to add logging, storage or modify inbound/outbound traffic
-	udpListener, err := net.ListenPacket("udp4", "0.0.0.0:"+strconv.Itoa(port))
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create TURN server listener: %s", err)
+	// UDP listeners share the same local address:port with setting SO_REUSEPORT and the kernel
+	// will load-balance received packets per the IP 5-tuple
+	listenerConfig := &net.ListenConfig{
+		Control: func(network, address string, conn syscall.RawConn) error { // nolint: revive
+			var operr error
+			if err = conn.Control(func(fd uintptr) {
+				operr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+			}); err != nil {
+				return err
+			}
+
+			return operr
+		},
 	}
 
-	// Cache -users flag for easy lookup later
-	// If passwords are stored they should be saved to your DB hashed using turn.GenerateAuthKey
-	usersMap := map[string][]byte{}
-	usersMap[username] = turn.GenerateAuthKey(username, realm, password)
+	relayAddressGenerator, err := NewGenerator(min_port, max_port)
+	if err != nil {
+		return nil, err
+	}
 
-	go func() {
-		if err != nil || t == nil {
-			return
+	packetConnConfigs := make([]turn.PacketConnConfig, threadNum)
+	for i := 0; i < threadNum; i++ {
+		conn, listErr := listenerConfig.ListenPacket(context.Background(), addr.Network(), addr.String())
+		if listErr != nil {
+			log.PushLog("Failed to allocate UDP listener at %s:%s", addr.Network(), addr.String())
 		}
 
-		time.Sleep(time.Hour * 24)
-		t.Close()
-	}()
+		packetConnConfigs[i] = turn.PacketConnConfig{
+			PacketConn:            conn,
+			RelayAddressGenerator: relayAddressGenerator,
+		}
 
-	return turn.NewServer(turn.ServerConfig{
-		Realm: realm,
-		// Set AuthHandler callback
-		// This is called every time a user tries to authenticate with the TURN server
-		// Return the key for that user, or false when no user is found
+		log.PushLog("Server %d listening on %s\n", i, conn.LocalAddr().String())
+	}
+
+	if ret.Server, err = turn.NewServer(turn.ServerConfig{
+		Realm:             realm,
+		PacketConnConfigs: packetConnConfigs,
 		AuthHandler: func(username string, realm string, srcAddr net.Addr) ([]byte, bool) {
-			// log.PushLog("[%s] Incoming TURN: Request from %s", time.Now().Format(time.RFC850), srcAddr.String())
-			if key, ok := usersMap[username]; ok {
+			ret.mut.Lock()
+			defer ret.mut.Unlock()
+			if key, ok := ret.usersMap[username]; ok {
 				return key, true
+			} else {
+				return nil, false
 			}
-			return nil, false
 		},
-		// PacketConnConfigs is a list of UDP Listeners and the configuration around them
-		PacketConnConfigs: []turn.PacketConnConfig{
-			{
-				PacketConn: &stunLogger{udpListener},
-				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
-					RelayAddress: net.ParseIP(publicip), // Claim that we are listening on IP passed by user (This should be your Public IP)
-					Address:      "0.0.0.0",             // But actually be listening on every interface
-					MinPort:      uint16(min),
-					MaxPort:      uint16(max),
-				},
-			},
-		},
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("Failed to create TURN server : %s", err)
+	}
+
+	return ret, nil
+}
+
+func (t *TurnServer) DeallocateUser(username string) {
+	t.mut.Lock()
+	defer t.mut.Unlock()
+
+	delete(t.usersMap, username)
+}
+func (t *TurnServer) AllocateUser(username, password string) {
+	t.mut.Lock()
+	defer t.mut.Unlock()
+
+	t.usersMap[username] = turn.GenerateAuthKey(username, realm, password)
+}
+func (t *TurnServer) Close() {
+	t.Server.Close()
 }

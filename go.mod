@@ -112,7 +112,7 @@ require (
 	github.com/judwhite/go-svc v1.2.1
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/pion/transport/v2 v2.2.4 // indirect
-	github.com/pion/turn/v3 v3.0.1
+	github.com/pion/turn/v4 v4.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pocketbase/pocketbase v0.22.6
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
