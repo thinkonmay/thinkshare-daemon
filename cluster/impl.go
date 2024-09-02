@@ -247,6 +247,13 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 	return impl, nil
 }
 
+func (impl *ClusterConfigImpl) TurnServer() (TurnConfig, bool) {
+	if impl.ClusterConfigManifest.Local.TurnServer == nil {
+		return TurnConfig{}, false
+	} else {
+		return *impl.ClusterConfigManifest.Local.TurnServer, true
+	}
+}
 func (impl *ClusterConfigImpl) DNSserver() string {
 	return impl.ClusterConfigManifest.Local.DNS
 }

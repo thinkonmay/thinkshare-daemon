@@ -8,7 +8,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/pion/turn/v3"
+	"github.com/pion/turn/v4"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"golang.org/x/sys/unix"
 )
@@ -24,7 +24,7 @@ type TurnServer struct {
 	usersMap map[string][]byte
 }
 
-func NewServer(min_port, max_port, port int) (*TurnServer, error) {
+func NewServer(min_port, max_port, port int, ip string) (*TurnServer, error) {
 	ret := &TurnServer{
 		mut:      &sync.Mutex{},
 		usersMap: map[string][]byte{},
@@ -53,7 +53,7 @@ func NewServer(min_port, max_port, port int) (*TurnServer, error) {
 		},
 	}
 
-	relayAddressGenerator, err := NewGenerator(min_port, max_port)
+	relayAddressGenerator, err := NewGenerator(min_port, max_port, ip)
 	if err != nil {
 		return nil, err
 	}

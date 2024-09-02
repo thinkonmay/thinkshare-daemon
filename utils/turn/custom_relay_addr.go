@@ -22,18 +22,19 @@ type CustomRelayAddressGenerator struct {
 	Net     transport.Net
 }
 
-func NewGenerator(min, max int) (*CustomRelayAddressGenerator, error) {
+func NewGenerator(min, max int, ip string) (*CustomRelayAddressGenerator, error) {
 	Net, err := stdnet.NewNet()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create network: %w", err)
 	}
 
 	return &CustomRelayAddressGenerator{
-		MinPort: uint16(min),
-		MaxPort: uint16(max),
-		Rand:    randutil.NewMathRandomGenerator(),
-		Address: "0.0.0.0",
-		Net:     Net,
+		MinPort:      uint16(min),
+		MaxPort:      uint16(max),
+		Rand:         randutil.NewMathRandomGenerator(),
+		RelayAddress: net.ParseIP(ip),
+		Address:      "0.0.0.0",
+		Net:          Net,
 	}, nil
 }
 

@@ -100,8 +100,15 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("fail to config cluster %s", err.Error())
 	}
 
-	if daemon.turn, err = turn.NewServer(3000, 65535, 1000); err != nil {
-		log.PushLog("fail to setup turn server %s", err.Error())
+	if turnconf, ok := daemon.cluster.TurnServer(); ok {
+		if daemon.turn, err = turn.NewServer(
+			turnconf.MinPort,
+			turnconf.MaxPort,
+			turnconf.Port,
+			turnconf.PublicIP); err != nil {
+			log.PushLog("fail to setup turn server %s", err.Error())
+			daemon.turn = nil
+		}
 	}
 
 	if ip, id, exists := daemon.cluster.Log(); exists {
@@ -151,7 +158,7 @@ func WebDaemon(persistent persistent.Persistent,
 		var channel *int = nil
 
 		err := fmt.Errorf("no session configured")
-		if ss.Turn != nil {
+		if ss.Turn != nil && daemon.turn != nil {
 			daemon.turn.AllocateUser(ss.Turn.Username, ss.Turn.Password)
 		}
 
@@ -275,7 +282,7 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 		}
 	}
 	if iws != nil {
-		if iws.Turn != nil {
+		if iws.Turn != nil && daemon.turn != nil {
 			daemon.turn.DeallocateUser(iws.Turn.Username)
 		}
 		if iws.memory_channel != nil {
@@ -291,7 +298,9 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 
 func (daemon *Daemon) Close() {
 	daemon.cluster.Deinit()
-	daemon.turn.Close()
+	if daemon.turn != nil {
+		daemon.turn.Close()
+	}
 	for _, clean := range daemon.cleans {
 		clean()
 	}

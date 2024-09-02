@@ -15,10 +15,11 @@ type PeerManifest struct {
 	Ip string `yaml:"ip"`
 }
 type Host struct {
-	Interface string  `yaml:"interface"`
-	DNS       string  `yaml:"dns"`
-	Domain    *string `yaml:"domain"`
-	Log       *struct {
+	Interface  string      `yaml:"interface"`
+	DNS        string      `yaml:"dns"`
+	Domain     *string     `yaml:"domain"`
+	TurnServer *TurnConfig `yaml:"turn"`
+	Log        *struct {
 		IP string `yaml:"ip"`
 		ID string `yaml:"id"`
 	} `yaml:"log"`
@@ -41,7 +42,15 @@ type Peer interface {
 	Query() error
 }
 
+type TurnConfig struct {
+	MinPort  int    `json:"min_port"`
+	MaxPort  int    `json:"max_port"`
+	Port     int    `json:"port"`
+	PublicIP string `json:"public_ip"`
+}
+
 type ClusterConfig interface {
+	TurnServer() (conf TurnConfig, exist bool)
 	Interface() string
 	DNSserver() string
 	Log() (ip, id string, exists bool)

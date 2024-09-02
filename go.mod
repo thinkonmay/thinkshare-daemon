@@ -8,8 +8,10 @@ require (
 	github.com/jaypipes/ghw v0.9.0
 	github.com/labstack/echo/v5 v5.0.0-20230722203903-ec5b858dab61
 	github.com/melbahja/goph v1.4.0
+	github.com/pion/randutil v0.1.0
 	github.com/pion/stun v0.6.1
-	github.com/pion/stun/v2 v2.0.0
+	github.com/pion/turn/v4 v4.0.0
+	github.com/pocketbase/dbx v1.10.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/thinkonmay/thinkremote-rtchub v1.1.1-0.20240225162949-450d9c6cc9a7
 	github.com/winlabs/gowin32 v0.0.0-20221003142512-0d265587d3c9
@@ -64,11 +66,11 @@ require (
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/pion/dtls/v2 v2.2.7 // indirect
+	github.com/pion/dtls/v3 v3.0.1 // indirect
 	github.com/pion/logging v0.2.2 // indirect
-	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/transport/v3 v3.0.1 // indirect
+	github.com/pion/stun/v3 v3.0.0 // indirect
+	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pkg/sftp v1.13.5 // indirect
-	github.com/pocketbase/dbx v1.10.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
@@ -76,15 +78,16 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/wlynxg/anet v0.0.3 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	gocloud.dev v0.37.0 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/crypto v0.25.0 // indirect
 	golang.org/x/image v0.15.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
-	golang.org/x/sync v0.6.0 // indirect
-	golang.org/x/term v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sync v0.7.0 // indirect
+	golang.org/x/term v0.22.0 // indirect
+	golang.org/x/text v0.16.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/api v0.171.0 // indirect
@@ -111,14 +114,13 @@ require (
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/judwhite/go-svc v1.2.1
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/pion/transport/v2 v2.2.4 // indirect
-	github.com/pion/turn/v4 v4.0.0 // indirect
+	github.com/pion/transport/v2 v2.2.4
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pocketbase/pocketbase v0.22.6
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	golang.org/x/sys v0.18.0
+	golang.org/x/sys v0.22.0
 	google.golang.org/grpc v1.62.1
 	gopkg.in/yaml.v2 v2.4.0
 	howett.net/plist v1.0.0 // indirect
