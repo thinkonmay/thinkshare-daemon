@@ -210,6 +210,10 @@ func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, err
 	http.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
+		if r.Method == "OPTIONS" {
+			return
+		}
+
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(503)

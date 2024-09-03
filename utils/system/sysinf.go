@@ -113,11 +113,6 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-	pci, err := ghw.PCI()
-	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil, err
-	}
 
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
@@ -168,9 +163,6 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		hostStat.KernelArch,
 		hostStat.KernelVersion,
 		hostStat.PlatformVersion)
-
-	for _, _ = range pci.Devices {
-	}
 
 	for _, i := range gpu.GraphicsCards {
 		ret.GPUs = append(ret.GPUs, i.DeviceInfo.Product.Name)
