@@ -109,6 +109,8 @@ func WebDaemon(persistent persistent.Persistent,
 			log.PushLog("fail to setup turn server %s", err.Error())
 			daemon.turn = nil
 		}
+	} else {
+		log.PushLog("turn config not exist, ignoring turn")
 	}
 
 	if ip, id, exists := daemon.cluster.Log(); exists {
@@ -146,92 +148,94 @@ func WebDaemon(persistent persistent.Persistent,
 		}
 	}
 
-	def := daemon.HandleVirtdaemon()
-	daemon.cleans = append(daemon.cleans, def)
+	if def := daemon.HandleVirtdaemon(); def != nil {
+		daemon.cleans = append(daemon.cleans, def)
+	}
 	daemon.persist.Infor(func() *packet.WorkerInfor {
 		result := daemon.QueryInfo(&daemon.WorkerInfor)
 		return &result
 	})
 
-	daemon.persist.RecvSession(func(ss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
-		process := []childprocess.ProcessID{}
-		var channel *int = nil
-
-		err := fmt.Errorf("no session configured")
-		if ss.Turn != nil && daemon.turn != nil {
-			daemon.turn.AllocateUser(ss.Turn.Username, ss.Turn.Password)
-		}
-
-		if ss.Target != nil {
-			return daemon.HandleSessionForward(ss, "new")
-		}
-
-		if ss.Display != nil {
-			if name, index, err := media.StartVirtualDisplay(
-				int(ss.Display.ScreenWidth),
-				int(ss.Display.ScreenHeight),
-			); err != nil {
-				i := ""
-				ss.Display.DisplayName = &i
-			} else {
-				val := int32(index)
-				ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
-			}
-		} else if len(media.Displays()) > 0 {
-			ss.Display = &packet.DisplaySession{
-				DisplayName:  &media.Displays()[0],
-				DisplayIndex: nil,
-			}
-		}
-
-		if ss.Thinkmay != nil {
-			process, channel, err = daemon.handleHub(ss)
-		}
-		if ss.Vm != nil {
-			daemon.QueryInfo(&daemon.WorkerInfor)
-			if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
-				if Vm, err := daemon.DeployVM(ss, cancel, keepalive); err != nil {
-					return nil, err
-				} else {
-					ss.Vm = Vm
-				}
-			} else {
-				var session *packet.WorkerSession
-				var inf *packet.WorkerInfor
-				session, inf, err = daemon.DeployVMwithVolume(ss, cancel, keepalive)
-				if err != nil {
-					return nil, err
-				} else if session != nil {
-					return session, nil
-				} else if inf != nil {
-					ss.Vm = inf
-				}
-			}
-		}
-		if ss.Sunshine != nil {
-			process, err = daemon.handleSunshine(ss)
-		}
-
-		if err != nil {
-			log.PushLog("session failed %s", err.Error())
-			return nil, err
-		}
-
-		log.PushLog("session creation successful")
-		daemon.session[ss.Id] = &internalWorkerSession{
-			WorkerSession:  ss,
-			childprocess:   process,
-			memory_channel: channel,
-		}
-
-		daemon.WorkerInfor.Sessions = append(daemon.WorkerInfor.Sessions, ss)
-		return ss, nil
-	})
-
+	daemon.persist.RecvSession(daemon.handleSession)
 	daemon.persist.ClosedSession(daemon.CloseSession)
 	daemon.signaling.AuthHandler(daemon.HandleSignaling)
-
 	return daemon
+}
+
+func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
+	process := []childprocess.ProcessID{}
+	var channel *int = nil
+
+	err := fmt.Errorf("no session configured")
+	if ss.Turn != nil && daemon.turn != nil {
+		daemon.turn.AllocateUser(ss.Turn.Username, ss.Turn.Password)
+		ss.Turn = nil
+	}
+
+	if ss.Target != nil {
+		return daemon.HandleSessionForward(ss, "new")
+	}
+
+	if ss.Display != nil {
+		if name, index, err := media.StartVirtualDisplay(
+			int(ss.Display.ScreenWidth),
+			int(ss.Display.ScreenHeight),
+		); err != nil {
+			i := ""
+			ss.Display.DisplayName = &i
+		} else {
+			val := int32(index)
+			ss.Display.DisplayName, ss.Display.DisplayIndex = &name, &val
+		}
+	} else if len(media.Displays()) > 0 {
+		ss.Display = &packet.DisplaySession{
+			DisplayName:  &media.Displays()[0],
+			DisplayIndex: nil,
+		}
+	}
+
+	if ss.Thinkmay != nil {
+		process, channel, err = daemon.handleHub(ss)
+	}
+	if ss.Vm != nil {
+		daemon.QueryInfo(&daemon.WorkerInfor)
+		if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
+			if Vm, err := daemon.DeployVM(ss, cancel, keepalive); err != nil {
+				return nil, err
+			} else {
+				ss.Vm = Vm
+			}
+		} else {
+			var session *packet.WorkerSession
+			var inf *packet.WorkerInfor
+			session, inf, err = daemon.DeployVMwithVolume(ss, cancel, keepalive)
+			if err != nil {
+				return nil, err
+			} else if session != nil {
+				return session, nil
+			} else if inf != nil {
+				ss.Vm = inf
+			}
+		}
+	}
+	if ss.Sunshine != nil {
+		process, err = daemon.handleSunshine(ss)
+	}
+
+	if err != nil {
+		log.PushLog("session failed %s", err.Error())
+		return nil, err
+	}
+
+	log.PushLog("session creation successful")
+	daemon.session[ss.Id] = &internalWorkerSession{
+		WorkerSession:  ss,
+		childprocess:   process,
+		memory_channel: channel,
+	}
+
+	daemon.WorkerInfor.Sessions = append(daemon.WorkerInfor.Sessions, ss)
+	return ss, nil
 }
 
 func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {

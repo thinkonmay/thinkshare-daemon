@@ -23,178 +23,16 @@ const (
 	Httpport = 60000
 )
 
+var (
+	client = http.Client{Timeout: 24 * time.Hour}
+	app    = (*pocketbase.PocketBase)(nil)
+	doms   = []string{}
+)
+
 func StartPocketbase(dir string, domain []string) {
+	doms = append(doms, domain...)
 	app := pocketbase.New()
 	app.Bootstrap()
-
-	client := http.Client{Timeout: 24 * time.Hour}
-	infoauth := func(c echo.Context) (err error) {
-		volumes := []struct {
-			LocalID string `db:"local_id"`
-		}{}
-
-		user := c.Request().Header.Get("User")
-		err = app.App.Dao().ConcurrentDB().
-			Select("volumes.local_id").
-			From("volumes").
-			Where(dbx.NewExp("user = {:id}", dbx.Params{"id": user})).
-			All(&volumes)
-		if err != nil {
-			log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-			return err
-		}
-
-		vols := []string{}
-		for _, v := range volumes {
-			vols = append(vols, v.LocalID)
-		}
-
-		body, _ := io.ReadAll(c.Request().Body)
-		req, _ := http.NewRequest(
-			c.Request().Method,
-			fmt.Sprintf("http://localhost:%d%s?%s",
-				Httpport,
-				c.Request().URL.Path,
-				c.Request().URL.RawQuery),
-			strings.NewReader(string(body)))
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-			return err
-		}
-
-		body, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		} else if resp.StatusCode != 200 {
-			c.Response().Status = resp.StatusCode
-		}
-
-		for k, v := range resp.Header {
-			if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
-				continue
-			}
-			c.Response().Header().Add(k, v[0])
-		}
-
-		data := packet.WorkerInfor{}
-		json.Unmarshal(body, &data)
-
-		newSessions := []*packet.WorkerSession{}
-		for _, session := range data.Sessions {
-			if session.Vm == nil || session.Vm.Volumes == nil {
-				continue
-			}
-
-			found := false
-			for _, volume := range session.Vm.Volumes {
-				for _, vol := range vols {
-					if vol == volume {
-						found = true
-					}
-				}
-			}
-
-			if found {
-				newSessions = append(newSessions, session)
-			}
-		}
-
-		data.Sessions = newSessions
-
-		newVolumes := []string{}
-		for _, volume := range data.Volumes {
-			found := false
-			for _, vol := range vols {
-				if vol == volume {
-					found = true
-				}
-			}
-
-			if found {
-				newVolumes = append(newVolumes, volume)
-			}
-		}
-
-		data.Volumes = newVolumes
-
-		out, _ := json.Marshal(&data)
-		c.Response().Write(out)
-		return nil
-	}
-
-	handle := func(c echo.Context) (err error) {
-		path := c.Request().URL.Path
-		if path == "_info" {
-			path = "info"
-		}
-
-		body, _ := io.ReadAll(c.Request().Body)
-		req, _ := http.NewRequest(
-			c.Request().Method,
-			fmt.Sprintf("http://localhost:%d%s?%s",
-				Httpport, path,
-				c.Request().URL.RawQuery),
-			strings.NewReader(string(body)))
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-			return err
-		}
-
-		body, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		} else if resp.StatusCode != 200 {
-			c.Response().Status = resp.StatusCode
-		}
-
-		for k, v := range resp.Header {
-			if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
-				continue
-			}
-			c.Response().Header().Add(k, v[0])
-		}
-
-		c.Response().Write(body)
-		return nil
-	}
-
-	// Customize edit manage volume api external
-	handle_manage_volume := func(c echo.Context) (err error) {
-		body, _ := io.ReadAll(c.Request().Body)
-		req, _ := http.NewRequest(
-			c.Request().Method,
-			fmt.Sprintf("http://localhost:%d%s?%s",
-				9000, c.Request().URL.Path,
-				c.Request().URL.RawQuery),
-			strings.NewReader(string(body)))
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-			return err
-		}
-
-		body, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		} else if resp.StatusCode != 200 {
-			c.Response().Status = resp.StatusCode
-		}
-
-		for k, v := range resp.Header {
-			if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
-				continue
-			}
-			c.Response().Header().Add(k, v[0])
-		}
-
-		c.Response().Write(body)
-		return nil
-	}
 
 	path, _ := filepath.Abs(dir)
 	log.PushLog("serving file content at %s", path)
@@ -235,4 +73,172 @@ func StartPocketbase(dir string, domain []string) {
 			time.Sleep(time.Second)
 		}
 	}()
+}
+
+func infoauth(c echo.Context) (err error) {
+	volumes := []struct {
+		LocalID string `db:"local_id"`
+	}{}
+
+	user := c.Request().Header.Get("User")
+	err = app.App.Dao().ConcurrentDB().
+		Select("volumes.local_id").
+		From("volumes").
+		Where(dbx.NewExp("user = {:id}", dbx.Params{"id": user})).
+		All(&volumes)
+	if err != nil {
+		log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
+		return err
+	}
+
+	vols := []string{}
+	for _, v := range volumes {
+		vols = append(vols, v.LocalID)
+	}
+
+	body, _ := io.ReadAll(c.Request().Body)
+	req, _ := http.NewRequest(
+		c.Request().Method,
+		fmt.Sprintf("http://localhost:%d%s?%s",
+			Httpport,
+			c.Request().URL.Path,
+			c.Request().URL.RawQuery),
+		strings.NewReader(string(body)))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
+		return err
+	}
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		c.Response().Status = resp.StatusCode
+	}
+
+	for k, v := range resp.Header {
+		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
+			continue
+		}
+		c.Response().Header().Add(k, v[0])
+	}
+
+	data := packet.WorkerInfor{}
+	json.Unmarshal(body, &data)
+
+	newSessions := []*packet.WorkerSession{}
+	for _, session := range data.Sessions {
+		if session.Vm == nil || session.Vm.Volumes == nil {
+			continue
+		}
+
+		found := false
+		for _, volume := range session.Vm.Volumes {
+			for _, vol := range vols {
+				if vol == volume {
+					found = true
+				}
+			}
+		}
+
+		if found {
+			newSessions = append(newSessions, session)
+		}
+	}
+
+	data.Sessions = newSessions
+
+	newVolumes := []string{}
+	for _, volume := range data.Volumes {
+		found := false
+		for _, vol := range vols {
+			if vol == volume {
+				found = true
+			}
+		}
+
+		if found {
+			newVolumes = append(newVolumes, volume)
+		}
+	}
+
+	data.Volumes = newVolumes
+
+	out, _ := json.Marshal(&data)
+	c.Response().Write(out)
+	return nil
+}
+
+func handle(c echo.Context) (err error) {
+	path := c.Request().URL.Path
+	if path == "_info" {
+		path = "info"
+	}
+
+	body, _ := io.ReadAll(c.Request().Body)
+	req, _ := http.NewRequest(
+		c.Request().Method,
+		fmt.Sprintf("http://localhost:%d%s?%s",
+			Httpport, path,
+			c.Request().URL.RawQuery),
+		strings.NewReader(string(body)))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
+		return err
+	}
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		c.Response().Status = resp.StatusCode
+	}
+
+	for k, v := range resp.Header {
+		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
+			continue
+		}
+		c.Response().Header().Add(k, v[0])
+	}
+
+	c.Response().Write(body)
+	return nil
+}
+
+// Customize edit manage volume api external
+func handle_manage_volume(c echo.Context) (err error) {
+	body, _ := io.ReadAll(c.Request().Body)
+	req, _ := http.NewRequest(
+		c.Request().Method,
+		fmt.Sprintf("http://localhost:%d%s?%s",
+			9000, c.Request().URL.Path,
+			c.Request().URL.RawQuery),
+		strings.NewReader(string(body)))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
+		return err
+	}
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != 200 {
+		c.Response().Status = resp.StatusCode
+	}
+
+	for k, v := range resp.Header {
+		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
+			continue
+		}
+		c.Response().Header().Add(k, v[0])
+	}
+
+	c.Response().Write(body)
+	return nil
 }
