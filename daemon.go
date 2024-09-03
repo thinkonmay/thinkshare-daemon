@@ -121,8 +121,8 @@ func WebDaemon(persistent persistent.Persistent,
 		})
 	}
 
-	if domain := daemon.cluster.Domain(); domain != nil {
-		pocketbase.StartPocketbase(web_path, []string{*domain})
+	if service,admin,ok := daemon.cluster.Domain(); ok {
+		pocketbase.StartPocketbase(web_path, service,admin)
 	}
 
 	if memory, handle, def, err := sharedmemory.AllocateSharedMemory(); err != nil {

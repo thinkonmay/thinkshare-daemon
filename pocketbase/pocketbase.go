@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,8 +30,8 @@ var (
 	doms   = []string{}
 )
 
-func StartPocketbase(dir string, domain []string) {
-	doms = append(doms, domain...)
+func StartPocketbase(dir, service_domain, admin_domain string) {
+	doms = append(doms, service_domain, admin_domain)
 	app := pocketbase.New()
 	app.Bootstrap()
 
@@ -46,15 +47,24 @@ func StartPocketbase(dir string, domain []string) {
 		e.Router.GET("/_info", handle, apis.RequireAdminAuth())
 		e.Router.GET("/info", infoauth)
 
-		// Customize edit manage volume api external
-		e.Router.POST("/access_store_volume", handle_manage_volume, apis.RequireRecordAuth("users"))
-		e.Router.POST("/check_volume", handle_manage_volume, apis.RequireAdminAuth())
-		e.Router.POST("/volume_delete", handle_manage_volume, apis.RequireAdminAuth())
-		e.Router.POST("/create_volume", handle_manage_volume, apis.RequireAdminAuth())
-		e.Router.POST("/fetch_node_info", handle_manage_volume, apis.RequireAdminAuth())
-		e.Router.POST("/fetch_node_volume", handle_manage_volume, apis.RequireAdminAuth())
+		// proxy API
+		e.Router.Any("/auth/v1/callback", proxy("http://auth:9999", "/auth/v1/callback"))
+		e.Router.Any("/auth/v1/authorize", proxy("http://auth:9999", "/auth/v1/authorize"))
+		e.Router.Any("/auth/v1/verify", proxy("http://auth:9999", "/auth/v1/verify"))
 
-		e.Router.GET("/*", apis.StaticDirectoryHandler(dirfs, true))
+		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1"))
+		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"))
+		e.Router.Any("/pg/*", proxy("http://:8080", "/pg"))
+
+		e.Router.GET("/*", func(c echo.Context) error {
+			if c.Request().Host == service_domain {
+				return apis.StaticDirectoryHandler(dirfs, true)(c)
+			} else if c.Request().Host == admin_domain {
+				return proxy("http://studio:3000", "")(c)
+			} else {
+				return c.Redirect(304, fmt.Sprintf("https://%s/"))
+			}
+		})
 		return nil
 	})
 
@@ -62,9 +72,9 @@ func StartPocketbase(dir string, domain []string) {
 		for {
 			_, err := apis.Serve(app, apis.ServeConfig{
 				ShowStartBanner:    true,
-				HttpAddr:           "0.0.0.0:40080",
-				HttpsAddr:          "0.0.0.0:40443",
-				CertificateDomains: domain,
+				HttpAddr:           "0.0.0.0:80",
+				HttpsAddr:          "0.0.0.0:443",
+				CertificateDomains: doms,
 			})
 			if err != nil {
 				log.PushLog("pocketbase error: %s", err.Error())
@@ -209,36 +219,38 @@ func handle(c echo.Context) (err error) {
 	return nil
 }
 
-// Customize edit manage volume api external
-func handle_manage_volume(c echo.Context) (err error) {
-	body, _ := io.ReadAll(c.Request().Body)
-	req, _ := http.NewRequest(
-		c.Request().Method,
-		fmt.Sprintf("http://localhost:%d%s?%s",
-			9000, c.Request().URL.Path,
-			c.Request().URL.RawQuery),
-		strings.NewReader(string(body)))
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.PushLog("error handle command %s : %s", c.Request().URL.Path, err.Error())
-		return err
-	}
-
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	} else if resp.StatusCode != 200 {
-		c.Response().Status = resp.StatusCode
-	}
-
-	for k, v := range resp.Header {
-		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
-			continue
+func proxy(destination, strip string) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		curl, err := url.Parse(destination)
+		if err != nil {
+			return c.String(400, err.Error())
 		}
-		c.Response().Header().Add(k, v[0])
-	}
 
-	c.Response().Write(body)
-	return nil
+		url := c.Request().URL
+		url.Host = curl.Host
+		url.Scheme = curl.Scheme
+
+		new_path := " "
+		if strip == "" {
+			new_path = url.String()
+		} else {
+			new_path = strings.ReplaceAll(url.String(), strip, "")
+		}
+
+		req, err := http.NewRequest(
+			c.Request().Method,
+			new_path,
+			c.Request().Body,
+		)
+		if err != nil {
+			return c.String(400, err.Error())
+		}
+
+		req.Header = c.Request().Header.Clone()
+		if resp, err := http.DefaultClient.Do(req); err != nil {
+			return c.String(400, err.Error())
+		} else {
+			return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
+		}
+	}
 }

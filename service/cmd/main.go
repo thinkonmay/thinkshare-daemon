@@ -50,6 +50,7 @@ func Start(stop chan os.Signal) {
 			if err := srv.ListenAndServe(); err != nil {
 				log.PushLog(err.Error())
 			}
+			time.Sleep(time.Second)
 		}
 	}()
 	defer srv.Close()

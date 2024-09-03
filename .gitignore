@@ -19,3 +19,4 @@ playground/
 pb_data
 *.iso
 binary/log.*
+.env

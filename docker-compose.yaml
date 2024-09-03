@@ -1,0 +1,271 @@
+version: "3.8"
+
+services:
+    gateway:
+        image: bioturing/updategw:latest
+        restart: always
+        environment:
+            HTTP_ADDRESS: "0.0.0.0:80"
+        ports:
+            - 80:80
+            - 443:443
+        volumes:
+            - ./volumes/child:/child
+            - ./volumes/pocketbase:/pb_data
+            - ./web/dist:/web
+            - ./cluster.yaml:/cluster.yaml
+        network_mode: host
+
+
+
+    studio:
+        container_name: supabase-studio
+        image: supabase/studio:20230803-15c6762
+        restart: unless-stopped
+        healthcheck:
+            test: [ "CMD", "node", "-e", "require('http').get('http://localhost:3000/api/profile', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" ]
+            timeout: 5s
+            interval: 5s
+            retries: 3
+        depends_on:
+            analytics:
+                condition: service_healthy
+        environment:
+            STUDIO_PG_META_URL: http://meta:8080
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+            DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION}
+            DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT}
+
+            SUPABASE_URL: http://gateway
+            SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+            SUPABASE_ANON_KEY: ${ANON_KEY}
+            SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+
+            LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+            LOGFLARE_URL: http://analytics:4000
+            NEXT_PUBLIC_ENABLE_LOGS: true
+            # Comment to use Big Query backend for analytics
+            NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+            # Uncomment to use Big Query backend for analytics
+            # NEXT_ANALYTICS_BACKEND_PROVIDER: bigquery
+
+
+    auth:
+        container_name: supabase-auth
+        image: supabase/gotrue:v2.82.4
+        depends_on:
+            db:
+                # Disable this if you are using an external Postgres database
+                condition: service_healthy
+            analytics:
+                condition: service_healthy
+        healthcheck:
+            test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health" ]
+            timeout: 5s
+            interval: 5s
+            retries: 3
+        restart: unless-stopped
+        environment:
+            GOTRUE_API_HOST: 0.0.0.0
+            GOTRUE_API_PORT: 9999
+            API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+
+            GOTRUE_DB_DRIVER: postgres
+            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+            GOTRUE_SITE_URL: ${SITE_URL}
+            GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS}
+            GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP}
+
+            GOTRUE_JWT_ADMIN_ROLES: service_role
+            GOTRUE_JWT_AUD: authenticated
+            GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+            GOTRUE_JWT_EXP: ${JWT_EXPIRY}
+            GOTRUE_JWT_SECRET: ${JWT_SECRET}
+
+            GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
+            GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM}
+            GOTRUE_RATE_LIMIT_EMAIL_SENT: 999999
+            # GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: true
+            # GOTRUE_SMTP_MAX_FREQUENCY: 1s
+
+            GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+            GOTRUE_SMTP_HOST: ${SMTP_HOST}
+            GOTRUE_SMTP_PORT: ${SMTP_PORT}
+            GOTRUE_SMTP_USER: ${SMTP_USER}
+            GOTRUE_SMTP_PASS: ${SMTP_PASS}
+            GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+            GOTRUE_MAILER_URLPATHS_INVITE: ${MAILER_URLPATHS_INVITE}
+            GOTRUE_MAILER_URLPATHS_CONFIRMATION: ${MAILER_URLPATHS_CONFIRMATION}
+            GOTRUE_MAILER_URLPATHS_RECOVERY: ${MAILER_URLPATHS_RECOVERY}
+            GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE}
+
+            GOTRUE_EXTERNAL_GOOGLE_ENABLED: false
+            GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+            GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET}
+            GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: https://${PROJECT_DOMAIN}/auth/v1/callback
+
+            GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
+            GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
+    rest:
+        container_name: supabase-rest
+        image: postgrest/postgrest:v11.1.0
+        depends_on:
+            db:
+                # Disable this if you are using an external Postgres database
+                condition: service_healthy
+            analytics:
+                condition: service_healthy
+        restart: unless-stopped
+        environment:
+            PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+            PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS}
+            PGRST_DB_ANON_ROLE: anon
+            PGRST_JWT_SECRET: ${JWT_SECRET}
+            PGRST_DB_USE_LEGACY_GUCS: "false"
+    meta:
+        container_name: supabase-meta
+        image: supabase/postgres-meta:v0.68.0
+        depends_on:
+            db:
+                # Disable this if you are using an external Postgres database
+                condition: service_healthy
+            analytics:
+                condition: service_healthy
+        restart: unless-stopped
+        environment:
+            PG_META_PORT: 8080
+            PG_META_DB_HOST: ${POSTGRES_HOST}
+            PG_META_DB_PORT: ${POSTGRES_PORT}
+            PG_META_DB_NAME: ${POSTGRES_DB}
+            PG_META_DB_USER: supabase_admin
+            PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    analytics:
+        container_name: supabase-analytics
+        image: supabase/logflare:1.4.0
+        healthcheck:
+            test: [ "CMD", "curl", "http://localhost:4000/health" ]
+            timeout: 5s
+            interval: 5s
+            retries: 10
+        restart: unless-stopped
+        ports:
+            - 127.0.0.1:4000:4000
+        depends_on:
+            db:
+                # Disable this if you are using an external Postgres database
+                condition: service_healthy
+        environment:
+            LOGFLARE_NODE_HOST: 127.0.0.1
+            DB_USERNAME: supabase_admin
+            DB_DATABASE: ${POSTGRES_DB}
+            DB_HOSTNAME: ${POSTGRES_HOST}
+            DB_PORT: ${POSTGRES_PORT}
+            DB_PASSWORD: ${POSTGRES_PASSWORD}
+            DB_SCHEMA: _analytics
+            LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+            LOGFLARE_SINGLE_TENANT: true
+            LOGFLARE_SUPABASE_MODE: true
+            LOGFLARE_MIN_CLUSTER_SIZE: 1
+            RELEASE_COOKIE: cookie
+
+            # Comment variables to use Big Query backend for analytics
+            POSTGRES_BACKEND_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+            POSTGRES_BACKEND_SCHEMA: _analytics
+            LOGFLARE_FEATURE_FLAG_OVERRIDE: multibackend=true
+        entrypoint: |
+            sh -c `cat <<'EOF' > run.sh && sh run.sh
+            ./logflare eval Logflare.Release.migrate
+            ./logflare start --sname logflare
+            EOF
+            `
+    db:
+        container_name: supabase-db
+        image: supabase/postgres:15.1.1.78
+        healthcheck:
+            test: pg_isready -U postgres -h localhost
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        command:
+            - postgres
+            - -c
+            - config_file=/etc/postgresql/postgresql.conf
+            - -c
+            - log_min_messages=fatal # prevents Realtime polling queries from appearing in logs
+        ports:
+            - 127.0.0.1:5432:${POSTGRES_PORT}
+        restart: unless-stopped
+        environment:
+            POSTGRES_HOST: /var/run/postgresql
+            PGPORT: ${POSTGRES_PORT}
+            POSTGRES_PORT: ${POSTGRES_PORT}
+            PGPASSWORD: ${POSTGRES_PASSWORD}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+            PGDATABASE: ${POSTGRES_DB}
+            POSTGRES_DB: ${POSTGRES_DB}
+            JWT_SECRET: ${JWT_SECRET}
+            JWT_EXP: ${JWT_EXPIRY}
+        volumes:
+            - ./volumes/supabase/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
+            # Must be superuser to create event trigger
+            - ./volumes/supabase/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+            # Must be superuser to alter reserved role
+            - ./volumes/supabase/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+            # Initialize the database settings with JWT_SECRET and JWT_EXP
+            - ./volumes/supabase/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+            # PGDATA directory is persisted between restarts
+            - ./volumes/supabase/db/data:/var/lib/postgresql/data:Z
+            # Changes required for Analytics support
+            - ./volumes/supabase/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+            # Use named volume to persist pgsodium decryption key between restarts
+            # - db-config:/etc/postgresql-custom
+
+    grafana:
+        image: grafana/grafana
+        container_name: visualization
+        ports:
+            - 3000:3000
+        volumes:
+            - ./volumes/grafana:/var/lib/grafana
+        networks:
+          - monitoring
+    node-exporter:
+        image: prom/node-exporter:latest
+        container_name: node-exporter
+        restart: unless-stopped
+        volumes:
+            - /proc:/host/proc:ro
+            - /sys:/host/sys:ro
+            - /:/rootfs:ro
+        command:
+            - '--path.procfs=/host/proc'
+            - '--path.rootfs=/rootfs'
+            - '--path.sysfs=/host/sys'
+            - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        ports:
+            - 9100:9100
+        networks:
+            - monitoring
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: prometheus
+        restart: unless-stopped
+        volumes:
+            - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+            - ./volumes/prometheus:/prometheus
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--web.console.libraries=/etc/prometheus/console_libraries'
+            - '--web.console.templates=/etc/prometheus/consoles'
+            - '--web.enable-lifecycle'
+        expose:
+            - 9090
+        networks:
+            - monitoring
+
+networks:
+  monitoring:
+    driver: bridge

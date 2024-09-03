@@ -54,7 +54,8 @@ type ClusterConfig interface {
 	Interface() string
 	DNSserver() string
 	Log() (ip, id string, exists bool)
-	Domain() *string
+	Domain() (service, admin string, ok bool)
+
 	Nodes() []Node
 	Peers() []Peer
 	Deinit()
