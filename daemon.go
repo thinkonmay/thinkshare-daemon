@@ -1,9 +1,5 @@
 package daemon
 
-/*
-#include "smemory.h"
-#include <string.h>
-*/
 import "C"
 import (
 	"encoding/json"
@@ -15,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/childprocess"
@@ -26,6 +21,7 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 	"github.com/thinkonmay/thinkshare-daemon/utils/media"
 	"github.com/thinkonmay/thinkshare-daemon/utils/path"
+	sharedmemory "github.com/thinkonmay/thinkshare-daemon/utils/shm"
 	"github.com/thinkonmay/thinkshare-daemon/utils/signaling"
 	"github.com/thinkonmay/thinkshare-daemon/utils/system"
 	"github.com/thinkonmay/thinkshare-daemon/utils/turn"
@@ -47,7 +43,7 @@ type internalWorkerSession struct {
 
 type Daemon struct {
 	packet.WorkerInfor
-	memory  *SharedMemory
+	memory  *sharedmemory.SharedMemory
 	mhandle string
 	cleans  []func()
 
@@ -80,7 +76,7 @@ func WebDaemon(persistent persistent.Persistent,
 
 	daemon := &Daemon{
 		mhandle:     "empty",
-		memory:      &SharedMemory{},
+		memory:      &sharedmemory.SharedMemory{},
 		WorkerInfor: *i,
 		mutex:       &sync.Mutex{},
 		cleans:      []func(){},
@@ -129,7 +125,7 @@ func WebDaemon(persistent persistent.Persistent,
 		pocketbase.StartPocketbase(web_path, []string{*domain})
 	}
 
-	if memory, handle, def, err := AllocateSharedMemory(); err != nil {
+	if memory, handle, def, err := sharedmemory.AllocateSharedMemory(); err != nil {
 		log.PushLog("fail to create shared memory %s", err.Error())
 	} else {
 		daemon.mhandle = handle
@@ -141,7 +137,7 @@ func WebDaemon(persistent persistent.Persistent,
 			return nil
 		}
 
-		_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", Audio)))
+		_, err = daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, handle, fmt.Sprintf("%d", sharedmemory.Audio)))
 		if err != nil {
 			log.PushLog("fail to start shmsunshine %s", err.Error())
 			return nil
@@ -290,7 +286,7 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 			daemon.turn.DeallocateUser(iws.Turn.Username)
 		}
 		if iws.memory_channel != nil {
-			daemon.memory.queues[*iws.memory_channel].metadata.active = 0
+			sharedmemory.SetState(daemon.memory, *iws.memory_channel, 0)
 		}
 		for _, pi := range iws.childprocess {
 			daemon.childprocess.CloseID(pi)
@@ -338,10 +334,10 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 	}
 
 	var channel int
-	if daemon.memory.queues[Video0].metadata.active == 0 {
-		channel = Video0
-	} else if daemon.memory.queues[Video1].metadata.active == 0 {
-		channel = Video1
+	if sharedmemory.GetState(daemon.memory, sharedmemory.Video0) == 0 {
+		channel = sharedmemory.Video0
+	} else if sharedmemory.GetState(daemon.memory, sharedmemory.Video1) == 0 {
+		channel = sharedmemory.Video1
 	} else {
 		return nil, nil, fmt.Errorf("no capture channel available")
 	}
@@ -351,11 +347,8 @@ func (daemon *Daemon) handleHub(current *packet.WorkerSession) ([]childprocess.P
 		return nil, nil, err
 	}
 
-	display := []byte(*current.Display.DisplayName)
-	if len(display) > 0 {
-		memcpy(unsafe.Pointer(&daemon.memory.queues[channel].metadata.display[0]), unsafe.Pointer(&display[0]), len(display))
-	}
-	daemon.memory.queues[channel].metadata.codec = 0
+	sharedmemory.SetDisplay(daemon.memory, channel, *current.Display.DisplayName)
+	sharedmemory.SetCodec(daemon.memory, channel, 0)
 	sunshine, err := daemon.childprocess.NewChildProcess(exec.Command(sunshine_path, daemon.mhandle, fmt.Sprintf("%d", channel)))
 	if err != nil {
 		return nil, nil, err

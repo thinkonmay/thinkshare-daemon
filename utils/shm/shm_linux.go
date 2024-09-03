@@ -1,4 +1,4 @@
-package daemon
+package sharedmemory
 
 /*
 #include "smemory.h"
@@ -8,25 +8,41 @@ import "C"
 import (
 	"bytes"
 	"unsafe"
+
 	"github.com/ebitengine/purego"
 
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
-
 )
 
 const (
-	Video0 = C.Video0
-	Video1 = C.Video1
-	Audio  = C.Audio
-	Input  = C.Input
+	Video0 int = C.Video0
+	Video1 int = C.Video1
+	Audio  int = C.Audio
+	Input  int = C.Input
 )
 
 type SharedMemory C.SharedMemory
+type Queue C.Queue
 
-func memcpy(to,from unsafe.Pointer, size int) {
-	C.memcpy(to, from, C.ulong(size))
+func GetState(mem *SharedMemory, _type int) int {
+	return int(mem.queues[_type].metadata.active)
+}
+func SetState(mem *SharedMemory, _type int, state C.int) {
+	mem.queues[_type].metadata.active = state
+}
+func SetCodec(mem *SharedMemory, _type int, codec int) {
+	mem.queues[_type].metadata.codec = C.int(codec)
+}
+func SetDisplay(mem *SharedMemory, _type int, _display string) {
+	display := []byte(_display)
+	if len(display) > 0 {
+		memcpy(unsafe.Pointer(&mem.queues[_type].metadata.display[0]), unsafe.Pointer(&display[0]), len(display))
+	}
 }
 
+func memcpy(to, from unsafe.Pointer, size int) {
+	C.memcpy(to, from, C.ulong(size))
+}
 
 func byteSliceToString(s []byte) string {
 	n := bytes.IndexByte(s, 0)
@@ -53,7 +69,7 @@ func AllocateSharedMemory() (*SharedMemory, string, func(), error) {
 		byteSliceToString(buffer),
 		func() {
 			log.PushLog("deallocated shared memory")
-			deinit()		
+			deinit()
 		},
 		nil
 }

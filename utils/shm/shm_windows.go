@@ -1,4 +1,4 @@
-package daemon
+package sharedmemory
 
 /*
 #include "smemory.h"
@@ -27,6 +27,23 @@ func memcpy(to,from unsafe.Pointer, size int) {
 }
 
 type SharedMemory C.SharedMemory
+
+func SetState(mem *SharedMemory, _type int, state bool) {
+	if state {
+		mem.queues[_type].metadata.active = 1
+	} else {
+		mem.queues[_type].metadata.active = 0
+	}
+}
+func SetCodec(mem *SharedMemory, _type int, codec int) {
+	mem.queues[_type].metadata.codec = C.int(codec)
+}
+func SetDisplay(mem *SharedMemory, _type int, _display string) {
+	display := []byte(_display)
+	if len(display) > 0 {
+		memcpy(unsafe.Pointer(&mem.queues[_type].metadata.display[0]), unsafe.Pointer(&display[0]), len(display))
+	}
+}
 
 func byteSliceToString(s []byte) string {
 	n := bytes.IndexByte(s, 0)
