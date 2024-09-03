@@ -17,9 +17,14 @@ type PeerManifest struct {
 type Host struct {
 	Interface  string      `yaml:"interface"`
 	DNS        string      `yaml:"dns"`
-	Domain     *string     `yaml:"domain"`
 	TurnServer *TurnConfig `yaml:"turn"`
-	Log        *struct {
+	Domain     *struct {
+		Service    string `yaml:"service"`
+		Data       string `yaml:"data"`
+		Management string `yaml:"management"`
+		Monitoring string `yaml:"monitoring"`
+	} `yaml:"domain"`
+	Log *struct {
 		IP string `yaml:"ip"`
 		ID string `yaml:"id"`
 	} `yaml:"log"`

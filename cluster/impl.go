@@ -269,8 +269,14 @@ func (impl *ClusterConfigImpl) Log() (ip, id string, exists bool) {
 func (impl *ClusterConfigImpl) Interface() string {
 	return impl.ClusterConfigManifest.Local.Interface
 }
-func (impl *ClusterConfigImpl) Domain() *string {
-	return impl.ClusterConfigManifest.Local.Domain
+func (impl *ClusterConfigImpl) Domain() (string, string, bool) {
+	dom := impl.ClusterConfigManifest.Local.Domain
+	if dom == nil {
+		return "", "", false
+	} else {
+		return dom.Service, dom.Management, false
+
+	}
 }
 
 func (impl *ClusterConfigImpl) Nodes() (ns []Node) {
