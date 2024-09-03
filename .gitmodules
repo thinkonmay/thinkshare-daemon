@@ -1,3 +1,3 @@
-[submodule "binary/web"]
-	path = binary/web
+[submodule "web"]
+	path = web
 	url = https://github.com/thinkonmay/VirtualOS-win11
