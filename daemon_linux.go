@@ -376,6 +376,10 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 }
 
 func querySession(session *packet.WorkerSession) error {
+	if !libvirt_available {
+		return fmt.Errorf("libvirt not available")
+	} 
+
 	if session == nil ||
 		session.Vm == nil ||
 		session.Vm.PrivateIP == nil {
@@ -407,6 +411,10 @@ func querySession(session *packet.WorkerSession) error {
 }
 
 func queryLocal(info *packet.WorkerInfor) error {
+	if !libvirt_available {
+		return fmt.Errorf("libvirt not available")
+	} 
+
 	ipmap, volumemap := map[string]string{}, map[string]string{}
 	vms, err := virt.ListVMs()
 	if err != nil {
