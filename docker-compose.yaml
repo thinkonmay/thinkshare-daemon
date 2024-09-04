@@ -16,7 +16,7 @@ services:
             WEB_DIR: /web
         volumes:
             # - ./_volumes/child:/child
-            # - ./_volumes/pocketbase:/pb_data
+            - ./_volumes/pocketbase:/pb_data
             - ./web/dist:/web
             - ./cluster.yaml:/cluster.yaml
 
@@ -220,9 +220,10 @@ services:
 
     grafana:
         image: grafana/grafana
-        container_name: visualization
         volumes:
             - ./_volumes/grafana:/var/lib/grafana
+        ports:
+          - 23421:3000
     node-exporter:
         image: prom/node-exporter:latest
         restart: unless-stopped

@@ -40,7 +40,7 @@ func StartPocketbase() {
 		certdoms = append(certdoms, doms.ServiceDomain)
 	}
 	if doms.MonitorDomain, ok = os.LookupEnv("MONITOR_DOMAIN"); ok {
-		certdoms = append(certdoms, doms.ServiceDomain)
+		certdoms = append(certdoms, doms.MonitorDomain)
 	}
 	if doms.AdminDomain, ok = os.LookupEnv("ADMIN_DOMAIN"); ok {
 		certdoms = append(certdoms, doms.AdminDomain)
@@ -66,6 +66,8 @@ func StartPocketbase() {
 			switch c.Request().Host {
 			case doms.DataDomain:
 				return proxy("http://studio:3000", "")(c)
+			case doms.MonitorDomain:
+				return proxy("http://grafana:3000", "")(c)
 			default:
 				return next(c)
 			}
@@ -89,25 +91,7 @@ func StartPocketbase() {
 		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"))
 		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg"))
 
-		e.Router.Any("/*", func(c echo.Context) error {
-			host := c.Request().Host
-			if referrer_header := c.Request().Header.Get("Referrer"); referrer_header != "" {
-				if url, err := url.Parse(referrer_header); err == nil {
-					host = url.Host
-				}
-			}
-
-			switch host {
-			case doms.ServiceDomain:
-				return apis.StaticDirectoryHandler(dirfs, true)(c)
-			case doms.DataDomain:
-				return proxy("http://studio:3000", "")(c)
-			case doms.MonitorDomain:
-				return proxy("http://grafana:3000", "")(c)
-			default:
-				return c.Redirect(304, fmt.Sprintf("https://%s/", doms.ServiceDomain))
-			}
-		})
+		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true))
 		return nil
 	})
 
@@ -296,6 +280,7 @@ func proxy(destination, strip string) echo.HandlerFunc {
 		}
 
 		req.Header = c.Request().Header.Clone()
+		req.Host = c.Request().Host
 		if resp, err := http.DefaultClient.Do(req); err != nil {
 			return c.String(400, err.Error())
 		} else {
