@@ -69,8 +69,6 @@ func NewServer(min_port, max_port, port int, ip string) (*TurnServer, error) {
 			PacketConn:            conn,
 			RelayAddressGenerator: relayAddressGenerator,
 		}
-
-		log.PushLog("Server %d listening on %s\n", i, conn.LocalAddr().String())
 	}
 
 	if ret.Server, err = turn.NewServer(turn.ServerConfig{

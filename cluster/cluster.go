@@ -15,16 +15,11 @@ type PeerManifest struct {
 	Ip string `yaml:"ip"`
 }
 type Host struct {
-	Interface  string      `yaml:"interface"`
-	DNS        string      `yaml:"dns"`
-	TurnServer *TurnConfig `yaml:"turn"`
-	Domain     *struct {
-		Service    string `yaml:"service"`
-		Data       string `yaml:"data"`
-		Management string `yaml:"management"`
-		Monitoring string `yaml:"monitoring"`
-	} `yaml:"domain"`
-	Log *struct {
+	Interface        string      `yaml:"interface"`
+	DNS              string      `yaml:"dns"`
+	TurnServer       *TurnConfig `yaml:"turn"`
+	EnablePocketbase bool        `yaml:"pocketbase"`
+	Log              *struct {
 		IP string `yaml:"ip"`
 		ID string `yaml:"id"`
 	} `yaml:"log"`
@@ -48,10 +43,10 @@ type Peer interface {
 }
 
 type TurnConfig struct {
-	MinPort  int    `json:"min_port"`
-	MaxPort  int    `json:"max_port"`
+	MinPort  int    `json:"min"`
+	MaxPort  int    `json:"max"`
 	Port     int    `json:"port"`
-	PublicIP string `json:"public_ip"`
+	PublicIP string `json:"publicip"`
 }
 
 type ClusterConfig interface {
@@ -59,7 +54,7 @@ type ClusterConfig interface {
 	Interface() string
 	DNSserver() string
 	Log() (ip, id string, exists bool)
-	Domain() (service, admin string, ok bool)
+	Pocketbase() bool
 
 	Nodes() []Node
 	Peers() []Peer

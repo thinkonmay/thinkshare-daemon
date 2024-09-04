@@ -13,9 +13,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
+	"github.com/thinkonmay/pocketbase"
+	"github.com/thinkonmay/pocketbase/apis"
+	"github.com/thinkonmay/pocketbase/core"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -27,17 +27,50 @@ const (
 var (
 	client = http.Client{Timeout: 24 * time.Hour}
 	app    = (*pocketbase.PocketBase)(nil)
-	doms   = []string{}
+	doms   = struct{ ServiceDomain, MonitorDomain, AdminDomain, DataDomain string }{}
 )
 
-func StartPocketbase(dir, service_domain, admin_domain string) {
-	doms = append(doms, service_domain, admin_domain)
+func StartPocketbase() {
+	enable_https := false
+
+	ok := false
+	dir := "/web"
+	certdoms := []string{}
+	if doms.ServiceDomain, ok = os.LookupEnv("SERVICE_DOMAIN"); ok {
+		certdoms = append(certdoms, doms.ServiceDomain)
+	}
+	if doms.MonitorDomain, ok = os.LookupEnv("MONITOR_DOMAIN"); ok {
+		certdoms = append(certdoms, doms.ServiceDomain)
+	}
+	if doms.AdminDomain, ok = os.LookupEnv("ADMIN_DOMAIN"); ok {
+		certdoms = append(certdoms, doms.AdminDomain)
+	}
+	if doms.DataDomain, ok = os.LookupEnv("DATA_DOMAIN"); ok {
+		certdoms = append(certdoms, doms.DataDomain)
+	}
+	if enableSSL, ok := os.LookupEnv("ENABLE_HTTPS"); ok && enableSSL == "true" {
+		enable_https = true
+	}
+	if _dir, ok := os.LookupEnv("WEB_DIR"); ok {
+		dir = _dir
+	}
+
 	app := pocketbase.New()
 	app.Bootstrap()
 
 	path, _ := filepath.Abs(dir)
-	log.PushLog("serving file content at %s", path)
 	dirfs := os.DirFS(path)
+
+	pre := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			switch c.Request().Host {
+			case doms.DataDomain:
+				return proxy("http://studio:3000", "")(c)
+			default:
+				return next(c)
+			}
+		}
+	}
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		e.Router.POST("/_new", handle)
 		e.Router.POST("/_use", handle)
@@ -54,15 +87,25 @@ func StartPocketbase(dir, service_domain, admin_domain string) {
 
 		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1"))
 		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"))
-		e.Router.Any("/pg/*", proxy("http://:8080", "/pg"))
+		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg"))
 
-		e.Router.GET("/*", func(c echo.Context) error {
-			if c.Request().Host == service_domain {
+		e.Router.Any("/*", func(c echo.Context) error {
+			host := c.Request().Host
+			if referrer_header := c.Request().Header.Get("Referrer"); referrer_header != "" {
+				if url, err := url.Parse(referrer_header); err == nil {
+					host = url.Host
+				}
+			}
+
+			switch host {
+			case doms.ServiceDomain:
 				return apis.StaticDirectoryHandler(dirfs, true)(c)
-			} else if c.Request().Host == admin_domain {
+			case doms.DataDomain:
 				return proxy("http://studio:3000", "")(c)
-			} else {
-				return c.Redirect(304, fmt.Sprintf("https://%s/"))
+			case doms.MonitorDomain:
+				return proxy("http://grafana:3000", "")(c)
+			default:
+				return c.Redirect(304, fmt.Sprintf("https://%s/", doms.ServiceDomain))
 			}
 		})
 		return nil
@@ -70,12 +113,18 @@ func StartPocketbase(dir, service_domain, admin_domain string) {
 
 	go func() {
 		for {
-			_, err := apis.Serve(app, apis.ServeConfig{
-				ShowStartBanner:    true,
-				HttpAddr:           "0.0.0.0:80",
-				HttpsAddr:          "0.0.0.0:443",
-				CertificateDomains: doms,
-			})
+			err := (error)(nil)
+			config := apis.ServeConfig{
+				ShowStartBanner: true,
+				HttpAddr:        "0.0.0.0:80",
+				PreMiddleware:   pre,
+			}
+			if enable_https {
+				config.HttpsAddr = "0.0.0.0:443"
+				config.CertificateDomains = certdoms
+			}
+
+			_, err = apis.Serve(app, config)
 			if err != nil {
 				log.PushLog("pocketbase error: %s", err.Error())
 			}
@@ -250,6 +299,11 @@ func proxy(destination, strip string) echo.HandlerFunc {
 		if resp, err := http.DefaultClient.Do(req); err != nil {
 			return c.String(400, err.Error())
 		} else {
+			for k, v := range resp.Header {
+				if len(v) > 0 {
+					c.Response().Header().Add(k, v[0])
+				}
+			}
 			return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
 		}
 	}

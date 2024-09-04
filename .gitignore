@@ -20,6 +20,6 @@ pb_data
 *.iso
 binary/log.*
 .env
-volumes/grafana/grafana.db
-volumes/supabase/db/
-volumes/prometheus/
+_volumes/grafana/
+_volumes/supabase/data/
+_volumes/prometheus/

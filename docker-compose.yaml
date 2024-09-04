@@ -7,11 +7,18 @@ services:
         ports:
             - 80:80
             - 443:443
-        # volumes:
-            # - ./volumes/child:/child
-            # - ./volumes/pocketbase:/pb_data
-            # - ./web/dist:/web
-            # - ./cluster.yaml:/cluster.yaml
+        environment:
+            SERVICE_DOMAIN: service.thinkmay.net
+            MONITOR_DOMAIN: monitor.thinkmay.net
+            ADMIN_DOMAIN: admin.thinkmay.net
+            DATA_DOMAIN: data.thinkmay.net
+            ENABLE_HTTPS: false
+            WEB_DIR: /web
+        volumes:
+            # - ./_volumes/child:/child
+            # - ./_volumes/pocketbase:/pb_data
+            - ./web/dist:/web
+            - ./cluster.yaml:/cluster.yaml
 
     studio:
         container_name: supabase-studio
@@ -79,11 +86,9 @@ services:
             GOTRUE_JWT_EXP: ${JWT_EXPIRY}
             GOTRUE_JWT_SECRET: ${JWT_SECRET}
 
-            GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP}
-            GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM}
+            GOTRUE_EXTERNAL_EMAIL_ENABLED: true
+            GOTRUE_MAILER_AUTOCONFIRM: true
             GOTRUE_RATE_LIMIT_EMAIL_SENT: 999999
-            # GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: true
-            # GOTRUE_SMTP_MAX_FREQUENCY: 1s
 
             GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
             GOTRUE_SMTP_HOST: ${SMTP_HOST}
@@ -97,12 +102,8 @@ services:
             GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: ${MAILER_URLPATHS_EMAIL_CHANGE}
 
             GOTRUE_EXTERNAL_GOOGLE_ENABLED: false
-            GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-            GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_CLIENT_SECRET}
-            GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: https://${PROJECT_DOMAIN}/auth/v1/callback
-
-            GOTRUE_EXTERNAL_PHONE_ENABLED: ${ENABLE_PHONE_SIGNUP}
-            GOTRUE_SMS_AUTOCONFIRM: ${ENABLE_PHONE_AUTOCONFIRM}
+            GOTRUE_EXTERNAL_PHONE_ENABLED: false
+            GOTRUE_SMS_AUTOCONFIRM: false
     rest:
         container_name: supabase-rest
         image: postgrest/postgrest:v11.1.0
@@ -203,17 +204,17 @@ services:
             JWT_SECRET: ${JWT_SECRET}
             JWT_EXP: ${JWT_EXPIRY}
         volumes:
-            - ./volumes/supabase/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
+            - ./_volumes/supabase/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
             # Must be superuser to create event trigger
-            - ./volumes/supabase/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+            - ./_volumes/supabase/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
             # Must be superuser to alter reserved role
-            - ./volumes/supabase/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+            - ./_volumes/supabase/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
             # Initialize the database settings with JWT_SECRET and JWT_EXP
-            - ./volumes/supabase/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+            - ./_volumes/supabase/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
             # PGDATA directory is persisted between restarts
-            - ./volumes/supabase/data:/var/lib/postgresql/data:Z
+            - ./_volumes/supabase/data:/var/lib/postgresql/data:Z
             # Changes required for Analytics support
-            - ./volumes/supabase/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+            - ./_volumes/supabase/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
             # Use named volume to persist pgsodium decryption key between restarts
             # - db-config:/etc/postgresql-custom
 
@@ -221,9 +222,7 @@ services:
         image: grafana/grafana
         container_name: visualization
         volumes:
-            - ./volumes/grafana:/var/lib/grafana
-        networks:
-          - monitoring
+            - ./_volumes/grafana:/var/lib/grafana
     node-exporter:
         image: prom/node-exporter:latest
         restart: unless-stopped
@@ -236,23 +235,15 @@ services:
             - '--path.rootfs=/rootfs'
             - '--path.sysfs=/host/sys'
             - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-        networks:
-            - monitoring
     prometheus:
         image: prom/prometheus:latest
         restart: unless-stopped
         volumes:
             - ./utils/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-            - ./volumes/prometheus:/prometheus
+            - ./_volumes/prometheus:/prometheus
         command:
             - '--config.file=/etc/prometheus/prometheus.yml'
             - '--storage.tsdb.path=/prometheus'
             - '--web.console.libraries=/etc/prometheus/console_libraries'
             - '--web.console.templates=/etc/prometheus/consoles'
             - '--web.enable-lifecycle'
-        networks:
-            - monitoring
-
-networks:
-  monitoring:
-    driver: bridge

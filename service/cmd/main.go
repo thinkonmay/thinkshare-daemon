@@ -89,7 +89,7 @@ func Start(stop chan os.Signal) {
 		os.WriteFile(manifest, content, 0777)
 	}
 
-	dm := daemon.WebDaemon(grpc, signaling, manifest, fmt.Sprintf("%s/web/dist", base_dir))
+	dm := daemon.WebDaemon(grpc, signaling, manifest)
 	defer dm.Close()
 	stop <- <-stop
 }
