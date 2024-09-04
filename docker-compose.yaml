@@ -190,8 +190,6 @@ services:
             - config_file=/etc/postgresql/postgresql.conf
             - -c
             - log_min_messages=fatal # prevents Realtime polling queries from appearing in logs
-        ports:
-            - 127.0.0.1:5432:${POSTGRES_PORT}
         restart: unless-stopped
         environment:
             POSTGRES_HOST: /var/run/postgresql
@@ -222,8 +220,6 @@ services:
         image: grafana/grafana
         volumes:
             - ./_volumes/grafana:/var/lib/grafana
-        ports:
-          - 23421:3000
     node-exporter:
         image: prom/node-exporter:latest
         restart: unless-stopped
