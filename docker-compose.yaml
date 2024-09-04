@@ -2,21 +2,16 @@ version: "3.8"
 
 services:
     gateway:
-        image: bioturing/updategw:latest
+        image: pigeatgarlic/virtdaemon
         restart: always
-        environment:
-            HTTP_ADDRESS: "0.0.0.0:80"
         ports:
             - 80:80
             - 443:443
-        volumes:
-            - ./volumes/child:/child
-            - ./volumes/pocketbase:/pb_data
-            - ./web/dist:/web
-            - ./cluster.yaml:/cluster.yaml
-        network_mode: host
-
-
+        # volumes:
+            # - ./volumes/child:/child
+            # - ./volumes/pocketbase:/pb_data
+            # - ./web/dist:/web
+            # - ./cluster.yaml:/cluster.yaml
 
     studio:
         container_name: supabase-studio
@@ -208,32 +203,29 @@ services:
             JWT_SECRET: ${JWT_SECRET}
             JWT_EXP: ${JWT_EXPIRY}
         volumes:
-            - ./volumes/supabase/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
+            - ./volumes/supabase/realtime.sql:/docker-entrypoint-initdb.d/migrations/99-realtime.sql:Z
             # Must be superuser to create event trigger
-            - ./volumes/supabase/db/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
+            - ./volumes/supabase/webhooks.sql:/docker-entrypoint-initdb.d/init-scripts/98-webhooks.sql:Z
             # Must be superuser to alter reserved role
-            - ./volumes/supabase/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+            - ./volumes/supabase/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
             # Initialize the database settings with JWT_SECRET and JWT_EXP
-            - ./volumes/supabase/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
+            - ./volumes/supabase/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:Z
             # PGDATA directory is persisted between restarts
-            - ./volumes/supabase/db/data:/var/lib/postgresql/data:Z
+            - ./volumes/supabase/data:/var/lib/postgresql/data:Z
             # Changes required for Analytics support
-            - ./volumes/supabase/db/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
+            - ./volumes/supabase/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
             # Use named volume to persist pgsodium decryption key between restarts
             # - db-config:/etc/postgresql-custom
 
     grafana:
         image: grafana/grafana
         container_name: visualization
-        ports:
-            - 3000:3000
         volumes:
             - ./volumes/grafana:/var/lib/grafana
         networks:
           - monitoring
     node-exporter:
         image: prom/node-exporter:latest
-        container_name: node-exporter
         restart: unless-stopped
         volumes:
             - /proc:/host/proc:ro
@@ -244,16 +236,13 @@ services:
             - '--path.rootfs=/rootfs'
             - '--path.sysfs=/host/sys'
             - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-        ports:
-            - 9100:9100
         networks:
             - monitoring
     prometheus:
         image: prom/prometheus:latest
-        container_name: prometheus
         restart: unless-stopped
         volumes:
-            - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+            - ./utils/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
             - ./volumes/prometheus:/prometheus
         command:
             - '--config.file=/etc/prometheus/prometheus.yml'
@@ -261,8 +250,6 @@ services:
             - '--web.console.libraries=/etc/prometheus/console_libraries'
             - '--web.console.templates=/etc/prometheus/consoles'
             - '--web.enable-lifecycle'
-        expose:
-            - 9090
         networks:
             - monitoring
 
