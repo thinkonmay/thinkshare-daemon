@@ -162,7 +162,9 @@ func infoauth(c echo.Context) (err error) {
 	}
 
 	for k, v := range resp.Header {
-		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
+		if len(v) == 0 ||
+			k == "Access-Control-Allow-Origin" ||
+			k == "Access-Control-Allow-Headers" {
 			continue
 		}
 		c.Response().Header().Add(k, v[0])
@@ -242,7 +244,9 @@ func handle(c echo.Context) (err error) {
 	}
 
 	for k, v := range resp.Header {
-		if len(v) == 0 || k == "Access-Control-Allow-Origin" || k == "Access-Control-Allow-Headers" {
+		if len(v) == 0 ||
+			k == "Access-Control-Allow-Origin" ||
+			k == "Access-Control-Allow-Headers" {
 			continue
 		}
 		c.Response().Header().Add(k, v[0])
@@ -285,9 +289,13 @@ func proxy(destination, strip string) echo.HandlerFunc {
 			return c.String(400, err.Error())
 		} else {
 			for k, v := range resp.Header {
-				if len(v) > 0 {
-					c.Response().Header().Add(k, v[0])
+				if len(v) == 0 ||
+					k == "Access-Control-Allow-Origin" ||
+					k == "Access-Control-Allow-Headers" {
+					continue
 				}
+
+				c.Response().Header().Add(k, v[0])
 			}
 			return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
 		}

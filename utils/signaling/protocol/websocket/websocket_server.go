@@ -76,6 +76,10 @@ func (server *WebSocketServer) HandleForward(w http.ResponseWriter, r *http.Requ
 func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "*")
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	if wsserver.HandleForward(w, r) {
 		return
 	}
