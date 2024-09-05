@@ -158,14 +158,20 @@ func WebDaemon(persistent persistent.Persistent,
 	return daemon
 }
 
-func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
+func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive chan bool) (_ *packet.WorkerSession, _err error) {
 	process := []childprocess.ProcessID{}
 	var channel *int = nil
 
 	err := fmt.Errorf("no session configured")
 	if ss.Turn != nil && daemon.turn != nil {
-		daemon.turn.AllocateUser(ss.Turn.Username, ss.Turn.Password)
+		turn := *ss.Turn
 		ss.Turn = nil
+		daemon.turn.AllocateUser(turn.Username, turn.Password)
+		defer func() {
+			if _err != nil {
+				daemon.turn.DeallocateUser(turn.Username)
+			}
+		}()
 	}
 
 	if ss.Target != nil {
