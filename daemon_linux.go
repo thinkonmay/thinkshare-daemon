@@ -138,8 +138,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		VDriver:       true,
 	}
 
-	pre := make([]libvirt.VMLaunchModel, len(models))
-	copy(pre, models)
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
@@ -226,7 +224,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		return &inf, nil
 	}
 
-	models = pre
 	virt.DeleteVM(model.ID)
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
@@ -378,7 +375,7 @@ func (daemon *Daemon) ShutdownVM(info *packet.WorkerInfor) error {
 func querySession(session *packet.WorkerSession) error {
 	if !libvirt_available {
 		return fmt.Errorf("libvirt not available")
-	} 
+	}
 
 	if session == nil ||
 		session.Vm == nil ||
@@ -413,7 +410,7 @@ func querySession(session *packet.WorkerSession) error {
 func queryLocal(info *packet.WorkerInfor) error {
 	if !libvirt_available {
 		return fmt.Errorf("libvirt not available")
-	} 
+	}
 
 	ipmap, volumemap := map[string]string{}, map[string]string{}
 	vms, err := virt.ListVMs()
@@ -451,25 +448,11 @@ func queryLocal(info *packet.WorkerInfor) error {
 			continue
 		}
 
-		var volume_id *string = nil
 		for _, model := range models {
 			if len(model.BackingVolume) == 0 || model.ID != *vm.Name {
-				continue
+			} else if splits := strings.Split(filepath.Base(model.BackingVolume[0].Path), ".qcow2"); len(splits) > 0 {
+				volumemap[*vm.Name] = splits[0]
 			}
-
-			splits := strings.Split(filepath.Base(model.BackingVolume[0].Path), ".qcow2")
-			if len(splits) == 0 {
-				continue
-			}
-
-			vol := splits[0]
-			volume_id = &vol
-			break
-		}
-
-		if volume_id != nil {
-			vol := *volume_id
-			volumemap[*vm.Name] = vol
 		}
 	}
 
@@ -510,26 +493,21 @@ func queryLocal(info *packet.WorkerInfor) error {
 		if ss.Vm == nil {
 			continue
 		}
-
-		ip := ss.Vm.PrivateIP
-		if ip == nil {
+		if ip := ss.Vm.PrivateIP; ip == nil {
 			log.PushLog("ip is nil")
 			continue
+		} else {
+			if name, ok := ipmap[*ip]; !ok {
+				log.PushLog("vm name not found %s", *ip)
+				continue
+			} else {
+				if volume_id, ok := volumemap[name]; !ok {
+					log.PushLog("volume map not found %v %s", volumemap, name)
+				} else {
+					ss.Vm.Volumes = []string{volume_id}
+				}
+			}
 		}
-
-		name, ok := ipmap[*ip]
-		if !ok {
-			log.PushLog("vm name not found %s", *ip)
-			continue
-		}
-
-		volume_id, ok := volumemap[name]
-		if !ok {
-			log.PushLog("volume map not found %v %s", volumemap, name)
-			continue
-		}
-
-		ss.Vm.Volumes = []string{volume_id}
 	}
 
 	return nil
