@@ -149,9 +149,9 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		return nil, err
 	}
 
-	start := time.Now().UnixMilli()
+	start := time.Now().Unix()
 	for {
-		if time.Now().UnixMilli()-start > 10*60*1000 {
+		if time.Now().Unix()-start > 10*60 {
 			break
 		}
 
