@@ -69,10 +69,6 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		func(conn string) ([]byte, error) {
 			return json.Marshal(ret.worker_info())
 		})
-	ret.wrapper("_info",
-		func(conn string) ([]byte, error) {
-			return json.Marshal(ret.worker_info())
-		})
 	ret.wrapper("log",
 		func(conn string) ([]byte, error) {
 			return []byte(strings.Join(ret.logger, "\n")), nil

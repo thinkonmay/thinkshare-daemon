@@ -79,7 +79,6 @@ func StartPocketbase() {
 		e.Router.POST("/new", handle)
 		e.Router.POST("/closed", handle)
 		e.Router.POST("/handshake/*", handle)
-		e.Router.GET("/_info", handle, apis.RequireAdminAuth())
 		e.Router.GET("/info", infoauth)
 
 		// proxy API
@@ -218,9 +217,6 @@ func infoauth(c echo.Context) (err error) {
 
 func handle(c echo.Context) (err error) {
 	path := c.Request().URL.Path
-	if path == "_info" {
-		path = "info"
-	}
 
 	body, _ := io.ReadAll(c.Request().Body)
 	req, _ := http.NewRequest(
