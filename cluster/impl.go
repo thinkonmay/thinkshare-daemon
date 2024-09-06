@@ -448,7 +448,7 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 
 func (node *NodeImpl) setupNode() error {
 	allocate := func() (*goph.Client, error) {
-		return goph.New(node.Username, node.Ip, goph.Password(node.Password))
+		return goph.NewUnknown(node.Username, node.Ip, goph.Password(node.Password))
 	}
 
 	client, err := allocate()
