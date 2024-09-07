@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
 	"github.com/thinkonmay/pocketbase"
@@ -264,21 +265,94 @@ func handle(c echo.Context) (err error) {
 }
 
 func proxy(destination, strip string) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	get_path := func(c *http.Request, transform func(url *url.URL)) (string, error) {
 		curl, err := url.Parse(destination)
 		if err != nil {
-			return c.String(400, err.Error())
+			return "", err
 		}
 
-		url := c.Request().URL
+		url := c.URL
 		url.Host = curl.Host
 		url.Scheme = curl.Scheme
-
+		transform(url)
 		new_path := " "
 		if strip == "" {
 			new_path = url.String()
 		} else {
 			new_path = strings.ReplaceAll(url.String(), strip, "")
+		}
+
+		return new_path, nil
+	}
+
+	upgrader := websocket.Upgrader{} // use default options
+	handle_ws := func(c echo.Context) error {
+		ctx, err := upgrader.Upgrade(c.Response().Writer, c.Request(), nil)
+		if err != nil {
+			return err
+		}
+		defer ctx.Close()
+
+		path, err := get_path(c.Request(),func(url *url.URL) {
+			url.Scheme = "ws"
+		})
+		if err != nil {
+			return err
+		}
+
+		conn, _, err := websocket.DefaultDialer.Dial(path, c.Request().Header)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+
+		exitErr := (error)(nil)
+
+		go func() {
+			for {
+				mt, message, err := ctx.ReadMessage()
+				if err != nil {
+					exitErr = err
+					break
+				}
+
+				if err := conn.WriteMessage(mt, message); err != nil {
+					exitErr = err
+					break
+				}
+			}
+		}()
+
+		go func() {
+			for {
+				mt, message, err := conn.ReadMessage()
+				if err != nil {
+					exitErr = err
+					break
+				}
+
+				if err := ctx.WriteMessage(mt, message); err != nil {
+					exitErr = err
+					break
+				}
+			}
+		}()
+
+		for exitErr == nil {
+			time.Sleep(time.Millisecond * 100)
+		}
+
+		return nil
+	}
+
+	return func(c echo.Context) error {
+		new_path, err := get_path(c.Request(),func(url *url.URL) {})
+		if err != nil {
+			return err
+		}
+
+		if c.IsWebSocket() {
+			return handle_ws(c)
 		}
 
 		req, err := http.NewRequest(
