@@ -20,7 +20,6 @@ type NodeImpl struct {
 	active       bool
 	connectError error
 
-	client     *goph.Client
 	httpclient *http.Client
 	internal   packet.WorkerInfor
 }
@@ -135,17 +134,17 @@ func (node *NodeImpl) Query() (err error) {
 	node.internal = ss
 	return nil
 }
-func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
+func (node *NodeImpl) fileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
 	out, err := exec.Command("du", lfile).Output()
 	if err != nil {
 		return fmt.Errorf("failed to retrieve file info %s", err.Error())
 	}
 
 	lsize := strings.Split(string(out), "\t")[0]
-	out, err = node.client.Run(fmt.Sprintf("du %s", rfile))
+	out, err = client.Run(fmt.Sprintf("du %s", rfile))
 	rsize := strings.Split(string(out), "\t")[0]
 	if err == nil && force {
-		node.client.Run(fmt.Sprintf("rm -f %s", rfile))
+		client.Run(fmt.Sprintf("rm -f %s", rfile))
 	}
 	if err != nil || force {
 		_, err := exec.Command("sshpass",
@@ -156,7 +155,7 @@ func (node *NodeImpl) fileTransfer(rfile, lfile string, force bool) error {
 			return err
 		}
 
-		out, err := node.client.Run(fmt.Sprintf("du %s", rfile))
+		out, err := client.Run(fmt.Sprintf("du %s", rfile))
 		if err != nil {
 			return err
 		}
@@ -180,20 +179,19 @@ func (node *NodeImpl) setupNode() error {
 		return err
 	}
 
-	node.client = client
 	client.Run(fmt.Sprintf("mkdir -p %s", child_dir))
 
-	err = node.fileTransfer(lbinary, lbinary, true)
+	err = node.fileTransfer(client, lbinary, lbinary, true)
 	if err != nil {
 		return err
 	}
 
-	err = node.fileTransfer(lapp, lapp, true)
+	err = node.fileTransfer(client, lapp, lapp, true)
 	if err != nil {
 		return err
 	}
 
-	err = node.fileTransfer(los, los, false)
+	err = node.fileTransfer(client, los, los, false)
 	if err != nil {
 		return err
 	}
