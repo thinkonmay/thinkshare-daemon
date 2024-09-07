@@ -147,11 +147,7 @@ func WebDaemon(persistent persistent.Persistent,
 	if def := daemon.HandleVirtdaemon(); def != nil {
 		daemon.cleans = append(daemon.cleans, def)
 	}
-	daemon.persist.Infor(func() *packet.WorkerInfor {
-		result := daemon.QueryInfo(&daemon.WorkerInfor)
-		return &result
-	})
-
+	daemon.persist.Infor(daemon.QueryInfo)
 	daemon.persist.RecvSession(daemon.handleSession)
 	daemon.persist.ClosedSession(daemon.CloseSession)
 	daemon.signaling.AuthHandler(daemon.HandleSignaling)
@@ -200,7 +196,7 @@ func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive 
 		process, channel, err = daemon.handleHub(ss)
 	}
 	if ss.Vm != nil {
-		daemon.QueryInfo(&daemon.WorkerInfor)
+		daemon.QueryInfo()
 		if ss.Vm.Volumes == nil || len(ss.Vm.Volumes) == 0 {
 			if Vm, err := daemon.DeployVM(ss, cancel, keepalive); err != nil {
 				return nil, err
@@ -246,7 +242,7 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 		return nil
 	}
 
-	daemon.QueryInfo(&daemon.WorkerInfor)
+	daemon.QueryInfo()
 	log.PushLog("terminating session %s", ss)
 	keys := make([]string, 0, len(daemon.session))
 	for k, _ := range daemon.session {
@@ -449,7 +445,8 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 	return nil, false
 }
 
-func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
+func (daemon *Daemon) QueryInfo() *packet.WorkerInfor {
+	info := &daemon.WorkerInfor
 	local := make(chan error)
 	jobs := []chan error{local}
 	go func() {
@@ -506,10 +503,11 @@ func (daemon *Daemon) QueryInfo(info *packet.WorkerInfor) packet.WorkerInfor {
 		}
 	}
 
-	return daemon.infoBuilder(*info)
+	return daemon.infoTransform(info)
 }
 
-func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
+func (daemon *Daemon) infoTransform(inf *packet.WorkerInfor) *packet.WorkerInfor {
+	cp := *inf
 	for _, node := range daemon.cluster.Nodes() {
 		ss, err := node.Sessions()
 		if err != nil {
@@ -541,7 +539,7 @@ func (daemon *Daemon) infoBuilder(cp packet.WorkerInfor) packet.WorkerInfor {
 		}
 	}
 
-	return cp
+	return &cp
 }
 
 func (daemon *Daemon) HandleSessionForward(ss *packet.WorkerSession, command string) (*packet.WorkerSession, error) {

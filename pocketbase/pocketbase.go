@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -55,7 +56,7 @@ func StartPocketbase() {
 		dir = _dir
 	}
 
-	app := pocketbase.New()
+	app = pocketbase.New()
 	app.Bootstrap()
 
 	path, _ := filepath.Abs(dir)
@@ -73,24 +74,34 @@ func StartPocketbase() {
 			}
 		}
 	}
+	recover := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			defer func() {
+				if err := recover(); err != nil {
+					log.PushLog("receive panic in serve thread: %s", debug.Stack())
+				}
+			}()
+			return next(c)
+		}
+	}
 	app.OnBeforeServe().Add(func(e *core.ServeEvent) error {
-		e.Router.POST("/_new", handle)
-		e.Router.POST("/_use", handle)
-		e.Router.POST("/new", handle)
-		e.Router.POST("/closed", handle)
-		e.Router.POST("/handshake/*", handle)
-		e.Router.GET("/info", infoauth)
+		e.Router.POST("/_new", handle, recover)
+		e.Router.POST("/_use", handle, recover)
+		e.Router.POST("/new", handle, recover)
+		e.Router.POST("/closed", handle, recover)
+		e.Router.POST("/handshake/*", handle, recover)
+		e.Router.GET("/info", infoauth, recover)
 
 		// proxy API
-		e.Router.Any("/auth/v1/callback", proxy("http://auth:9999", "/auth/v1/callback"))
-		e.Router.Any("/auth/v1/authorize", proxy("http://auth:9999", "/auth/v1/authorize"))
-		e.Router.Any("/auth/v1/verify", proxy("http://auth:9999", "/auth/v1/verify"))
+		e.Router.Any("/auth/v1/callback", proxy("http://auth:9999", "/auth/v1/callback"), recover)
+		e.Router.Any("/auth/v1/authorize", proxy("http://auth:9999", "/auth/v1/authorize"), recover)
+		e.Router.Any("/auth/v1/verify", proxy("http://auth:9999", "/auth/v1/verify"), recover)
 
-		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1"))
-		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"))
-		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg"))
+		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1"), recover)
+		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"), recover)
+		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg"), recover)
 
-		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true))
+		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true), recover)
 		return nil
 	})
 
