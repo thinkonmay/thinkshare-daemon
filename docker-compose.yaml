@@ -10,12 +10,13 @@ services:
             MONITOR_DOMAIN: monitor.thinkmay.net
             ADMIN_DOMAIN: admin.thinkmay.net
             DATA_DOMAIN: data.thinkmay.net
-            ENABLE_HTTPS: false 
+            ENABLE_HTTPS: true
             WEB_DIR: /web
         volumes:
             - ./_volumes/pocketbase:/pb_data
             - ./web/dist:/web:ro
             - ./cluster.yaml:/cluster.yaml:ro
+            - ./turn.json:/turn.json:rw
 
     studio:
         container_name: supabase-studio

@@ -10,9 +10,10 @@ RUN go build -o /artifact/daemon ./service/linux
 
 
 FROM ubuntu 
-RUN apt-get update -y
-RUN apt install -y virt-manager  \
+RUN apt-get update -y && \
+    apt install -y virt-manager  \
     net-tools \
+    curl \
     vim \
     neofetch
 
