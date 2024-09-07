@@ -101,7 +101,8 @@ func WebDaemon(persistent persistent.Persistent,
 			turnconf.MinPort,
 			turnconf.MaxPort,
 			turnconf.Port,
-			turnconf.PublicIP); err != nil {
+			turnconf.PublicIP,
+			turnconf.Backup); err != nil {
 			log.PushLog("fail to setup turn server %s", err.Error())
 			daemon.turn = nil
 		}

@@ -47,6 +47,7 @@ type TurnConfig struct {
 	MaxPort  int    `json:"max"`
 	Port     int    `json:"port"`
 	PublicIP string `json:"publicip"`
+	Backup   string `json:"backup"`
 }
 
 type ClusterConfig interface {

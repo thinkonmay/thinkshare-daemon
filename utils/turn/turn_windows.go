@@ -20,7 +20,7 @@ type TurnServer struct {
 	usersMap map[string][]byte
 }
 
-func NewServer(min_port, max_port, port int, ip string) (*TurnServer, error) {
+func NewServer(min_port, max_port, port int, ip, backup_path string) (*TurnServer, error) {
 	ret := &TurnServer{
 		mut:      &sync.Mutex{},
 		usersMap: map[string][]byte{},

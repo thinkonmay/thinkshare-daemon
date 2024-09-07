@@ -2,11 +2,14 @@ package turn
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/pion/turn/v4"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
@@ -20,15 +23,30 @@ const (
 
 type TurnServer struct {
 	*turn.Server
-	mut      *sync.Mutex
-	usersMap map[string][]byte
+	mut          *sync.Mutex
+	usersMap     map[string]string
+	sync_usermap bool
 }
 
-func NewServer(min_port, max_port, port int, ip string) (*TurnServer, error) {
+func NewServer(min_port, max_port, port int, ip, backup_path string) (*TurnServer, error) {
 	ret := &TurnServer{
-		mut:      &sync.Mutex{},
-		usersMap: map[string][]byte{},
+		mut:          &sync.Mutex{},
+		usersMap:     map[string]string{},
+		sync_usermap: true,
 	}
+
+	go func() {
+		if bytes, err := os.ReadFile(backup_path); err == nil {
+			json.Unmarshal(bytes, ret.usersMap)
+		}
+
+		for ret.sync_usermap {
+			time.Sleep(time.Second)
+			if bytes, err := json.Marshal(ret.usersMap); err == nil {
+				os.WriteFile(backup_path, bytes, 777)
+			}
+		}
+	}()
 
 	addr, err := net.ResolveUDPAddr("udp", "0.0.0.0:"+strconv.Itoa(port))
 	if err != nil {
@@ -78,7 +96,7 @@ func NewServer(min_port, max_port, port int, ip string) (*TurnServer, error) {
 			ret.mut.Lock()
 			defer ret.mut.Unlock()
 			if key, ok := ret.usersMap[username]; ok {
-				return key, true
+				return []byte(key), true
 			} else {
 				return nil, false
 			}
@@ -100,8 +118,9 @@ func (t *TurnServer) AllocateUser(username, password string) {
 	t.mut.Lock()
 	defer t.mut.Unlock()
 
-	t.usersMap[username] = turn.GenerateAuthKey(username, realm, password)
+	t.usersMap[username] = string(turn.GenerateAuthKey(username, realm, password))
 }
 func (t *TurnServer) Close() {
 	t.Server.Close()
+	t.sync_usermap = false
 }
