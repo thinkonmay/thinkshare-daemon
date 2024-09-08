@@ -4,11 +4,11 @@ go 1.22
 
 require (
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/hugolgst/rich-go v0.0.0-20230917173849-4a4fb1d3c362
 	github.com/jaypipes/ghw v0.9.0
 	github.com/labstack/echo/v5 v5.0.0-20230722203903-ec5b858dab61
 	github.com/melbahja/goph v1.4.0
-	github.com/pion/randutil v0.1.0
 	github.com/pion/stun v0.6.1
 	github.com/pion/turn/v4 v4.0.0
 	github.com/pocketbase/dbx v1.10.1
@@ -16,6 +16,7 @@ require (
 	github.com/thinkonmay/pocketbase v0.22.21-0.20240904163807-d08114dfcda2
 	github.com/thinkonmay/thinkremote-rtchub v1.1.1-0.20240225162949-450d9c6cc9a7
 	github.com/winlabs/gowin32 v0.0.0-20221003142512-0d265587d3c9
+	golang.org/x/net v0.28.0
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -53,7 +54,6 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/googleapis/gax-go/v2 v2.13.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
@@ -66,6 +66,7 @@ require (
 	github.com/pion/dtls/v2 v2.2.7 // indirect
 	github.com/pion/dtls/v3 v3.0.1 // indirect
 	github.com/pion/logging v0.2.2 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/stun/v3 v3.0.0 // indirect
 	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pkg/sftp v1.13.5 // indirect
@@ -81,7 +82,6 @@ require (
 	gocloud.dev v0.39.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/image v0.19.0 // indirect
-	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.22.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
@@ -111,7 +111,7 @@ require (
 	github.com/jaypipes/pcidb v1.0.0 // indirect
 	github.com/judwhite/go-svc v1.2.1
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/pion/transport/v2 v2.2.4
+	github.com/pion/transport/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
