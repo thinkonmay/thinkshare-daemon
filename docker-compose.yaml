@@ -1,11 +1,19 @@
 services:
+    turn:
+        image: pigeatgarlic/turndaemon
+        restart: unless-stopped
+        network_mode: host
+        environment:
+            PATH: /turn.json
+            PORT: 80
+        volumes:
+            - ./turn.json:/turn.json:rw
     gateway:
         image: pigeatgarlic/virtdaemon
         restart: unless-stopped
         ports:
             - 80:80
             - 443:443
-            - 10000-10100:10000-10100/udp
             - 60001:60000
         environment:
             SERVICE_DOMAIN: play.thinkmay.net
@@ -22,7 +30,6 @@ services:
             - ./cluster.yaml:/cluster.yaml:ro
             - ./binary/os.qcow2:/os.qcow2:ro
             - ./binary/app.qcow2:/app.qcow2:ro
-            - ./turn.json:/turn.json:rw
     studio:
         container_name: supabase-studio
         image: supabase/studio:20230803-15c6762
