@@ -138,8 +138,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		VDriver:       true,
 	}
 
-	pre := make([]libvirt.VMLaunchModel, len(models))
-	copy(pre, models)
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
@@ -226,7 +224,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		return &inf, nil
 	}
 
-	models = pre
 	virt.DeleteVM(model.ID)
 	return nil, fmt.Errorf("timeout deploy new VM")
 }

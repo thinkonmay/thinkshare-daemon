@@ -19,3 +19,5 @@ playground/
 pb_data
 *.iso
 binary/log.*
+_volumes/
+.env
