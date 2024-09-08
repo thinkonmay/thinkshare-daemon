@@ -32,33 +32,34 @@ const (
 var (
 	client = http.Client{Timeout: 24 * time.Hour}
 	app    = (*pocketbase.PocketBase)(nil)
-	doms   = struct{ ServiceDomain, MonitorDomain, AdminUsername, AdminPassword, AdminDomain, DataDomain string }{}
+	env   = struct{ ServiceDomain, MonitorDomain, AdminUsername, AdminPassword, AdminDomain, DataDomain string }{}
 )
 
 func StartPocketbase() {
-	enable_https := false
-
 	ok := false
-	dir := "/web"
+	dir := "./web"
+	enable_https := true
 	certdoms := []string{}
-	if doms.ServiceDomain, ok = os.LookupEnv("SERVICE_DOMAIN"); ok {
-		certdoms = append(certdoms, doms.ServiceDomain)
+	if env.ServiceDomain, ok = os.LookupEnv("SERVICE_DOMAIN"); ok {
+		certdoms = append(certdoms, env.ServiceDomain)
+	} else {
+		env.ServiceDomain = "play.thinkmay.net"
 	}
-	if doms.MonitorDomain, ok = os.LookupEnv("MONITOR_DOMAIN"); ok {
-		certdoms = append(certdoms, doms.MonitorDomain)
+	if env.MonitorDomain, ok = os.LookupEnv("MONITOR_DOMAIN"); ok {
+		certdoms = append(certdoms, env.MonitorDomain)
 	}
-	if doms.AdminDomain, ok = os.LookupEnv("ADMIN_DOMAIN"); ok {
-		certdoms = append(certdoms, doms.AdminDomain)
+	if env.AdminDomain, ok = os.LookupEnv("ADMIN_DOMAIN"); ok {
+		certdoms = append(certdoms, env.AdminDomain)
 	}
-	if doms.AdminPassword, ok = os.LookupEnv("ADMIN_PASSWORD"); ok {
+	if env.AdminPassword, ok = os.LookupEnv("ADMIN_PASSWORD"); ok {
 	}
-	if doms.AdminUsername, ok = os.LookupEnv("ADMIN_USERNAME"); ok {
+	if env.AdminUsername, ok = os.LookupEnv("ADMIN_USERNAME"); ok {
 	}
-	if doms.DataDomain, ok = os.LookupEnv("DATA_DOMAIN"); ok {
-		certdoms = append(certdoms, doms.DataDomain)
+	if env.DataDomain, ok = os.LookupEnv("DATA_DOMAIN"); ok {
+		certdoms = append(certdoms, env.DataDomain)
 	}
-	if enableSSL, ok := os.LookupEnv("ENABLE_HTTPS"); ok && enableSSL == "true" {
-		enable_https = true
+	if enableSSL, ok := os.LookupEnv("DISABLE_HTTPS"); ok && enableSSL == "true" {
+		enable_https = false
 	}
 	if _dir, ok := os.LookupEnv("WEB_DIR"); ok {
 		dir = _dir
@@ -70,8 +71,8 @@ func StartPocketbase() {
 	path, _ := filepath.Abs(dir)
 	dirfs := os.DirFS(path)
 
-	expectedUsernameHash := sha256.Sum256([]byte(doms.AdminUsername))
-	expectedPasswordHash := sha256.Sum256([]byte(doms.AdminPassword))
+	expectedUsernameHash := sha256.Sum256([]byte(env.AdminUsername))
+	expectedPasswordHash := sha256.Sum256([]byte(env.AdminPassword))
 	basicAuth := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if username, password, ok := c.Request().BasicAuth(); ok {
@@ -95,11 +96,11 @@ func StartPocketbase() {
 	pre := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			switch c.Request().Host {
-			case doms.DataDomain:
+			case env.DataDomain:
 				return basicAuth(proxy("http://studio:3000", "", ""))(c)
-			case doms.MonitorDomain:
+			case env.MonitorDomain:
 				return basicAuth(proxy("http://grafana:3000", "", ""))(c)
-			case doms.ServiceDomain:
+			case env.ServiceDomain:
 				if c.IsWebSocket() {
 					return proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
 				} else {
@@ -147,11 +148,11 @@ func StartPocketbase() {
 			err := (error)(nil)
 			config := apis.ServeConfig{
 				ShowStartBanner: true,
-				HttpAddr:        "0.0.0.0:80",
+				HttpAddr:        "0.0.0.0:8000",
 				PreMiddleware:   pre,
 			}
 			if enable_https {
-				config.HttpsAddr = "0.0.0.0:443"
+				config.HttpsAddr = "0.0.0.0:44300"
 				config.CertificateDomains = certdoms
 			}
 
