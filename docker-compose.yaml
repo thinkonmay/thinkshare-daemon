@@ -10,14 +10,13 @@ services:
             MONITOR_DOMAIN: monitor.thinkmay.net
             ADMIN_DOMAIN: admin.thinkmay.net
             DATA_DOMAIN: data.thinkmay.net
-            ENABLE_HTTPS: true
+            ENABLE_HTTPS: false
             WEB_DIR: /web
         volumes:
             - ./_volumes/pocketbase:/pb_data
             - ./web/dist:/web:ro
             - ./cluster.yaml:/cluster.yaml:ro
             - ./turn.json:/turn.json:rw
-
     studio:
         container_name: supabase-studio
         image: supabase/studio:20230803-15c6762
@@ -35,11 +34,54 @@ services:
             DEFAULT_PROJECT_NAME: thinkmay
 
             SUPABASE_URL: http://gateway
-            SUPABASE_PUBLIC_URL: data.thinkmay.net
+            SUPABASE_PUBLIC_URL: http://data.thinkmay.net
             SUPABASE_ANON_KEY: ${ANON_KEY}
             SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
 
             NEXT_PUBLIC_ENABLE_LOGS: false
+
+    realtime:
+        # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
+        container_name: realtime.supabase-realtime
+        image: supabase/realtime:v2.30.34
+        depends_on:
+            db:
+                # Disable this if you are using an external Postgres database
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "curl",
+                    "-sSfL",
+                    "--head",
+                    "-o",
+                    "/dev/null",
+                    "-H",
+                    "Authorization: Bearer ${ANON_KEY}",
+                    "http://localhost:4000/api/tenants/realtime/health"
+                ]
+            timeout: 5s
+            interval: 5s
+            retries: 3
+        restart: unless-stopped
+        environment:
+            PORT: 4000
+            DB_HOST: ${POSTGRES_HOST}
+            DB_PORT: ${POSTGRES_PORT}
+            DB_USER: supabase_admin
+            DB_PASSWORD: ${POSTGRES_PASSWORD}
+            DB_NAME: ${POSTGRES_DB}
+            DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+            DB_ENC_KEY: supabaserealtime
+            API_JWT_SECRET: ${JWT_SECRET}
+            SECRET_KEY_BASE: UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq
+            ERL_AFLAGS: -proto_dist inet_tcp
+            DNS_NODES: "''"
+            RLIMIT_NOFILE: "10000"
+            APP_NAME: realtime
+            SEED_SELF_HOST: true
+
     auth:
         container_name: supabase-auth
         image: supabase/gotrue:v2.82.4
@@ -113,6 +155,8 @@ services:
             interval: 5s
             timeout: 5s
             retries: 10
+        ports:
+            - 127.0.0.1:5432:${POSTGRES_PORT}
         command:
             - postgres
             - -c

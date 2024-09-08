@@ -20,6 +20,7 @@ import (
 	"github.com/thinkonmay/pocketbase/core"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
+	ws "golang.org/x/net/websocket"
 )
 
 const (
@@ -67,9 +68,15 @@ func StartPocketbase() {
 		return func(c echo.Context) error {
 			switch c.Request().Host {
 			case doms.DataDomain:
-				return proxy("http://studio:3000", "")(c)
+				return proxy("http://studio:3000", "", "")(c)
 			case doms.MonitorDomain:
-				return proxy("http://grafana:3000", "")(c)
+				return proxy("http://grafana:3000", "", "")(c)
+			case doms.ServiceDomain:
+				if c.IsWebSocket() {
+					return proxy("http://realtime.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
+				} else {
+					return next(c)
+				}
 			default:
 				return next(c)
 			}
@@ -94,13 +101,14 @@ func StartPocketbase() {
 		e.Router.GET("/info", infoauth, recover)
 
 		// proxy API
-		e.Router.Any("/auth/v1/callback", proxy("http://auth:9999", "/auth/v1/callback"), recover)
-		e.Router.Any("/auth/v1/authorize", proxy("http://auth:9999", "/auth/v1/authorize"), recover)
-		e.Router.Any("/auth/v1/verify", proxy("http://auth:9999", "/auth/v1/verify"), recover)
+		e.Router.Any("/auth/v1/callback", proxy("http://auth:9999", "/auth/v1/callback", ""), recover)
+		e.Router.Any("/auth/v1/authorize", proxy("http://auth:9999", "/auth/v1/authorize", ""), recover)
+		e.Router.Any("/auth/v1/verify", proxy("http://auth:9999", "/auth/v1/verify", ""), recover)
 
-		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1"), recover)
-		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1"), recover)
-		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg"), recover)
+		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1", ""), recover)
+		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1", ""), recover)
+		e.Router.Any("/realtime/v1/api/*", proxy("http://realtime.supabase-realtime:4000", "/realtime/v1/api", "/api"), recover)
+		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg", ""), recover)
 
 		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true), recover)
 		return nil
@@ -264,7 +272,7 @@ func handle(c echo.Context) (err error) {
 	return nil
 }
 
-func proxy(destination, strip string) echo.HandlerFunc {
+func proxy(destination, strip, replace string) echo.HandlerFunc {
 	get_path := func(c *http.Request, transform func(url *url.URL)) (string, error) {
 		curl, err := url.Parse(destination)
 		if err != nil {
@@ -279,74 +287,75 @@ func proxy(destination, strip string) echo.HandlerFunc {
 		if strip == "" {
 			new_path = url.String()
 		} else {
-			new_path = strings.ReplaceAll(url.String(), strip, "")
+			new_path = strings.ReplaceAll(url.String(), strip, replace)
 		}
-
 		return new_path, nil
 	}
 
-	upgrader := websocket.Upgrader{} // use default options
 	handle_ws := func(c echo.Context) error {
-		ctx, err := upgrader.Upgrade(c.Response().Writer, c.Request(), nil)
-		if err != nil {
-			return err
-		}
-		defer ctx.Close()
-
-		path, err := get_path(c.Request(),func(url *url.URL) {
-			url.Scheme = "ws"
-		})
-		if err != nil {
-			return err
-		}
-
-		conn, _, err := websocket.DefaultDialer.Dial(path, c.Request().Header)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		exitErr := (error)(nil)
-
-		go func() {
-			for {
-				mt, message, err := ctx.ReadMessage()
-				if err != nil {
-					exitErr = err
-					break
-				}
-
-				if err := conn.WriteMessage(mt, message); err != nil {
-					exitErr = err
-					break
-				}
+		ws.Handler(func(ctx *ws.Conn) {
+			path, connErr := get_path(c.Request(), func(url *url.URL) {
+				url.Scheme = "ws"
+			})
+			if connErr != nil {
+				return
 			}
-		}()
 
-		go func() {
-			for {
-				mt, message, err := conn.ReadMessage()
-				if err != nil {
-					exitErr = err
-					break
-				}
-
-				if err := ctx.WriteMessage(mt, message); err != nil {
-					exitErr = err
-					break
-				}
+			header := c.Request().Header.Clone()
+			delete(header, "Sec-Websocket-Extensions")
+			delete(header, "Sec-Websocket-Version")
+			delete(header, "Sec-Websocket-Key")
+			delete(header, "Connection")
+			delete(header, "Upgrade")
+			conn, _, connErr := websocket.DefaultDialer.Dial(path, header)
+			if connErr != nil {
+				return
 			}
-		}()
+			defer conn.Close()
 
-		for exitErr == nil {
-			time.Sleep(time.Millisecond * 100)
-		}
+			exitErr := (error)(nil)
 
+			go func() {
+				buffer := make([]byte, 4096)
+				for {
+					size, err := ctx.Read(buffer)
+					if err != nil {
+						exitErr = err
+						break
+					}
+
+					if err := conn.WriteMessage(websocket.BinaryMessage, buffer[:size]); err != nil {
+						exitErr = err
+						break
+					}
+				}
+			}()
+
+			go func() {
+				for {
+					_, message, err := conn.ReadMessage()
+					if err != nil {
+						exitErr = err
+						break
+					}
+
+					if _, err := ctx.Write(message); err != nil {
+						exitErr = err
+						break
+					}
+				}
+			}()
+
+			for exitErr == nil {
+				time.Sleep(time.Millisecond * 100)
+			}
+
+		}).ServeHTTP(c.Response(), c.Request())
 		return nil
 	}
 
 	return func(c echo.Context) error {
-		new_path, err := get_path(c.Request(),func(url *url.URL) {})
+		new_path, err := get_path(c.Request(), func(url *url.URL) {})
 		if err != nil {
 			return err
 		}
