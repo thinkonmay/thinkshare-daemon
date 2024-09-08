@@ -5,17 +5,11 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/jaypipes/ghw"
 	"github.com/pion/stun"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
-
-	// "github.com/shirou/gopsutil/winservices"
-	"github.com/shirou/gopsutil/disk"
-	netinf "github.com/shirou/gopsutil/net"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
@@ -34,30 +28,42 @@ type SysInfo struct {
 }
 
 // Get preferred outbound ip of this machine
-func GetPrivateIP() string {
+func GetPrivateIP() (string, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		log.PushLog(err.Error())
-		return ""
+		return "", err
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP.String()
+	return localAddr.IP.String(), nil
 }
 
-
-
-func GetPublicIPCurl() (result string) {
+func GetPublicIPCurl() (result string, err error) {
 	result = ""
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0] }
-	if result == "" { result = getPublicIPSTUN() }
-	return result
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = strings.Split(getPublicIPCurl("https://ipv4.icanhazip.com/"), "\n")[0]
+	}
+	if result == "" {
+		result = getPublicIPSTUN()
+	}
+	if result == "" {
+		result = getPublicIPSTUN()
+	}
+	if result == "" {
+		return "", fmt.Errorf("worker is not connected to internet")
+	} else {
+		return result, nil
+	}
 }
-func getPublicIPCurl(url string) (string) {
+func getPublicIPCurl(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.PushLog(err.Error())
@@ -101,34 +107,13 @@ func getPublicIPSTUN() (result string) {
 	return result
 }
 
-
-
-
-func GetPartitions() ([]*packet.Partition, error) {
-	partitions,err := disk.Partitions(true)
-	if err != nil {
-		return nil, err
-	}
-
-	ret := []*packet.Partition{}
-    for _, partition := range partitions {
-		ret = append(ret, &packet.Partition{
-			Device: partition.Device,
-			Opts: partition.Opts,
-			Mountpoint: partition.Mountpoint,
-			Fstype: partition.Fstype,
-		})
-    }
-
-	return ret,nil
-}
-
 func GetInfor() (*packet.WorkerInfor, error) {
 	hostStat, err := host.Info()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
+
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
@@ -144,106 +129,44 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-	pcies, err := ghw.Block()
-	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
-		return nil, err
-	}
 	cpus, err := ghw.CPU()
 	if err != nil {
 		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-	networks, err := ghw.Network()
+
+	public, err := GetPublicIPCurl()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-
-	partitions,_ := disk.Partitions(true)
-
+	private, err := GetPrivateIP()
+	if err != nil {
+		return nil, err
+	}
 	ret := &packet.WorkerInfor{
 		CPU:  cpus.Processors[0].Model,
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
 		BIOS: fmt.Sprintf("%v", bios),
 
-		NICs:  make([]string, 0),
-		Disks: make([]string, 0),
-		GPUs:  make([]string, 0),
+		GPUs:     []string{},
+		Sessions: []*packet.WorkerSession{},
+		Volumes:  []string{},
 
 		// Get preferred outbound ip of this machine
-		PublicIP:  GetPublicIPCurl(),
-		PrivateIP: GetPrivateIP(),
-
-		Timestamp: time.Now().Format(time.RFC3339),
+		PublicIP:  &public,
+		PrivateIP: &private,
 	}
 
-	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)", 
-		hostStat.Hostname, 
-		hostStat.Platform, 
-		hostStat.KernelArch, 
-		hostStat.KernelVersion, 
+	ret.Hostname = fmt.Sprintf("%s (OS %s) (arch %s) (kernel ver.%s) (platform ver.%s)",
+		hostStat.Hostname,
+		hostStat.Platform,
+		hostStat.KernelArch,
+		hostStat.KernelVersion,
 		hostStat.PlatformVersion)
 
 	for _, i := range gpu.GraphicsCards {
 		ret.GPUs = append(ret.GPUs, i.DeviceInfo.Product.Name)
 	}
-	for _, i := range pcies.Disks {
-		ret.Disks = append(ret.Disks, fmt.Sprintf("%v", i))
-	}
-	for _, i := range networks.NICs {
-		ret.NICs = append(ret.NICs, fmt.Sprintf("%v",i))
-	}
-    for _, partition := range partitions {
-		ret.Partitions = append(ret.Partitions, &packet.Partition{
-			Device: partition.Device,
-			Opts: partition.Opts,
-			Mountpoint: partition.Mountpoint,
-			Fstype: partition.Fstype,
-		})
-    }
 
 	return ret, nil
-}
-
-
-
-
-
-func GetStatus() (map[string]interface{},error) {
-	ret := map[string]interface{}{}
-
-	procs := []map[string]interface{}{}
-	processes,_ := process.Processes()
-	for _,proc := range processes {
-		cmd,_ 		:= proc.Cmdline()
-		cwd,_ 		:= proc.Cwd()
-		parent,_ 	:= proc.Parent()
-		env,_ 		:= proc.Environ()
-		mem,_ 		:= proc.MemoryPercent()
-		cpu,_ 		:= proc.CPUPercent()
-		files,_ 	:= proc.Exe()
-		user,_ 		:= proc.Username()
-
-		procs = append(procs, map[string]interface{}{
-			"cpu": cpu,
-			"mem": mem,
-			"user": user,
-
-			"exe": files,
-			"cwd": cwd,
-			"cmd": cmd,
-
-			"env": env,
-			"pid": proc.Pid,
-			"parent": parent,
-		})
-	}
-
-	ret["process"] = procs 
-	// svc,_ := winservices.ListServices()
-	// ret["svc"] = svc
-	net,_ := netinf.Connections("inet4")
-	ret["net"] = net
-	return ret,nil
 }

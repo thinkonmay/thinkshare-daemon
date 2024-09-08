@@ -2,104 +2,59 @@ syntax = "proto3";
 package protobuf;
 option go_package = "./packet";
 
-
-service Conductor {
-	rpc sync			(stream WorkerSessions) returns (stream WorkerSessions);
-
-	rpc infor			(stream WorkerInfor) 	  returns (Closer);
-	rpc logger			(stream WorkerLog) 	   	  returns (Closer);
-}
-
-message Closer{ 
-	string timestamp = 1;
-	string reason    = 2;
-}
-
-
-
-
-message AppSession { 
-	string backup_folder = 1;
-
-	string app_path      		= 2;
-	repeated string app_args    = 3;
-}
-message Manifest { 
-	int64 process_id    = 1;
-}
-message WorkerSession{ 
-	int32  id = 1;
-	string timestamp = 2;
-
-	string authConfig 		   	= 3; // do sync
-	string signalingConfig 		= 4; // do sync
-	string webrtcConfig    		= 5; // do sync
-	Manifest manifest        	= 8; // not sync
-}
-message WorkerSessions {
-	WorkerSession session = 1;
-	AppSession app = 2;
-}
-
-
-message Partition{
-	string device = 1;
-	string mountpoint = 2;
-	string fstype = 3;
-	string opts = 4;
-}
-
 message WorkerInfor{ 
-	string timestamp = 1;
-
 	string   Hostname   = 2;
 	string   CPU        = 3;
 	string   RAM        = 4;
 	string   BIOS       = 5;
+	optional string   PublicIP   = 6;
+	optional string   PrivateIP  = 7;
+	optional string   MacAddr  = 8;
 
-	string   PublicIP   = 6;
-	string   PrivateIP  = 7;
-
-	repeated string GPUs        = 8;
-	repeated string disks       = 9;
-	repeated Partition partitions  = 10;
-	repeated string NICs    = 11;
+	repeated string GPUs    = 9;
+	repeated WorkerSession Sessions    = 10;
+	repeated WorkerInfor Peers    = 11;
+	repeated string Volumes = 12;
 }
 
-message WorkerLog{ 
-	string timestamp = 1;
+message WorkerSession{ 
+	string id = 1;
+	optional string target  = 2;
 
-	string log       = 2;
-	string level     = 3;
-	string source    = 4;
+	optional DisplaySession  display = 3;
+	optional ThinkmaySession thinkmay = 4;
+	optional SunshineSession sunshine = 5;
+	optional TurnSession turn = 6;
+	optional WorkerInfor vm = 7;
 }
 
-
-
-
-
-message Pipeline {
-	string PipelineHash   	= 1;
-	string PipelineString   = 2;
-	string Plugin   		= 3;
-}
-message Soundcard {
-	string 	DeviceID 	= 1;
-	string 	Name     	= 2;
-	string 	Api      	= 3;
-
-	Pipeline pipeline = 6;
-}
-message Microphone {
-	string 	DeviceID 	= 1;
-	string 	Name     	= 2;
-	string 	Api      	= 3;
-
-	Pipeline pipeline = 6;
+message TurnSession{ 
+	int32 minPort = 1; 
+	int32 maxPort = 2; 
+	int32 port = 3; 
+	string username = 4; 
+	string password = 5; 
 }
 
-message MediaDevice { 
-	Soundcard soundcard = 1;
-	Microphone microphone = 2;
+message DisplaySession{ 
+	optional int32 DisplayIndex = 2; 
+	optional string DisplayName = 3; 
+	int32 ScreenWidth = 6;
+	int32 ScreenHeight = 7;
 }
 
+message ThinkmaySession{ 
+	string stunAddress = 1; 
+	string turnAddress = 2; 
+	string username = 3; 
+	string password = 4; 
+
+	optional string audioToken = 5;
+	optional string videoToken = 6;
+}
+
+message SunshineSession{ 
+	string port = 2; 
+	string username = 3; 
+	string password = 4; 
+}

@@ -1,8 +1,5 @@
 .vscode/launch.json
-cmd.exe
-daemon.exe
-main.exe
-cli.exe
+*.exe
 
 log.txt
 build/
@@ -12,3 +9,18 @@ task_result.yaml
 *.zip
 *.msi
 .vscode/
+thinkmay.log
+*.dll
+*.qcow2
+daemon
+cluster.yaml
+binary/pb_data/
+playground/
+pb_data
+*.iso
+binary/log.*
+.env
+_volumes/grafana/
+_volumes/supabase/data/
+_volumes/prometheus/
+_volumes/pocketbase/

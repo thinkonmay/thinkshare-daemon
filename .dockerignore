@@ -1,0 +1,9 @@
+.git
+binary/
+_volumes/
+web/
+.env
+*git*
+Dockerfile
+docker-compose.yaml
+*.yaml
