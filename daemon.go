@@ -51,7 +51,7 @@ type Daemon struct {
 	childprocess *childprocess.ChildProcesses
 	cluster      cluster.ClusterConfig
 	persist      persistent.Persistent
-	turn         *turn.TurnServer
+	turn         *turn.TurnClient
 
 	mutex *sync.Mutex
 
@@ -97,15 +97,7 @@ func WebDaemon(persistent persistent.Persistent,
 	}
 
 	if turnconf, ok := daemon.cluster.TurnServer(); ok {
-		if daemon.turn, err = turn.NewServer(
-			turnconf.MinPort,
-			turnconf.MaxPort,
-			turnconf.Port,
-			turnconf.PublicIP,
-			turnconf.Backup); err != nil {
-			log.PushLog("fail to setup turn server %s", err.Error())
-			daemon.turn = nil
-		}
+		daemon.turn = &turn.TurnClient{Addr: turnconf.Addr}
 	} else {
 		log.PushLog("turn config not exist, ignoring turn")
 	}
@@ -161,14 +153,15 @@ func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive 
 
 	err := fmt.Errorf("no session configured")
 	if ss.Turn != nil && daemon.turn != nil {
-		turn := *ss.Turn
+		t := *ss.Turn
 		ss.Turn = nil
-		daemon.turn.AllocateUser(turn.Username, turn.Password)
-		defer func() {
-			if _err != nil {
-				daemon.turn.DeallocateUser(turn.Username)
-			}
-		}()
+		daemon.turn.Open(turn.TurnRequest{
+			Username: t.Username,
+			Password: t.Password,
+			Port:     int(t.Port),
+			MaxPort:  int(t.MaxPort),
+			MinPort:  int(t.MinPort),
+		})
 	}
 
 	if ss.Target != nil {
@@ -286,7 +279,7 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 	}
 	if iws != nil {
 		if iws.Turn != nil && daemon.turn != nil {
-			daemon.turn.DeallocateUser(iws.Turn.Username)
+			daemon.turn.Close(iws.Turn.Username)
 		}
 		if iws.memory_channel != nil {
 			sharedmemory.SetState(daemon.memory, *iws.memory_channel, 0)
@@ -301,9 +294,6 @@ func (daemon *Daemon) CloseSession(ss *packet.WorkerSession) error {
 
 func (daemon *Daemon) Close() {
 	daemon.cluster.Deinit()
-	if daemon.turn != nil {
-		daemon.turn.Close()
-	}
 	for _, clean := range daemon.cleans {
 		clean()
 	}

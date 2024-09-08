@@ -44,11 +44,7 @@ type Peer interface {
 }
 
 type TurnConfig struct {
-	MinPort  int    `json:"min"`
-	MaxPort  int    `json:"max"`
-	Port     int    `json:"port"`
-	PublicIP string `json:"publicip"`
-	Backup   string `json:"backup"`
+	Addr string `yaml:"address"`
 }
 
 type ClusterConfig interface {
