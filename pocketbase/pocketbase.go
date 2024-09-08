@@ -73,7 +73,7 @@ func StartPocketbase() {
 				return proxy("http://grafana:3000", "", "")(c)
 			case doms.ServiceDomain:
 				if c.IsWebSocket() {
-					return proxy("http://realtime.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
+					return proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
 				} else {
 					return next(c)
 				}
@@ -107,7 +107,7 @@ func StartPocketbase() {
 
 		e.Router.Any("/auth/v1/*", proxy("http://auth:9999", "/auth/v1", ""), recover)
 		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1", ""), recover)
-		e.Router.Any("/realtime/v1/api/*", proxy("http://realtime.supabase-realtime:4000", "/realtime/v1/api", "/api"), recover)
+		e.Router.Any("/realtime/v1/api/*", proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1/api", "/api"), recover)
 		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg", ""), recover)
 
 		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true), recover)
