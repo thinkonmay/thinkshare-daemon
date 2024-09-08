@@ -15,6 +15,9 @@ import (
 
 const (
 	Httpport = 60000
+	_os      = "os.qcow2"
+	_app     = "app.qcow2"
+	_binary  = "daemon"
 )
 
 var (
@@ -23,27 +26,26 @@ var (
 	local_queue       = []string{}
 	local_queue_mut   = &sync.Mutex{}
 
-	libvirt_available = true
-	base_dir          = "."
-	child_dir         = "./child"
-	los               = "./os.qcow2"
-	lapp              = "./app.qcow2"
-	lbinary           = "./daemon"
+	libvirt_available  = true
+	base_dir           = "."
+	child_dir          = "./child"
+	los, lapp, lbinary = "", "", ""
 )
 
 func init() {
 	exe, _ := os.Executable()
 	base_dir, _ = filepath.Abs(filepath.Dir(exe))
 	child_dir = fmt.Sprintf("%s/child", base_dir)
-	los = fmt.Sprintf("%s/os.qcow2", base_dir)
-	lapp = fmt.Sprintf("%s/app.qcow2", base_dir)
-	lbinary = fmt.Sprintf("%s/daemon", base_dir)
+	los = fmt.Sprintf("%s/%s", base_dir, _os)
+	lapp = fmt.Sprintf("%s/%s", base_dir, _app)
+	lbinary = fmt.Sprintf("%s/%s", base_dir, _binary)
 }
 
 type ClusterConfigManifest struct {
-	Nodes []NodeManifest `yaml:"nodes"`
-	Peers []PeerManifest `yaml:"peers"`
-	Local Host           `yaml:"local"`
+	Override bool           `yaml:"override"`
+	Nodes    []NodeManifest `yaml:"nodes"`
+	Peers    []PeerManifest `yaml:"peers"`
+	Local    Host           `yaml:"local"`
 }
 type ClusterConfigImpl struct {
 	ClusterConfigManifest
@@ -111,7 +113,7 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 		}
 
 		for _, create := range need_create {
-			if node, err := NewNode(create); err != nil {
+			if node, err := NewNode(create, impl.Override); err != nil {
 				log.PushLog("failed to init node %s", err.Error())
 			} else {
 				log.PushLog("new node successfully added %s", node.Name())
@@ -208,14 +210,6 @@ func NewClusterConfig(manifest_path string) (ClusterConfig, error) {
 	err := (error)(nil)
 	impl.ClusterConfigManifest, err = fetch_content()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := sync_nodes(); err != nil {
-		return nil, err
-	}
-
-	if err := sync_peers(); err != nil {
 		return nil, err
 	}
 

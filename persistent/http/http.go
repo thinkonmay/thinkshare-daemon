@@ -172,9 +172,6 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				for {
 					time.Sleep(time.Minute)
 					timeout := now() - keepalive.timestamp
-					if timeout > 60 {
-						log.PushLog("session %s has timeout value %d", keepaliveid, timeout)
-					}
 					if timeout > _use_timeout {
 						keepalive.cancel <- true
 						return

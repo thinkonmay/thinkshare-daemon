@@ -5,17 +5,23 @@ services:
         ports:
             - 80:80
             - 443:443
+            - 10000-10100:10000-10100/udp
+            - 60001:60000
         environment:
             SERVICE_DOMAIN: play.thinkmay.net
-            MONITOR_DOMAIN: monitor.thinkmay.net
-            ADMIN_DOMAIN: admin.thinkmay.net
-            DATA_DOMAIN: data.thinkmay.net
+            MONITOR_DOMAIN: monitor.1.thinkmay.net
+            ADMIN_DOMAIN: admin.1.thinkmay.net
+            ADMIN_USERNAME: thinkmay
+            ADMIN_PASSWORD: thinkmayvantue
+            DATA_DOMAIN: data.1.thinkmay.net
             ENABLE_HTTPS: true
             WEB_DIR: /web
         volumes:
             - ./_volumes/pocketbase:/pb_data
             - ./web/dist:/web:ro
             - ./cluster.yaml:/cluster.yaml:ro
+            - ./binary/os.qcow2:/os.qcow2:ro
+            - ./binary/app.qcow2:/app.qcow2:ro
             - ./turn.json:/turn.json:rw
     studio:
         container_name: supabase-studio

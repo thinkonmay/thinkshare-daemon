@@ -23,17 +23,22 @@ import (
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
+const (
+	_os     = "os.qcow2"
+	_app    = "app.qcow2"
+	_binary = "daemon"
+	_child  = "child"
+)
+
 var (
 	very_quick_client = http.Client{Timeout: time.Second}
 	local_queue       = []string{}
 	local_queue_mut   = &sync.Mutex{}
 
-	libvirt_available = true
-	child_dir         = "./child"
-	los               = "./os.qcow2"
-	lapp              = "./app.qcow2"
-	sidecars          = []string{"lancache", "do-not-delete"}
-	models            = []libvirt.VMLaunchModel{}
+	libvirt_available         = true
+	los, lapp, lbinary, child = "", "", "", ""
+	sidecars                  = []string{"lancache", "do-not-delete"}
+	models                    = []libvirt.VMLaunchModel{}
 
 	virt    *libvirt.VirtDaemon
 	network libvirt.Network
@@ -42,9 +47,10 @@ var (
 func init() {
 	exe, _ := os.Executable()
 	base_dir, _ := filepath.Abs(filepath.Dir(exe))
-	child_dir = fmt.Sprintf("%s/child", base_dir)
-	los = fmt.Sprintf("%s/os.qcow2", base_dir)
-	lapp = fmt.Sprintf("%s/app.qcow2", base_dir)
+	los = fmt.Sprintf("%s/%s", base_dir, _os)
+	lapp = fmt.Sprintf("%s/%s", base_dir, _app)
+	lbinary = fmt.Sprintf("%s/%s", base_dir, _binary)
+	child = fmt.Sprintf("%s/%s", base_dir, _child)
 }
 
 func (daemon *Daemon) HandleVirtdaemon() func() {
@@ -101,7 +107,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 
 	os := los
 	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
-		os, err = findVolumesInDir(child_dir, session.Vm.Volumes[0])
+		os, err = findVolumesInDir(child, session.Vm.Volumes[0])
 		if err != nil {
 			return nil, err
 		}
@@ -229,10 +235,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 }
 
 func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, error) {
-	if !libvirt_available {
-		return nil, fmt.Errorf("libvirt not available")
-	}
-
 	log.PushLog("deploying VM on node %s", node.Name())
 	reqbody, err := json.Marshal(nss)
 	if err != nil {
@@ -297,9 +299,7 @@ func (daemon *Daemon) DeployVMonNode(node cluster.Node, nss *packet.WorkerSessio
 }
 
 func (daemon *Daemon) DeployVMwithVolume(nss *packet.WorkerSession, cancel, keepalive chan bool) (*packet.WorkerSession, *packet.WorkerInfor, error) {
-	if !libvirt_available {
-		return nil, nil, fmt.Errorf("libvirt not available")
-	} else if nss.Vm == nil {
+	if nss.Vm == nil {
 		return nil, nil, fmt.Errorf("VM not specified")
 	} else if len(nss.Vm.Volumes) == 0 {
 		return nil, nil, fmt.Errorf("empty volume id")
@@ -456,7 +456,7 @@ func queryLocal(info *packet.WorkerInfor) error {
 		}
 	}
 
-	vols, err := listVolumesInDir(child_dir)
+	vols, err := listVolumesInDir(child)
 	if err != nil {
 		return err
 	}

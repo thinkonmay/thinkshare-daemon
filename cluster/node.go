@@ -24,24 +24,38 @@ type NodeImpl struct {
 	internal   packet.WorkerInfor
 }
 
-func NewNode(manifest NodeManifest) (*NodeImpl, error) {
+func NewNode(manifest NodeManifest, override bool) (*NodeImpl, error) {
+	now := func() int64 { return time.Now().Unix() }
 	impl := &NodeImpl{
 		NodeManifest: manifest,
 		active:       true,
 	}
 
-	if err := impl.Query(); err != nil {
-		if err := impl.setupNode(); err != nil {
+	exist := false
+	start := now()
+	if !override {
+		exist = true
+		for now()-start < 20 {
+			time.Sleep(time.Second)
+			if err := impl.Query(); err != nil {
+				exist = false
+				break
+			}
+		}
+	}
+
+	if exist {
+		log.PushLog("virtdaemon already runnning on node %s, skip file transfer and daemon start", impl.Ip)
+		return impl, nil
+	} else {
+		if err := impl.setupNode(manifest); err != nil {
 			impl.active = false
 			return nil, err
 		}
-	} else {
-		return impl, nil
 	}
 
 	err := (error)(nil)
-	now := func() int64 { return time.Now().Unix() }
-	start := now()
+	start = now()
 	for now()-start < 60 {
 		time.Sleep(time.Second)
 		if err = impl.Query(); err != nil {
@@ -134,10 +148,10 @@ func (node *NodeImpl) Query() (err error) {
 	node.internal = ss
 	return nil
 }
-func (node *NodeImpl) fileTransfer(client *goph.Client, rfile, lfile string, force bool) error {
-	out, err := exec.Command("du", lfile).Output()
+func (node *NodeImpl) fileTransfer(client *goph.Client, lfile, rfile string, force bool) error {
+	out, err := exec.Command("du", lfile).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to retrieve file info %s", err.Error())
+		return fmt.Errorf("failed to retrieve file %s info %s", lfile, string(out))
 	}
 
 	lsize := strings.Split(string(out), "\t")[0]
@@ -147,12 +161,14 @@ func (node *NodeImpl) fileTransfer(client *goph.Client, rfile, lfile string, for
 		client.Run(fmt.Sprintf("rm -f %s", rfile))
 	}
 	if err != nil || force {
-		_, err := exec.Command("sshpass",
+		res, err := exec.Command("sshpass",
 			"-p", node.Password,
-			"scp", lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
-		).Output()
+			"scp",
+			"-o", "StrictHostKeyChecking=no",
+			lfile, fmt.Sprintf("%s@%s:%s", node.Username, node.Ip, rfile),
+		).CombinedOutput()
 		if err != nil {
-			return err
+			return fmt.Errorf(string(res))
 		}
 
 		out, err := client.Run(fmt.Sprintf("du %s", rfile))
@@ -169,7 +185,7 @@ func (node *NodeImpl) fileTransfer(client *goph.Client, rfile, lfile string, for
 	return nil
 }
 
-func (node *NodeImpl) setupNode() error {
+func (node *NodeImpl) setupNode(manifest NodeManifest) error {
 	allocate := func() (*goph.Client, error) {
 		return goph.NewUnknown(node.Username, node.Ip, goph.Password(node.Password))
 	}
@@ -181,17 +197,18 @@ func (node *NodeImpl) setupNode() error {
 
 	client.Run(fmt.Sprintf("mkdir -p %s", child_dir))
 
-	err = node.fileTransfer(client, lbinary, lbinary, true)
+	rbinary := fmt.Sprintf("%s/%s", manifest.Path, _binary)
+	err = node.fileTransfer(client, lbinary, rbinary, true)
 	if err != nil {
 		return err
 	}
 
-	err = node.fileTransfer(client, lapp, lapp, true)
+	err = node.fileTransfer(client, lapp, fmt.Sprintf("%s/%s", manifest.Path, _app), true)
 	if err != nil {
 		return err
 	}
 
-	err = node.fileTransfer(client, los, los, false)
+	err = node.fileTransfer(client, los, fmt.Sprintf("%s/%s", manifest.Path, _os), false)
 	if err != nil {
 		return err
 	}
@@ -205,10 +222,10 @@ func (node *NodeImpl) setupNode() error {
 				continue
 			}
 
-			log.PushLog("start %s on %s", lbinary, node.Ip)
-			rclient.Run(fmt.Sprintf("chmod 777 %s", lbinary))
+			log.PushLog("start %s on %s", rbinary, node.Ip)
+			rclient.Run(fmt.Sprintf("chmod 777 %s", rbinary))
 			rclient.Run(fmt.Sprintf("chmod 777 %s", lapp))
-			rclient.Run(lbinary)
+			rclient.Run(rbinary)
 			time.Sleep(time.Second * 10)
 		}
 	}()

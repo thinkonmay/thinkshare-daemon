@@ -25,6 +25,7 @@ type TurnServer struct {
 	*turn.Server
 	mut          *sync.Mutex
 	usersMap     map[string]string
+	credMap      map[string]string
 	sync_usermap bool
 }
 
@@ -32,17 +33,23 @@ func NewServer(min_port, max_port, port int, ip, backup_path string) (*TurnServe
 	ret := &TurnServer{
 		mut:          &sync.Mutex{},
 		usersMap:     map[string]string{},
+		credMap:      map[string]string{},
 		sync_usermap: true,
 	}
 
 	go func() {
 		if bytes, err := os.ReadFile(backup_path); err == nil {
-			json.Unmarshal(bytes, ret.usersMap)
+			json.Unmarshal(bytes, ret.credMap)
+			for username, password := range ret.credMap {
+				ret.usersMap[username] = string(turn.GenerateAuthKey(username, realm, password))
+			}
 		}
 
 		for ret.sync_usermap {
 			time.Sleep(time.Second)
-			if bytes, err := json.Marshal(ret.usersMap); err == nil {
+
+			bytes, err := json.MarshalIndent(ret.credMap, "", "")
+			if err == nil {
 				os.WriteFile(backup_path, bytes, 777)
 			}
 		}
@@ -113,12 +120,14 @@ func (t *TurnServer) DeallocateUser(username string) {
 	defer t.mut.Unlock()
 
 	delete(t.usersMap, username)
+	delete(t.credMap, username)
 }
 func (t *TurnServer) AllocateUser(username, password string) {
 	t.mut.Lock()
 	defer t.mut.Unlock()
 
 	t.usersMap[username] = string(turn.GenerateAuthKey(username, realm, password))
+	t.credMap[username] = password
 }
 func (t *TurnServer) Close() {
 	t.Server.Close()

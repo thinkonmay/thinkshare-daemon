@@ -15,6 +15,7 @@ RUN apt-get update -y && \
     net-tools \
     curl \
     vim \
+    sshpass \
     neofetch
 
 WORKDIR /

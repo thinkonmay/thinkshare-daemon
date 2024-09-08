@@ -8,6 +8,7 @@ import (
 
 type NodeManifest struct {
 	Ip       string `yaml:"ip"`
+	Path     string `yaml:"path"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }

@@ -1,6 +1,8 @@
 package pocketbase
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +32,7 @@ const (
 var (
 	client = http.Client{Timeout: 24 * time.Hour}
 	app    = (*pocketbase.PocketBase)(nil)
-	doms   = struct{ ServiceDomain, MonitorDomain, AdminDomain, DataDomain string }{}
+	doms   = struct{ ServiceDomain, MonitorDomain, AdminUsername, AdminPassword, AdminDomain, DataDomain string }{}
 )
 
 func StartPocketbase() {
@@ -48,6 +50,10 @@ func StartPocketbase() {
 	if doms.AdminDomain, ok = os.LookupEnv("ADMIN_DOMAIN"); ok {
 		certdoms = append(certdoms, doms.AdminDomain)
 	}
+	if doms.AdminPassword, ok = os.LookupEnv("ADMIN_PASSWORD"); ok {
+	}
+	if doms.AdminUsername, ok = os.LookupEnv("ADMIN_USERNAME"); ok {
+	}
 	if doms.DataDomain, ok = os.LookupEnv("DATA_DOMAIN"); ok {
 		certdoms = append(certdoms, doms.DataDomain)
 	}
@@ -64,13 +70,35 @@ func StartPocketbase() {
 	path, _ := filepath.Abs(dir)
 	dirfs := os.DirFS(path)
 
+	expectedUsernameHash := sha256.Sum256([]byte(doms.AdminUsername))
+	expectedPasswordHash := sha256.Sum256([]byte(doms.AdminPassword))
+	basicAuth := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if username, password, ok := c.Request().BasicAuth(); ok {
+				usernameHash := sha256.Sum256([]byte(username))
+				passwordHash := sha256.Sum256([]byte(password))
+				usernameMatch := (subtle.ConstantTimeCompare(usernameHash[:], expectedUsernameHash[:]) == 1)
+				passwordMatch := (subtle.ConstantTimeCompare(passwordHash[:], expectedPasswordHash[:]) == 1)
+				if usernameMatch && passwordMatch {
+					return next(c)
+				} else {
+					c.Response().Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+					return c.String(http.StatusUnauthorized, "Unauthorized")
+				}
+			} else {
+				c.Response().Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+				return c.String(http.StatusUnauthorized, "Unauthorized")
+			}
+		}
+	}
+
 	pre := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			switch c.Request().Host {
 			case doms.DataDomain:
-				return proxy("http://studio:3000", "", "")(c)
+				return basicAuth(proxy("http://studio:3000", "", ""))(c)
 			case doms.MonitorDomain:
-				return proxy("http://grafana:3000", "", "")(c)
+				return basicAuth(proxy("http://grafana:3000", "", ""))(c)
 			case doms.ServiceDomain:
 				if c.IsWebSocket() {
 					return proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
