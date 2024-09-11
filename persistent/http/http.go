@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -132,7 +133,21 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			}
 
 			deployment.timestamp = now()
-			return []byte("{}"), nil
+
+			keys := make([]string, 0, len(ret.pending))
+            for k := range ret.pending {
+                keys = append(keys, k)
+            }
+            sort.Strings(keys) // Ensure consistent ordering
+            position := -1
+            for i, k := range keys {
+                if k == msg.Id {
+                    position = i
+                    break
+                }
+            }
+
+			return []byte(fmt.Sprintf(`{"position": %d}`, position)), nil
 		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
