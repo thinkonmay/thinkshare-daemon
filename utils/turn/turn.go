@@ -20,11 +20,11 @@ const (
 )
 
 type TurnServerConfig struct {
-	Port int    `json:"port"`
 	Path string `json:"path"`
 }
 type TurnServer struct {
 	sessions map[string]*TurnSession
+	Mux      *http.ServeMux
 	mut      *sync.Mutex
 	sync     bool
 }
@@ -95,6 +95,7 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 		if err := json.Unmarshal(data, &body); err != nil {
 			w.WriteHeader(400)
 			w.Write([]byte(err.Error()))
+			return
 		}
 
 		server.mut.Lock()
@@ -104,12 +105,15 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 		if err != nil {
 			w.WriteHeader(400)
 			w.Write([]byte(err.Error()))
+			return
 		}
 
+		fmt.Printf("Started a new turn server %v\n",body)
 		server.sessions[body.Username] = &TurnSession{
 			TurnRequest: body,
 			server:      ts,
 		}
+
 		w.WriteHeader(200)
 		w.Write([]byte("success"))
 	})
@@ -119,6 +123,7 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 		if err != nil {
 			w.WriteHeader(400)
 			w.Write([]byte(err.Error()))
+			return
 		}
 
 		body := struct {
@@ -127,6 +132,7 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 		if err := json.Unmarshal(data, &body); err != nil {
 			w.WriteHeader(400)
 			w.Write([]byte(err.Error()))
+			return
 		}
 
 		server.mut.Lock()
@@ -142,7 +148,7 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 		}
 	})
 
-	http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", config.Port), mux)
+	server.Mux = mux
 	return server, nil
 }
 

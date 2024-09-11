@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -13,8 +15,13 @@ func main() {
 		panic(err)
 	}
 
-	turn.NewTurnServer(turn.TurnServerConfig{
-		Port: int(port),
+	server, err := turn.NewTurnServer(turn.TurnServerConfig{
 		Path: os.Getenv("PATH"),
 	})
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("started turn http server on port %d\n", port)
+	panic(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), server.Mux))
 }
