@@ -98,6 +98,8 @@ func StartPocketbase() {
 			switch c.Request().Host {
 			case env.DataDomain:
 				return basicAuth(proxy("http://studio:3000", "", ""))(c)
+			case env.AdminDomain:
+				return basicAuth(proxy("http://admin", "", ""))(c)
 			case env.MonitorDomain:
 				return proxy("http://grafana:3000", "", "")(c)
 			case env.ServiceDomain:
