@@ -108,7 +108,7 @@ func NewTurnServer(config TurnServerConfig) (*TurnServer, error) {
 			return
 		}
 
-		fmt.Printf("Started a new turn server %v\n",body)
+		fmt.Printf("Started a new turn server %v\n", body)
 		server.sessions[body.Username] = &TurnSession{
 			TurnRequest: body,
 			server:      ts,
@@ -162,7 +162,10 @@ func (client *TurnClient) Open(req TurnRequest) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/new", client.Addr), "application/json", bytes.NewReader(data))
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/open", client.Addr), 
+		"application/json", 
+		bytes.NewReader(data))
 	if err != nil {
 		return err
 	} else if resp.StatusCode != 200 {
@@ -185,7 +188,10 @@ func (client *TurnClient) Close(username string) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/new", client.Addr), "application/json", bytes.NewReader(data))
+	resp, err := http.Post(
+		fmt.Sprintf("http://%s/close", client.Addr), 
+		"application/json", 
+		bytes.NewReader(data))
 	if err != nil {
 		return err
 	} else if resp.StatusCode != 200 {

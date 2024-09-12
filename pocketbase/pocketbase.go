@@ -148,11 +148,11 @@ func StartPocketbase() {
 			err := (error)(nil)
 			config := apis.ServeConfig{
 				ShowStartBanner: true,
-				HttpAddr:        "0.0.0.0:8000",
+				HttpAddr:        "0.0.0.0:80",
 				PreMiddleware:   pre,
 			}
 			if enable_https {
-				config.HttpsAddr = "0.0.0.0:44300"
+				config.HttpsAddr = "0.0.0.0:443"
 				config.CertificateDomains = certdoms
 			}
 

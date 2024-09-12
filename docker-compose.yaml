@@ -5,7 +5,7 @@ services:
         network_mode: host
         environment:
             PATH: /turn.json
-            PORT: 80
+            PORT: 8080
         volumes:
             - ./turn.json:/turn.json:rw
     gateway:
@@ -16,13 +16,14 @@ services:
             - 443:443
             - 60001:60000
         environment:
-            SERVICE_DOMAIN: play.thinkmay.net
-            MONITOR_DOMAIN: monitor.1.thinkmay.net
-            ADMIN_DOMAIN: admin.1.thinkmay.net
+            SERVICE_DOMAIN: play.0.thinkmay.net
+            MONITOR_DOMAIN: monitor.0.thinkmay.net
+            ADMIN_DOMAIN: admin.0.thinkmay.net
+            DATA_DOMAIN: data.0.thinkmay.net
+
             ADMIN_USERNAME: thinkmay
             ADMIN_PASSWORD: thinkmayvantue
-            DATA_DOMAIN: data.1.thinkmay.net
-            ENABLE_HTTPS: true
+            DISABLE_HTTPS: false
             WEB_DIR: /web
         volumes:
             - ./_volumes/pocketbase:/pb_data

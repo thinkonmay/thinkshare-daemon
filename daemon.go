@@ -155,13 +155,16 @@ func (daemon *Daemon) handleSession(ss *packet.WorkerSession, cancel, keepalive 
 	if ss.Turn != nil && daemon.turn != nil {
 		t := *ss.Turn
 		ss.Turn = nil
-		daemon.turn.Open(turn.TurnRequest{
+		if err := daemon.turn.Open(turn.TurnRequest{
 			Username: t.Username,
 			Password: t.Password,
+			PublicIP: *daemon.PublicIP,
 			Port:     int(t.Port),
 			MaxPort:  int(t.MaxPort),
 			MinPort:  int(t.MinPort),
-		})
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	if ss.Target != nil {
