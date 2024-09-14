@@ -1,3 +1,6 @@
 [submodule "web"]
 	path = web
 	url = https://github.com/thinkonmay/VirtualOS-win11
+[submodule "manage"]
+	path = manage
+	url = https://github.com/thinkonmay/manage
