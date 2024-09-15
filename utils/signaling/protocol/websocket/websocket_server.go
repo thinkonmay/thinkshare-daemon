@@ -176,7 +176,7 @@ func (wsserver *WebSocketServer) HandleHttpSignaling(w http.ResponseWriter, r *h
 	w.Write(b)
 }
 
-func InitSignallingHttp(path string) *WebSocketServer {
+func InitSignallingHttp(mux *http.ServeMux,path string) *WebSocketServer {
 	wsserver := &WebSocketServer{
 		mapid: map[string]*HttpTenant{},
 		fun:   func(protocol.Tenant) error { return nil },
@@ -184,7 +184,7 @@ func InitSignallingHttp(path string) *WebSocketServer {
 		path:  path,
 		mut:   &sync.Mutex{},
 	}
-	http.HandleFunc(path, wsserver.HandleHttpSignaling)
+	mux.HandleFunc(path, wsserver.HandleHttpSignaling)
 	return wsserver
 }
 

@@ -34,8 +34,8 @@ func Start(stop chan os.Signal) {
 	defer grpc.Stop()
 
 	signaling := signaling.InitSignallingServer(
-		ws.InitSignallingHttp("/handshake/client"),
-		ws.InitSignallingHttp("/handshake/server"),
+		ws.InitSignallingHttp(grpc.Mux,"/handshake/client"),
+		ws.InitSignallingHttp(grpc.Mux,"/handshake/server"),
 	)
 
 	srv := &http.Server{
