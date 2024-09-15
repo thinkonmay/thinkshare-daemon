@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -214,6 +215,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			return
 		}
 
+		result := []byte("success")
 		err := (error)(nil)
 		defer func() {
 			if err != nil {
@@ -221,11 +223,22 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				w.Write([]byte(err.Error()))
 			} else {
 				w.WriteHeader(200)
-				w.Write([]byte("success"))
+				w.Write(result)
 			}
 		}()
 		if r.Method == "DELETE" {
 			err = os.Remove(fmt.Sprintf("%s%s", path, r.URL.Path))
+		} else if r.Method == "PUT" {
+			temppath := fmt.Sprintf("%s/temp%s", path, r.URL.Path)
+			if err = os.MkdirAll(filepath.Dir(temppath), 0777); err != nil {
+			} else if result, err = exec.Command("mv",
+				fmt.Sprintf("%s%s", path, r.URL.Path),
+				temppath,
+			).CombinedOutput(); err != nil {
+				err = fmt.Errorf("%s", string(result))
+			} else {
+				result = []byte(fmt.Sprintf("/temp%s", r.URL.Path))
+			}
 		}
 	})
 	ret.wrapper("allocate",
@@ -257,18 +270,37 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			if err = json.Unmarshal([]byte(conn), msg); err != nil {
 				return nil, err
 			}
+			var targeturl *url.URL
 			if exist, err := exists(msg.Path); err != nil {
 				return nil, err
 			} else if exist {
 				return nil, fmt.Errorf("file path exist %s", msg.Path)
+			} else if targeturl, err = url.Parse(msg.From); err != nil {
+				return nil, err
 			}
 
+			req, err := http.NewRequest("PUT", msg.From, bytes.NewReader([]byte{}))
+			if err != nil {
+				return nil, err
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return nil, err
+			} else if body, err := io.ReadAll(resp.Body); err != nil {
+				return nil, err
+			} else if resp.StatusCode != 200 {
+				return nil, fmt.Errorf("%s", string(body))
+			} else {
+				targeturl.Path = string(body)
+			}
+
+			_tempurl := targeturl.String()
 			tempfile := fmt.Sprintf("%s/%s", os.TempDir(), uuid.NewString())
 			defer os.Remove(tempfile)
 			result, err := exec.Command("curl",
 				"--progress-bar", "--limit-rate", "60M",
 				"-o", tempfile,
-				msg.From).CombinedOutput()
+				_tempurl).CombinedOutput()
 			if err != nil {
 				return nil, fmt.Errorf("failed to download file %s", string(result))
 			}
@@ -280,7 +312,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, fmt.Errorf("failed to move file %s", string(result))
 			}
 
-			req, err := http.NewRequest("DELETE", msg.From, bytes.NewReader([]byte{}))
+			req, err = http.NewRequest("DELETE", _tempurl, bytes.NewReader([]byte{}))
 			if err != nil {
 				return nil, err
 			}
