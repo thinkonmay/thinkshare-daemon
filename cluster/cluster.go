@@ -20,10 +20,6 @@ type Host struct {
 	DNS              string      `yaml:"dns"`
 	TurnServer       *TurnConfig `yaml:"turn"`
 	EnablePocketbase bool        `yaml:"pocketbase"`
-	Log              *struct {
-		IP string `yaml:"ip"`
-		ID string `yaml:"id"`
-	} `yaml:"log"`
 }
 type Node interface {
 	Name() string
@@ -51,7 +47,6 @@ type ClusterConfig interface {
 	TurnServer() (conf TurnConfig, exist bool)
 	Interface() string
 	DNSserver() string
-	Log() (ip, id string, exists bool)
 	Pocketbase() bool
 
 	Nodes() []Node

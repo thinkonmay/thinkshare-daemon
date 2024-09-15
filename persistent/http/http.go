@@ -1,14 +1,19 @@
 package httpp
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/app"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
@@ -32,6 +37,7 @@ type GRPCclient struct {
 	worker_info     func() *packet.WorkerInfor
 	recv_session    func(*packet.WorkerSession, chan bool, chan bool) (*packet.WorkerSession, error)
 	closed_sesssion func(*packet.WorkerSession) error
+	Mux             *http.ServeMux
 
 	pending    map[string]*deployment
 	keepalives map[string]*deployment
@@ -47,6 +53,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		pending:    map[string]*deployment{},
 		keepalives: map[string]*deployment{},
 		mut:        &sync.Mutex{},
+		Mux:        http.NewServeMux(),
 
 		logger: []string{},
 		worker_info: func() *packet.WorkerInfor {
@@ -195,12 +202,67 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 
 			return []byte("{}"), ret.closed_sesssion(msg)
 		})
+
+	exe, _ := os.Executable()
+	path, _ := filepath.Abs(filepath.Dir(exe))
+	fileserver := http.FileServerFS(os.DirFS(path))
+	ret.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.PushLog("receive %s request on file %s", r.Method, r.URL.Path)
+		if r.Method == "GET" {
+			fileserver.ServeHTTP(w, r)
+		} else if r.Method == "DELETE" {
+			os.Remove(fmt.Sprintf("%s%s", path, r.URL.Path))
+			w.WriteHeader(200)
+			w.Write([]byte("success"))
+		}
+	})
+	ret.wrapper("import",
+		func(conn string) ([]byte, error) {
+			msg := &struct {
+				From string `json:"from"`
+				Path string `json:"path"`
+			}{}
+
+			if err = json.Unmarshal([]byte(conn), msg); err != nil {
+				return nil, err
+			}
+			if exist, err := exists(msg.Path); err != nil {
+				return nil, err
+			} else if exist {
+				return nil, fmt.Errorf("file path exist %s", msg.Path)
+			}
+
+			tempfile := fmt.Sprintf("%s/%s", os.TempDir(), uuid.NewString())
+			defer os.Remove(tempfile)
+			result, err := exec.Command("curl",
+				"--progress-bar", "--limit-rate", "60M",
+				"-o", tempfile,
+				msg.From).CombinedOutput()
+			if err != nil {
+				return nil, fmt.Errorf("failed to download file %s", string(result))
+			}
+
+			result, err = exec.Command("mv",
+				tempfile,
+				fmt.Sprintf("%s%s", path, msg.Path)).CombinedOutput()
+			if err != nil {
+				return nil, fmt.Errorf("failed to move file %s", string(result))
+			}
+
+			req, err := http.NewRequest("DELETE", msg.From, bytes.NewReader([]byte{}))
+			if err != nil {
+				return nil, err
+			}
+			http.DefaultClient.Do(req)
+			return []byte("{}"), nil
+		})
+
 	return ret, nil
 }
 
 func (ret *GRPCclient) wrapper(url string, fun func(content string) ([]byte, error)) {
 	log.PushLog("registering url handler on %s", url)
-	http.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
+	ret.Mux.HandleFunc("/"+url, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
 		if r.Method == "OPTIONS" {
@@ -243,4 +305,15 @@ func (grpc *GRPCclient) RecvSession(fun func(*packet.WorkerSession, chan bool, c
 }
 func (grpc *GRPCclient) ClosedSession(fun func(*packet.WorkerSession) error) {
 	grpc.closed_sesssion = fun
+}
+
+func exists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }

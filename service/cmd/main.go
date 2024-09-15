@@ -38,7 +38,10 @@ func Start(stop chan os.Signal) {
 		ws.InitSignallingHttp("/handshake/server"),
 	)
 
-	srv := &http.Server{Addr: fmt.Sprintf(":%d", daemon.Httpport)}
+	srv := &http.Server{
+		Handler: grpc.Mux,
+		Addr: fmt.Sprintf(":%d", daemon.Httpport), 
+	}
 	go func() {
 		if pid, found := findPreviousPID(daemon.Httpport); found {
 			log.PushLog("kill previous child process %s", pid)

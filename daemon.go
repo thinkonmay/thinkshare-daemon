@@ -102,18 +102,6 @@ func WebDaemon(persistent persistent.Persistent,
 		log.PushLog("turn config not exist, ignoring turn")
 	}
 
-	if ip, id, exists := daemon.cluster.Log(); exists {
-		client := http.Client{Timeout: time.Second}
-		i := log.TakeLog(func(log string) {
-			client.Post(fmt.Sprintf("http://%s/_log", ip),
-				"application/text",
-				strings.NewReader(fmt.Sprintf("%s : %s", id, log)))
-		})
-		daemon.cleans = append(daemon.cleans, func() {
-			log.RemoveCallback(i)
-		})
-	}
-
 	if daemon.cluster.Pocketbase() {
 		pocketbase.StartPocketbase()
 	}
