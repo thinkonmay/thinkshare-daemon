@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
 	"github.com/thinkonmay/thinkshare-daemon/utils/app"
+	"github.com/thinkonmay/thinkshare-daemon/utils/libvirt"
 	"github.com/thinkonmay/thinkshare-daemon/utils/log"
 )
 
@@ -210,12 +211,42 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		log.PushLog("receive %s request on file %s", r.Method, r.URL.Path)
 		if r.Method == "GET" {
 			fileserver.ServeHTTP(w, r)
-		} else if r.Method == "DELETE" {
-			os.Remove(fmt.Sprintf("%s%s", path, r.URL.Path))
-			w.WriteHeader(200)
-			w.Write([]byte("success"))
+			return
+		}
+
+		err := (error)(nil)
+		defer func() {
+			if err != nil {
+				w.WriteHeader(400)
+				w.Write([]byte(err.Error()))
+			} else {
+				w.WriteHeader(200)
+				w.Write([]byte("success"))
+			}
+		}()
+		if r.Method == "DELETE" {
+			err = os.Remove(fmt.Sprintf("%s%s", path, r.URL.Path))
 		}
 	})
+	ret.wrapper("allocate",
+		func(conn string) ([]byte, error) {
+			Allocate := struct {
+				ID   string `json:"id"`
+				Base string `json:"base"`
+				Size int    `json:"size"`
+			}{}
+
+			if err = json.Unmarshal([]byte(conn), &Allocate); err != nil {
+				return nil, err
+			} else if err = uuid.Validate(Allocate.ID); err != nil {
+				return nil, err
+			} else if err = libvirt.
+				NewVolume(fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)).
+				PushChainID(Allocate.ID, Allocate.Size); err != nil {
+				return nil, err
+			}
+			return []byte("success"), nil
+		})
 	ret.wrapper("import",
 		func(conn string) ([]byte, error) {
 			msg := &struct {
@@ -254,7 +285,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, err
 			}
 			http.DefaultClient.Do(req)
-			return []byte("{}"), nil
+			return []byte("success"), nil
 		})
 
 	return ret, nil

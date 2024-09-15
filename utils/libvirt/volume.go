@@ -29,6 +29,26 @@ func NewVolume(path ...string) *Volume {
 	}
 }
 
+func (chain *Volume) PushChainID(id string, size int) error {
+	_, err := os.Stat(chain.Path)
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(chain.Path)
+	path := fmt.Sprintf("%s/child/%s.qcow2", dir, id)
+	res, err := exec.Command("qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-o",
+		fmt.Sprintf("backing_file=%s", chain.Path), path,
+		fmt.Sprintf("%dG", size)).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create volume %s %s", err.Error(), string(res))
+	}
+
+	copy := *chain
+	chain.Path = path
+	chain.Backing = &copy
+	return nil
+}
 func (chain *Volume) PushChain(size int) error {
 	_, err := os.Stat(chain.Path)
 	if err != nil {
