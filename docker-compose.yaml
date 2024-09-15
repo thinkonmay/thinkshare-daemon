@@ -1,4 +1,13 @@
 services:
+    daemon:
+        image: pigeatgarlic/managedaemon
+        restart: unless-stopped
+        environment:
+            BASE_URL: https://play.0.thinkmay.net
+            SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+        volumes:
+            - ./cluster.yaml:/cluster.yaml:ro
+
     turn:
         image: pigeatgarlic/turndaemon
         restart: unless-stopped
