@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,7 +27,7 @@ var (
 
 type deployment struct {
 	cancel    chan bool
-	timestamp int
+	starttime,timestamp int
 }
 type GRPCclient struct {
 	logger          []string
@@ -59,6 +61,34 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 		closed_sesssion: func(ws *packet.WorkerSession) error {
 			return fmt.Errorf("handler not configured")
 		},
+	}
+	get_current_position := func(id string) int {
+		type pos = struct{
+			*deployment
+			id string
+		}
+
+		order := []pos{}
+		ret.mut.Lock()
+		defer ret.mut.Unlock()
+		for k,v  := range ret.pending {
+			order = append(order, pos{
+				deployment: v,
+				id: k,
+			})
+		}
+
+		slices.SortFunc(order,func(a pos,b pos) int {
+			return a.starttime - b.starttime
+		})
+
+		for i,v  := range order {
+			if v.id == id {
+				return i
+			}
+		}
+
+		return -1
 	}
 
 	ret.wrapper("ping",
@@ -132,7 +162,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			}
 
 			deployment.timestamp = now()
-			return []byte("{}"), nil
+			return json.Marshal(map[string]int{"position": get_current_position(msg.Id)})
 		})
 	ret.wrapper("new",
 		func(conn string) ([]byte, error) {
@@ -145,9 +175,11 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				&deployment{
 					cancel:    make(chan bool, 4096),
 					timestamp: now(),
+					starttime: now(),
 				}, &deployment{
 					cancel:    make(chan bool, 4096),
 					timestamp: now(),
+					starttime: now(),
 				}
 
 			keepaliveid := app.GetKeepaliveID(msg)
