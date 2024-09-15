@@ -19,8 +19,5 @@ playground/
 pb_data
 *.iso
 binary/log.*
+_volumes/
 .env
-_volumes/grafana/
-_volumes/supabase/data/
-_volumes/prometheus/
-_volumes/pocketbase/
