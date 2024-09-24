@@ -28,6 +28,7 @@ services:
             MONITOR_DOMAIN: monitor.1.thinkmay.net
             ADMIN_DOMAIN: admin.1.thinkmay.net
             DATA_DOMAIN: data.1.thinkmay.net
+            MANAGE_VOLUME: volume.1.thinkmay.net
 
             ADMIN_USERNAME: thinkmay
             ADMIN_PASSWORD: thinkmayvantue
@@ -240,4 +241,16 @@ services:
             - '--web.console.templates=/etc/prometheus/consoles'
             - '--web.enable-lifecycle'
     admin:
-        image: pigeatgarlic/thinkmay_dashboard:latest
+        image: pigeatgarlic/thinkmay_dashboard:0.0.10
+        restart: unless-stopped
+        environment:
+            - VITE_PUBLIC_SUPABASE_URL=https://play.thinkmay.net
+            - VITE_PUBLIC_SUPABASE_ANON_KEY=${SERVICE_ROLE_KEY}
+            - VITE_PUBLIC_POCKETBASE_URL=https://play.thinkmay.net
+            - VITE_PUBLIC_MANAGE_VOLUME_URL=https://play.thinkmay.net
+
+            - VITE_PUBLIC_SUPABASE_MANAGE_URL=${SUPABASE_MANAGE_URL}
+            - VITE_PUBLIC_SUPABASE_MANAGE_ANON_KEY=${SUPABASE_MANAGE_ANON_KEY}
+            - VITE_PUBLIC_POCKETBASE_DOMAIN=play.thinkmay.net
+    manage_volume:
+        image: pigeatgarlic/host_manage_volume:0.0.3
