@@ -7,6 +7,8 @@ services:
             SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
         volumes:
             - ./cluster.yaml:/cluster.yaml:ro
+        networks:
+            - internal
 
     turn:
         image: pigeatgarlic/turndaemon
@@ -24,11 +26,11 @@ services:
             - 80:80
             - 443:443
         environment:
-            SERVICE_DOMAIN: play.thinkmay.net
-            MONITOR_DOMAIN: monitor.1.thinkmay.net
-            ADMIN_DOMAIN: admin.1.thinkmay.net
-            DATA_DOMAIN: data.1.thinkmay.net
-            MANAGE_VOLUME: volume.1.thinkmay.net
+            SERVICE_DOMAIN: play.0.thinkmay.net
+            MONITOR_DOMAIN: monitor.0.thinkmay.net
+            ADMIN_DOMAIN: admin.0.thinkmay.net
+            DATA_DOMAIN: data.0.thinkmay.net
+            MANAGE_DOMAIN: manage.0.thinkmay.net
 
             ADMIN_USERNAME: thinkmay
             ADMIN_PASSWORD: thinkmayvantue
@@ -40,6 +42,8 @@ services:
             - ./cluster.yaml:/cluster.yaml:ro
             - ./binary/os.qcow2:/os.qcow2:ro
             - ./binary/app.qcow2:/app.qcow2:ro
+        networks:
+            - internal
     studio:
         container_name: supabase-studio
         image: supabase/studio:20230803-15c6762
@@ -62,6 +66,8 @@ services:
             SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
 
             NEXT_PUBLIC_ENABLE_LOGS: false
+        networks:
+            - internal
 
     realtime:
         # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
@@ -104,6 +110,8 @@ services:
             RLIMIT_NOFILE: "10000"
             APP_NAME: realtime
             SEED_SELF_HOST: true
+        networks:
+            - internal
 
     auth:
         container_name: supabase-auth
@@ -141,6 +149,8 @@ services:
             GOTRUE_EXTERNAL_GOOGLE_ENABLED: false
             GOTRUE_EXTERNAL_PHONE_ENABLED: false
             GOTRUE_SMS_AUTOCONFIRM: false
+        networks:
+            - internal
     rest:
         container_name: supabase-rest
         image: postgrest/postgrest:v11.1.0
@@ -155,6 +165,8 @@ services:
             PGRST_DB_ANON_ROLE: anon
             PGRST_JWT_SECRET: ${JWT_SECRET}
             PGRST_DB_USE_LEGACY_GUCS: "false"
+        networks:
+            - internal
     meta:
         container_name: supabase-meta
         image: supabase/postgres-meta:v0.68.0
@@ -170,6 +182,8 @@ services:
             PG_META_DB_NAME: ${POSTGRES_DB}
             PG_META_DB_USER: supabase_admin
             PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+        networks:
+            - internal
     db:
         container_name: supabase-db
         image: supabase/postgres:15.1.1.78
@@ -211,11 +225,16 @@ services:
             - ./_volumes/supabase/logs.sql:/docker-entrypoint-initdb.d/migrations/99-logs.sql:Z
             # Use named volume to persist pgsodium decryption key between restarts
             # - db-config:/etc/postgresql-custom
+        networks:
+            - internal
 
     grafana:
         image: grafana/grafana
         volumes:
             - ./_volumes/grafana:/var/lib/grafana
+            - ./_volumes/grafana-ds:/etc/grafana/provisioning/datasources
+        networks:
+            - internal
     node-exporter:
         image: prom/node-exporter:latest
         restart: unless-stopped
@@ -228,6 +247,8 @@ services:
             - '--path.rootfs=/rootfs'
             - '--path.sysfs=/host/sys'
             - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        networks:
+            - internal
     prometheus:
         image: prom/prometheus:latest
         restart: unless-stopped
@@ -240,16 +261,28 @@ services:
             - '--web.console.libraries=/etc/prometheus/console_libraries'
             - '--web.console.templates=/etc/prometheus/consoles'
             - '--web.enable-lifecycle'
+        networks:
+            - internal
     admin:
-        image: pigeatgarlic/thinkmay_dashboard:0.0.10
-        restart: unless-stopped
-        environment:
-            - VITE_PUBLIC_SUPABASE_URL=https://play.thinkmay.net
-            - VITE_PUBLIC_SUPABASE_ANON_KEY=${SERVICE_ROLE_KEY}
-            - VITE_PUBLIC_POCKETBASE_URL=https://play.thinkmay.net
+        image: pigeatgarlic/thinkmay_dashboard:latest
+        networks:
+            - internal
 
-            - VITE_PUBLIC_SUPABASE_MANAGE_URL=${SUPABASE_MANAGE_URL}
-            - VITE_PUBLIC_SUPABASE_MANAGE_ANON_KEY=${SUPABASE_MANAGE_ANON_KEY}
-            - VITE_PUBLIC_POCKETBASE_DOMAIN=play.thinkmay.net
-    manage_volume:
-        image: pigeatgarlic/host_manage_volume:0.0.3
+    host_manage_volume:
+        image: pigeatgarlic/host_manage_volume:0.0.2
+        container_name: host_manage_volume_container
+        # restart: unless-stopped
+        ports:
+            - 9090:9090
+        volumes:
+        - ./_volumes/manage_volume/cluster.yaml:/app/cluster.yaml
+        networks:
+            - internal
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "10.20.40.0/24"
+          gateway: "10.20.40.1"

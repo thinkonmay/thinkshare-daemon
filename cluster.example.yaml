@@ -8,4 +8,4 @@ peers: []
 local:
     pocketbase: true
     turn:
-      address: turn
+      address: 10.20.40.1:8080
