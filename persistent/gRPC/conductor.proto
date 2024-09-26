@@ -19,9 +19,9 @@ message WorkerInfor{
 }
 
 message DiskInfo {
-	int32 free = 1;
-	int32 used = 2;
-	int32 total = 3;
+	uint64 free = 1;
+	uint64 used = 2;
+	uint64 total = 3;
 	string path = 4;
 	string fstype = 5;
 }
