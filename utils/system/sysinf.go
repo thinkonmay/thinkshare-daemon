@@ -8,6 +8,7 @@ import (
 
 	"github.com/jaypipes/ghw"
 	"github.com/pion/stun"
+	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/thinkonmay/thinkshare-daemon/persistent/gRPC/packet"
@@ -110,31 +111,28 @@ func getPublicIPSTUN() (result string) {
 func GetInfor() (*packet.WorkerInfor, error) {
 	hostStat, err := host.Info()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-
 	vmStat, err := mem.VirtualMemory()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
 	gpu, err := ghw.GPU()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
 	bios, err := ghw.BIOS()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
 	cpus, err := ghw.CPU()
 	if err != nil {
-		log.PushLog("unable to get information from system: %s", err.Error())
 		return nil, err
 	}
-
+	stat, err := disk.Usage("/")
+	if err != nil {
+		return nil, err
+	}
 	public, err := GetPublicIPCurl()
 	if err != nil {
 		return nil, err
@@ -147,6 +145,13 @@ func GetInfor() (*packet.WorkerInfor, error) {
 		CPU:  cpus.Processors[0].Model,
 		RAM:  fmt.Sprintf("%dMb", vmStat.Total/1024/1024),
 		BIOS: fmt.Sprintf("%v", bios),
+		Disk: &packet.DiskInfo{
+			Total:  stat.Total / 1024 / 1024 / 1024,
+			Free:   stat.Free / 1024 / 1024 / 1024,
+			Used:   stat.Used / 1024 / 1024 / 1024,
+			Path:   stat.Path,
+			Fstype: stat.Fstype,
+		},
 
 		GPUs:     []string{},
 		Sessions: []*packet.WorkerSession{},

@@ -270,7 +270,7 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 			} else {
 				result = []byte(fmt.Sprintf("/temp%s", r.URL.Path))
 			}
-		} else if r.Method == "TRACE" {
+		} else if r.Method == "POST" {
 			if result, err = exec.Command("qemu-img",
 				"info", fmt.Sprintf("%s%s", path, r.URL.Path),
 				"--output", "json",
