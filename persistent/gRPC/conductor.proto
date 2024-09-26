@@ -7,14 +7,15 @@ message WorkerInfor{
 	string   CPU        = 3;
 	string   RAM        = 4;
 	string   BIOS       = 5;
-	optional string   PublicIP   = 6;
-	optional string   PrivateIP  = 7;
-	optional string   MacAddr  = 8;
+	string   Disk       = 6;
+	optional string   PublicIP   = 7;
+	optional string   PrivateIP  = 8;
+	optional string   MacAddr  = 9;
 
-	repeated string GPUs    = 9;
-	repeated WorkerSession Sessions    = 10;
-	repeated WorkerInfor Peers    = 11;
-	repeated string Volumes = 12;
+	repeated string GPUs    = 10;
+	repeated WorkerSession Sessions    = 11;
+	repeated WorkerInfor Peers    = 12;
+	repeated string Volumes = 13;
 }
 
 message WorkerSession{ 
