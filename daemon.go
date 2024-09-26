@@ -63,10 +63,10 @@ func WebDaemon(persistent persistent.Persistent,
 	signaling *signaling.Signaling,
 	cluster_path string,
 ) *Daemon {
-	i := (*packet.WorkerInfor)(nil)
+	in := (*packet.WorkerInfor)(nil)
 	err := (error)(nil)
 	for {
-		if i, err = system.GetInfor(); err == nil {
+		if in, err = system.GetInfor(); err == nil {
 			break
 		}
 
@@ -77,7 +77,7 @@ func WebDaemon(persistent persistent.Persistent,
 	daemon := &Daemon{
 		mhandle:     "empty",
 		memory:      &sharedmemory.SharedMemory{},
-		WorkerInfor: *i,
+		WorkerInfor: *in,
 		mutex:       &sync.Mutex{},
 		cleans:      []func(){},
 		session:     map[string]*internalWorkerSession{},
@@ -429,6 +429,10 @@ func (daemon *Daemon) HandleSignaling(token string) (*string, bool) {
 
 func (daemon *Daemon) QueryInfo() *packet.WorkerInfor {
 	info := &daemon.WorkerInfor
+	if in, err := system.GetInfor(); err == nil {
+		info.Disk = in.Disk
+	}
+
 	local := make(chan error)
 	jobs := []chan error{local}
 	go func() {
