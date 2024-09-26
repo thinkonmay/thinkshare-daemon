@@ -7,7 +7,7 @@ message WorkerInfor{
 	string   CPU        = 3;
 	string   RAM        = 4;
 	string   BIOS       = 5;
-	string   Disk       = 6;
+	DiskInfo Disk       = 6;
 	optional string   PublicIP   = 7;
 	optional string   PrivateIP  = 8;
 	optional string   MacAddr  = 9;
@@ -16,6 +16,14 @@ message WorkerInfor{
 	repeated WorkerSession Sessions    = 11;
 	repeated WorkerInfor Peers    = 12;
 	repeated string Volumes = 13;
+}
+
+message DiskInfo {
+	int32 free = 1;
+	int32 used = 2;
+	int32 total = 3;
+	string path = 4;
+	string fstype = 5;
 }
 
 message WorkerSession{ 
