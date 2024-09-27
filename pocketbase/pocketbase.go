@@ -352,8 +352,10 @@ func proxy(destination, strip, replace string) echo.HandlerFunc {
 			delete(header, "Sec-Websocket-Key")
 			delete(header, "Connection")
 			delete(header, "Upgrade")
-			conn, _, connErr := websocket.DefaultDialer.Dial(path, header)
+			conn, resp, connErr := websocket.DefaultDialer.Dial(path, header)
 			if connErr != nil {
+				b,_ := io.ReadAll(resp.Body)
+				log.PushLog("websocket connection failed %s",string(b))
 				return
 			}
 			defer conn.Close()
