@@ -271,17 +271,6 @@ services:
         networks:
             - internal
 
-    host_manage_volume:
-        image: pigeatgarlic/host_manage_volume:0.0.2
-        container_name: host_manage_volume_container
-        # restart: unless-stopped
-        ports:
-            - 9090:9090
-        volumes:
-        - ./_volumes/manage_volume/cluster.yaml:/app/cluster.yaml
-        networks:
-            - internal
-
 networks:
   internal:
     driver: bridge

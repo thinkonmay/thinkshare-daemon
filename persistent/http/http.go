@@ -291,10 +291,18 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 				return nil, err
 			} else if err = uuid.Validate(Allocate.ID); err != nil {
 				return nil, err
-			} else if err = libvirt.
-				NewVolume(fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)).
-				PushChainID(Allocate.ID, Allocate.Size); err != nil {
-				return nil, err
+			} else if Allocate.Base == "os" {
+				if err = libvirt.
+					NewVolume(fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)).
+					PushChainID(Allocate.ID, Allocate.Size); err != nil {
+					return nil, err
+				}
+			} else if _, err := os.Stat(fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)); err == nil {
+				if result, err := exec.Command("cp",
+					fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base),
+					fmt.Sprintf("%s/child/%s.qcow2", path, Allocate.ID)).CombinedOutput(); err != nil {
+					return nil, fmt.Errorf("%s", string(result))
+				}
 			}
 			return []byte("success"), nil
 		})
