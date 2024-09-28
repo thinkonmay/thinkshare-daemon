@@ -3,10 +3,10 @@ services:
         image: pigeatgarlic/managedaemon
         restart: unless-stopped
         environment:
-            BASE_URL: https://play.thinkmay.net
+            BASE_URL: https://play.0.thinkmay.net
             SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
         volumes:
-            - ./cluster.yaml:/cluster.yaml:ro
+            - ./cluster.yaml:/cluster.yaml:rw
         networks:
             - internal
 
@@ -60,8 +60,8 @@ services:
             DEFAULT_ORGANIZATION_NAME: thinkmay
             DEFAULT_PROJECT_NAME: thinkmay
 
-            SUPABASE_URL: http://gateway
-            SUPABASE_PUBLIC_URL: http://data.thinkmay.net
+            SUPABASE_URL: https://play.0.thinkmay.net
+            SUPABASE_PUBLIC_URL: https://play.0.thinkmay.net
             SUPABASE_ANON_KEY: ${ANON_KEY}
             SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
 
@@ -233,6 +233,7 @@ services:
         volumes:
             - ./_volumes/grafana:/var/lib/grafana
             - ./_volumes/grafana-ds:/etc/grafana/provisioning/datasources
+            - ./_volumes/grafana.ini:/etc/grafana/grafana.ini
         networks:
             - internal
     node-exporter:
@@ -242,6 +243,8 @@ services:
             - /proc:/host/proc:ro
             - /sys:/host/sys:ro
             - /:/rootfs:ro
+        ports:
+            - 9100:9100
         command:
             - '--path.procfs=/host/proc'
             - '--path.rootfs=/rootfs'
