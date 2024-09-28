@@ -4,3 +4,6 @@
 [submodule "manage"]
 	path = manage
 	url = https://github.com/thinkonmay/manage
+[submodule "dashboard"]
+	path = dashboard
+	url = https://github.com/thinkonmay/thinkmay-dashboard
