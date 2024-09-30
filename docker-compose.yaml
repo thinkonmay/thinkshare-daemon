@@ -285,9 +285,6 @@ services:
             - internal
     manage_volume:
         image: pigeatgarlic/host_manage_volume:0.0.3
-        restart: unless-stopped
-        volumes:
-            - ./cluster.yaml:/app/cluster.yaml
         networks:
             - internal
 
