@@ -267,7 +267,29 @@ services:
         networks:
             - internal
     admin:
-        image: pigeatgarlic/thinkmay_dashboard:latest
+        image: pigeatgarlic/thinkmay_dashboard:0.0.11
+        restart: unless-stopped
+        environment:
+            - VITE_PUBLIC_SUPABASE_URL=https://play.thinkmay.net
+            - VITE_PUBLIC_SUPABASE_ANON_KEY=${SERVICE_ROLE_KEY}
+            - VITE_PUBLIC_POCKETBASE_URL=https://play.thinkmay.net
+            - VITE_PUBLIC_MANAGE_VOLUME_URL=https://play.thinkmay.net
+
+            - VITE_PUBLIC_SUPABASE_MANAGE_URL=${SUPABASE_MANAGE_URL}
+            - VITE_PUBLIC_SUPABASE_MANAGE_ANON_KEY=${SUPABASE_MANAGE_ANON_KEY}
+            - VITE_PUBLIC_POCKETBASE_DOMAIN=play.thinkmay.net
+
+            - VITE_PUBLIC_POCKETBASE_USERNAME=huyhoangdo0205@gmail.com
+            - VITE_PUBLIC_POCKETBASE_PASSWORD=thinkmayvantue
+        networks:
+            - internal
+    manage_volume:
+        image: pigeatgarlic/host_manage_volume:0.0.3
+        restart: unless-stopped
+        ports:
+            - "9090:80"
+        volumes:
+            - ./cluster.yaml:/app/cluster.yaml
         networks:
             - internal
 
