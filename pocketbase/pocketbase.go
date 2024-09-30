@@ -106,7 +106,7 @@ func StartPocketbase() {
 			case env.MonitorDomain:
 				return proxy("http://grafana:3000", "", "")(c)
 			case env.ManageDomain:
-				return basicAuth(proxy("http://manage_volume:9090", "", ""))(c)
+				return basicAuth(proxy("http://manage_volume", "", ""))(c)
 			case env.ServiceDomain:
 				if c.IsWebSocket() {
 					return proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
