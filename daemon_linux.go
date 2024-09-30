@@ -164,7 +164,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		time.Sleep(time.Second)
 		addr, err := network.FindDomainIPs(dom)
 		if err != nil {
-			log.PushLog("VM ip not available %s", err.Error())
 			continue
 		} else if addr.Ip == nil {
 			continue
@@ -199,7 +198,6 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 			log.PushLog("failed unmarshal reponse body %s", err.Error())
 			continue
 		} else if inf.PrivateIP == nil || inf.PublicIP == nil {
-			log.PushLog("VM address is null, retry")
 			continue
 		} else if *inf.PrivateIP == "" || *inf.PublicIP == "" {
 			log.PushLog("VM address is empty, retry")
