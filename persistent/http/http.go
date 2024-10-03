@@ -303,6 +303,8 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 					fmt.Sprintf("%s/child/%s.qcow2", path, Allocate.ID)).CombinedOutput(); err != nil {
 					return nil, fmt.Errorf("%s", string(result))
 				}
+			} else {
+				return nil, err
 			}
 			return []byte("success"), nil
 		})
