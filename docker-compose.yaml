@@ -284,7 +284,11 @@ services:
         networks:
             - internal
     manage_volume:
-        image: pigeatgarlic/host_manage_volume:0.0.3
+        image: pigeatgarlic/host_manage_volume:0.0.5
+        ports:
+            - 9090:80
+        volumes:
+            - ./cluster.yaml:/app/cluster.yml:ro
         networks:
             - internal
 
