@@ -32,7 +32,7 @@ const (
 var (
 	client = http.Client{Timeout: 24 * time.Hour}
 	app    = (*pocketbase.PocketBase)(nil)
-	env   = struct{ ServiceDomain, MonitorDomain, AdminUsername, AdminPassword, AdminDomain, DataDomain, ManageDomain string }{}
+	env   = struct{ ServiceDomain, MonitorDomain, AdminUsername, AdminPassword, AdminDomain, DataDomain string }{}
 )
 
 func StartPocketbase() {
@@ -57,9 +57,6 @@ func StartPocketbase() {
 	}
 	if env.DataDomain, ok = os.LookupEnv("DATA_DOMAIN"); ok {
 		certdoms = append(certdoms, env.DataDomain)
-	}
-	if env.ManageDomain, ok = os.LookupEnv("MANAGE_DOMAIN"); ok {
-		certdoms = append(certdoms, env.ManageDomain)
 	}
 	if enableSSL, ok := os.LookupEnv("DISABLE_HTTPS"); ok && enableSSL == "true" {
 		enable_https = false
@@ -105,8 +102,6 @@ func StartPocketbase() {
 				return basicAuth(proxy("http://admin:3000", "", ""))(c)
 			case env.MonitorDomain:
 				return proxy("http://grafana:3000", "", "")(c)
-			case env.ManageDomain:
-				return basicAuth(proxy("http://manage_volume", "", ""))(c)
 			case env.ServiceDomain:
 				if c.IsWebSocket() {
 					return proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1", "/socket")(c)
@@ -145,14 +140,6 @@ func StartPocketbase() {
 		e.Router.Any("/rest/v1/*", proxy("http://rest:3000", "/rest/v1", ""), recover)
 		e.Router.Any("/realtime/v1/api/*", proxy("http://realtime-dev.supabase-realtime:4000", "/realtime/v1/api", "/api"), recover)
 		e.Router.Any("/pg/*", proxy("http://meta:8080", "/pg", ""), recover)
-
-		// volume API
-		e.Router.Any("/access_store_volume", proxy("http://manage_volume", "/access_store_volume", "/access_store_volume"), recover)
-		e.Router.Any("/create_volume", proxy("http://manage_volume", "/create_volume", "/create_volume"), recover)
-		e.Router.Any("/volume_delete", proxy("http://manage_volume", "/volume_delete", "/volume_delete"), recover)
-		e.Router.Any("/fetch_node_info", proxy("http://manage_volume", "/fetch_node_info", "/fetch_node_info"), recover)
-		e.Router.Any("/fetch_node_volume", proxy("http://manage_volume", "/fetch_node_volume", "/fetch_node_volume"), recover)
-		e.Router.Any("/check_volume", proxy("http://manage_volume", "/check_volume", "/check_volume"), recover)
 
 		e.Router.Any("/*", apis.StaticDirectoryHandler(dirfs, true), recover)
 		return nil
