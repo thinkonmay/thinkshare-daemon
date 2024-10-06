@@ -37,6 +37,10 @@ func (chain *Volume) PushChainID(id string, size int) error {
 
 	dir := filepath.Dir(chain.Path)
 	path := fmt.Sprintf("%s/child/%s.qcow2", dir, id)
+	if chain.Disposable {
+		os.MkdirAll(fmt.Sprintf("%s/temp", dir),0777)
+		path = fmt.Sprintf("%s/temp/%s.qcow2", dir, id)
+	}
 	res, err := exec.Command("qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-o",
 		fmt.Sprintf("backing_file=%s", chain.Path), path,
 		fmt.Sprintf("%dG", size)).CombinedOutput()
@@ -58,6 +62,10 @@ func (chain *Volume) PushChain(size int) error {
 	now := uuid.NewString()
 	dir := filepath.Dir(chain.Path)
 	path := fmt.Sprintf("%s/child/%s.qcow2", dir, now)
+	if chain.Disposable {
+		os.MkdirAll(fmt.Sprintf("%s/temp", dir),0777)
+		path = fmt.Sprintf("%s/temp/%s.qcow2", dir, now)
+	}
 	res, err := exec.Command("qemu-img", "create", "-f", "qcow2", "-F", "qcow2", "-o",
 		fmt.Sprintf("backing_file=%s", chain.Path), path,
 		fmt.Sprintf("%dG", size)).CombinedOutput()

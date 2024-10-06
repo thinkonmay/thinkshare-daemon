@@ -240,7 +240,6 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 	path, _ := filepath.Abs(filepath.Dir(exe))
 	fileserver := http.FileServerFS(os.DirFS(path))
 	ret.Mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.PushLog("receive %s request on file %s", r.Method, r.URL.Path)
 		if r.Method == "GET" {
 			fileserver.ServeHTTP(w, r)
 			return
@@ -298,9 +297,17 @@ func InitHttppServer() (ret *GRPCclient, err error) {
 					return nil, err
 				}
 			} else if _, err := os.Stat(fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)); err == nil {
-				if result, err := exec.Command("cp",
-					fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base),
-					fmt.Sprintf("%s/child/%s.qcow2", path, Allocate.ID)).CombinedOutput(); err != nil {
+				base := fmt.Sprintf("%s/%s.qcow2", path, Allocate.Base)
+				temp := fmt.Sprintf("%s/temp/%s.qcow2", path, Allocate.ID)
+				dest := fmt.Sprintf("%s/child/%s.qcow2", path, Allocate.ID)
+
+				if err := os.WriteFile(dest, []byte("volume is being created"), 0777); err != nil {
+					return nil, err
+				} else if result, err := exec.Command("cp", base, temp).CombinedOutput(); err != nil {
+					return nil, fmt.Errorf("%s", string(result))
+				} else if err = os.Remove(dest); err != nil {
+					return nil, err
+				} else if result, err = exec.Command("mv", temp, dest).CombinedOutput(); err != nil {
 					return nil, fmt.Errorf("%s", string(result))
 				}
 			} else {

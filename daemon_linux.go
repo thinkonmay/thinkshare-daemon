@@ -106,7 +106,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 	}
 
 	os := los
-	if session.Vm.Volumes != nil && len(session.Vm.Volumes) != 0 {
+	if session.Vm.Volumes != nil || len(session.Vm.Volumes) != 0 {
 		os, err = findVolumesInDir(child, session.Vm.Volumes[0])
 		if err != nil {
 			return nil, err
@@ -133,6 +133,14 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 		return nil, err
 	}
 
+	dispose_disks := func() {
+		for _, d := range disks {
+			if d.Disposable || os == los {
+				d.PopChain()
+			}
+		}
+	}
+
 	id := uuid.NewString()
 	model := libvirt.VMLaunchModel{
 		ID:            id,
@@ -147,11 +155,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 	models = append(models, model)
 	dom, err := virt.DeployVM(model)
 	if err != nil {
-		for _, d := range disks {
-			if d.Disposable || os == los {
-				d.PopChain()
-			}
-		}
+		dispose_disks()
 		return nil, err
 	}
 
@@ -229,6 +233,7 @@ func (daemon *Daemon) DeployVM(session *packet.WorkerSession, cancel, keepalive 
 	}
 
 	virt.DeleteVM(model.ID)
+	dispose_disks()
 	return nil, fmt.Errorf("timeout deploy new VM")
 }
 
@@ -513,6 +518,7 @@ func queryLocal(info *packet.WorkerInfor) error {
 
 func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 	chain_app := libvirt.NewVolume(app)
+	chain_app.Disposable = true
 	err := chain_app.PushChain(5)
 	if err != nil {
 		return []libvirt.Volume{}, err
@@ -534,8 +540,10 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 		return []libvirt.Volume{}, err
 	} else if result_data.Backing != nil {
 		chain_os = libvirt.NewVolume(os, *result_data.Backing)
+		chain_os.Disposable = false
 	} else {
 		chain_os = libvirt.NewVolume(os)
+		chain_os.Disposable = false
 		err = chain_os.PushChain(240)
 		if err != nil {
 			chain_app.PopChain()
@@ -543,7 +551,6 @@ func prepareVolume(os, app string) ([]libvirt.Volume, error) {
 		}
 	}
 
-	chain_os.Disposable = false
 	return []libvirt.Volume{*chain_os, *chain_app}, nil
 }
 
